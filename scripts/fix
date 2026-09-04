@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=libs/detect.sh
+source "$repo_root/scripts/libs/detect.sh"
+
+if ! language_capabilities has-any; then
+  echo "No project manifest found, so there is nothing to format yet."
+  exit 0
+fi
+
+language_capabilities run format-write
+
+if tally; then
+  echo "Review the diff before committing."
+else
+  exit 1
+fi

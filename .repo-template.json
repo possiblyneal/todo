@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "template": {
+    "repository": "https://github.com/possiblyneal/template",
+    "subtree": "apps/github-repository-template/src/base-repo",
+    "commit": "8fe5cce143a40c2abd3687481ba3d6857d928ea2"
+  },
+  "destination": {
+    "repository": "possiblyneal/todo",
+    "default_branch": "main"
+  },
+  "generation": {
+    "applications": ["todo"],
+    "visibility": "public",
+    "features": {}
+  },
+  "ownership": [
+    {"path": ".repo-template.json", "mode": "managed"},
+    {"path": "CLAUDE.md", "mode": "managed"},
+    {"path": ".commitlintrc.yaml", "mode": "managed"},
+    {"path": ".env", "mode": "managed"},
+    {"path": ".gitattributes", "mode": "managed"},
+    {"path": ".gitignore", "mode": "managed"},
+    {"path": ".mcp.json", "mode": "managed"},
+    {"path": ".pre-commit-config.yaml", "mode": "managed"},
+    {"path": ".worktreeinclude", "mode": "managed"},
+    {"path": ".claude/settings.json", "mode": "managed"},
+    {"path": ".github/**", "mode": "managed"},
+    {"path": "scripts/**", "mode": "managed"},
+    {"path": "docs/agents/**", "mode": "managed"},
+    {"path": "docs/adrs/0000-template.md", "mode": "managed"},
+    {"path": "apps/**", "mode": "product"},
+    {"path": "libs/**", "mode": "product"},
+    {"path": "tests/**", "mode": "product"},
+    {"path": "tools/**", "mode": "product"},
+    {"path": "docs/**", "mode": "product"},
+    {"path": "tmp/**", "mode": "product"},
+    {"path": ".claude/agents/**", "mode": "product"},
+    {"path": ".claude/hooks/**", "mode": "product"},
+    {"path": ".claude/output-styles/**", "mode": "product"},
+    {"path": ".claude/rules/**", "mode": "product"},
+    {"path": ".claude/skills/**", "mode": "product"},
+    {"path": ".claude/workflows/**", "mode": "product"}
+  ]
+}
