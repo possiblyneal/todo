@@ -1,0 +1,68 @@
+# Only the ecosystems whose manifests this template ships are listed. An entry
+# naming a manifest that is not there fails the run with dependency_file_not_found
+# rather than being skipped, so npm, pip, cargo, gomod, and gradle cannot be
+# listed ahead of the manifest that would justify them.
+#
+# Add the matching entry when a manifest arrives. A root package.json wants:
+#
+#   - package-ecosystem: npm
+#     directory: /
+#     schedule:
+#       interval: weekly
+#     groups:
+#       npm:
+#         patterns: ["*"]
+#
+# The ecosystem name for the rest: pip for pyproject.toml, cargo for Cargo.toml,
+# gomod for go.mod, gradle for build.gradle.kts.
+#
+# This file governs version updates, the scheduled bumps for dependencies with
+# nothing wrong with them. Security updates are a separate feature that reads
+# the dependency graph, needs no entry here, and is switched on in repository
+# settings rather than in this file. That distinction decides who fixes a CVE:
+# scripts/security fails the pull request that introduces one, and the security
+# update opens the pull request that resolves it. With the setting off, the
+# first half happens and the second does not.
+version: 2
+updates:
+  # Keeps the action pins in .github/workflows/ current, so a third-party
+  # action's immutable commit is reviewed in a pull request rather than moving
+  # beneath an unchanged workflow file.
+  #
+  # "/" covers .github/workflows/ and a root action.yml only. Composite actions
+  # under .github/actions/ are not reached from it, so their pins would age
+  # silently while the workflow copies stay current. The glob below covers them,
+  # and needs `directories`, which supports globbing where `directory` does not.
+  #
+  # The cooldown is the reason a bump here is not just noise deferred. Dependabot
+  # waits three days by default; a week is long enough that an opportunistic
+  # package compromise is usually taken down before an update pull request
+  # proposes it, and short enough that a real fix is not held back.
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/*
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Reads the rev of every hook in .pre-commit-config.yaml. Those pins are
+  # exact tags rather than major ones, because pre-commit resolves a rev to a
+  # single revision and offers no floating form, so nothing here updates
+  # without a bump. The scanners are the reason it matters: a stale gitleaks
+  # reports a clean tree by knowing about fewer secret formats.
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      pre-commit:
+        patterns:
+          - "*"
