@@ -29,6 +29,8 @@
     {"path": "scripts/**", "mode": "managed"},
     {"path": "docs/agents/**", "mode": "managed"},
     {"path": "docs/adrs/0000-template.md", "mode": "managed"},
+    {"path": "docs/agents/session-launcher.md", "mode": "product"},
+    {"path": "docs/LESSONS.md", "mode": "managed"},
     {"path": "apps/**", "mode": "product"},
     {"path": "libs/**", "mode": "product"},
     {"path": "tests/**", "mode": "product"},

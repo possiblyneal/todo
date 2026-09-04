@@ -1,10 +1,10 @@
 ---
 type: Architecture Decision Record
 title: A Subtask Tree Is One Aggregate, Leased Whole
-description: A top-level Task and every Subtask nested beneath it form a single aggregate with a single tree-scoped Lease, so that a parent cannot complete with open children is an invariant the store enforces rather than a convention callers keep.
+description: A top-level Task and every Subtask nested beneath it form a single aggregate with a single tree-scoped Lease, so that "a parent cannot complete with open children" becomes an invariant the store enforces rather than a convention callers keep.
 scope: [global]
 tags: [domain-model, aggregate-boundary, concurrency, invariants]
-generated: { by: "agent/claude-opus-5", at: "2026-09-04T16:42:17Z" }
+generated: { by: "agent/claude-opus-5", at: "2026-09-04T20:22:14Z" }
 superseded_by:
 status: accepted
 ---

@@ -2,8 +2,8 @@
 type: Lessons Learned
 title: Repository Lessons Learned
 description: Repository-specific knowledge that prevents recurring mistakes or expensive rediscovery.
-tags: [go, tooling, repository-checks]
-generated: { by: "agent/claude-opus-5", at: "2026-09-04T18:46:37Z" } # update after each meaningful change
+tags: []
+generated: { by: "agent/claude-opus-5", at: "2026-09-04T20:22:14Z" } # update after each meaningful change
 # verified: { by: "<actor>", at: "<ISO 8601 datetime>" } # uncomment after confirming this document against its cited sources
 status: draft                 # draft | stable | deprecated
 ---

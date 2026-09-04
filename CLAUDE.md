@@ -2,7 +2,7 @@
 
 `todo` is a task tracker with two kinds of consumer: a person at a keyboard, and agents that add, edit, and delete while nobody is watching. Both reach the same store through the same calls; neither gets a weaker or a stronger contract than the other. `CONTEXT.md` holds the language that keeps those two from meaning different things by the same word, and `docs/features.md` records the operator's wish list verbatim as source material rather than as a specification.
 
-The repository ships **one deployable**. Three bounded contexts — Tracking, Scheduling, Change History — collapse into a single Go binary with three modes: bare `todo` opens the TUI, `todo <verb>` acts and exits, and `todo serve` serves the same TUI over SSH on the LAN. The store is SQLite embedded as a library, so it is not a deployable of its own. `docs/adrs/0001-ship-todo-as-one-go-binary.md` records why, including the three triggers that re-open the language choice.
+The repository holds **one deployable**. Three bounded contexts — Tracking, Scheduling, Change History — collapse into a single Go binary with three modes: bare `todo` opens the TUI, `todo <verb>` acts and exits, and `todo serve` serves the same TUI over SSH on the LAN. The store is SQLite embedded as a library, so it is not a deployable of its own. `docs/adrs/0001-ship-todo-as-one-go-binary.md` records why, including the three triggers that re-open the language choice.
 
 No root manifest exists yet. A `go.mod` under `apps/todo/` and none at the root is invisible to every check, so the root manifest is what the first real commit brings; `scripts/doctor` fails on the orphan shape rather than passing over it.
 
@@ -41,4 +41,4 @@ Orca, on this machine. See `docs/agents/session-launcher.md`.
 
 - `scripts/CLAUDE.md` — the language-capabilities interface, the result states, the test harness, and what adding a language or check requires
 
-`apps/todo/` holds the single deployable named above and is empty but for its `.unit.json`. It owns its own `CLAUDE.md` from the commit that first puts code in it; `docs/CLAUDE.md` likewise, once `docs/` holds enough to need a local contract.
+`apps/todo/` holds the single deployable named above, written in Go. It is empty but for an empty `src/` and its `.unit.json`, which declares `run: none, ships: {kind: none}` until the first real commit establishes otherwise. It owns its own `CLAUDE.md` from the commit that first puts code in it; `docs/CLAUDE.md` likewise, once `docs/` holds enough to need a local contract.

@@ -7,7 +7,7 @@ _A task tracker for a person at a keyboard and for agents working while nobody i
 [![Build](https://img.shields.io/github/actions/workflow/status/possiblyneal/todo/ci.yml?branch=main)](https://github.com/possiblyneal/todo/actions)
 [![License](https://img.shields.io/github/license/possiblyneal/todo)](LICENSE)
 
-[About](#about) &bull; [Shape](#shape) &bull; [Install](#install) &bull; [Contributing](#contributing) &bull; [License](#license)
+[About](#about) &bull; [Shape](#shape) &bull; [Install](#install) &bull; [Contributing](#contributing) &bull; [License](#license) &bull; [Acknowledgements](#acknowledgements)
 
 </div>
 
@@ -22,15 +22,6 @@ _A task tracker for a person at a keyboard and for agents working while nobody i
 
 > [!IMPORTANT]
 > **Nothing is built yet.** This repository currently holds the decisions and the scaffolding, not the program. The sections below describe what has been settled, not what runs.
-
-## Table of contents
-
-- [About](#about)
-- [Shape](#shape)
-- [Install](#install)
-- [Contributing](#contributing)
-- [License](#license)
-- [Acknowledgements](#acknowledgements)
 
 ## Shape
 
@@ -62,7 +53,7 @@ Released under the [GPL-3.0-or-later](LICENSE) license.
 
 ## Acknowledgements
 
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Wish](https://github.com/charmbracelet/wish) — the TUI and the SSH surface the language choice was measured against
+- [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Wish](https://github.com/charmbracelet/wish) — the TUI and the SSH surface the language choice was reasoned from
 - [SQLite](https://sqlite.org/) — the store, embedded rather than deployed
 
 Built by [possiblyneal](https://github.com/possiblyneal).

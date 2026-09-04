@@ -4,7 +4,7 @@ title: Ship Todo as One Go Binary
 description: The repository holds a single deployable, `apps/todo`, written in Go — not because a constraint demanded Go, but because all five choke-point constraints were checked and none binds, leaving the time-to-working-code tiebreaker to decide on the evidence gathered about the SSH surface.
 scope: [apps/todo, lang:go]
 tags: [deployable-boundary, language-choice, tui, ssh]
-generated: { by: "agent/claude-opus-5", at: "2026-09-04T18:46:37Z" }
+generated: { by: "agent/claude-opus-5", at: "2026-09-04T20:22:14Z" }
 superseded_by:
 status: accepted
 ---
@@ -59,8 +59,9 @@ the binary puts the Lease and the Change History rules in two artifacts.
 into every generated repository, and nobody installs or ships it, so it gets no
 `apps/` directory and no language decision.
 
-Derived with the operator across a `/wayfinder` map of eight tickets, all closed:
-`possiblyneal/todo` issues #1 through #8.
+Derived with the operator across a `/wayfinder` map: `possiblyneal/todo` issue #1
+is the map itself and stays open as the record; its seven decision tickets, #2
+through #8, are all closed.
 
 ## Alternatives Considered
 
