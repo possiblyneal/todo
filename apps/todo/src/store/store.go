@@ -44,6 +44,15 @@ const (
 	KindLeaseTaken    = "lease_taken"
 	KindLeaseReleased = "lease_released"
 	KindLeaseBroken   = "lease_broken"
+
+	KindListCreated   = "list_created"
+	KindListDescribed = "list_described"
+	KindTaskListed    = "task_listed"
+	KindTaskUnlisted  = "task_unlisted"
+	KindTagCreated    = "tag_created"
+	KindTagDescribed  = "tag_described"
+	KindTagAttached   = "tag_attached"
+	KindTagDetached   = "tag_detached"
 )
 
 // ErrRefused is a write with no unexpired Lease held by the writing Actor on
@@ -103,6 +112,12 @@ type Task struct {
 	SnoozedUntil time.Time
 	Colour       string
 	Fields       map[string]string
+
+	// Lists and Tags are the ids the Task carries, never the names: a List
+	// or a Tag is renamed once, in its own aggregate, and every Task
+	// carrying it shows the new name without being written to.
+	Lists []string
+	Tags  []string
 
 	CompletedAt time.Time
 	DeletedAt   time.Time
@@ -349,6 +364,98 @@ END;
 
 -- Lease Broken folds nothing. It is the trail a crashed run leaves, and the
 -- Lease Taken appended straight after it is what replaces the stale row.
+
+-- A List and a Tag are aggregates of their own: each exists before any Task
+-- carries it and outlives the last one that did. A Task carries the id, never
+-- the text, which is what makes a rename one write rather than one per Task.
+CREATE TABLE IF NOT EXISTS list (
+	id         TEXT PRIMARY KEY,
+	name       TEXT NOT NULL,
+	colour     TEXT,
+	created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tag (
+	id         TEXT PRIMARY KEY,
+	name       TEXT NOT NULL,
+	colour     TEXT,
+	created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS task_list (
+	task_id TEXT NOT NULL REFERENCES task(id),
+	list_id TEXT NOT NULL REFERENCES list(id),
+	PRIMARY KEY (task_id, list_id)
+);
+
+CREATE TABLE IF NOT EXISTS task_tag (
+	task_id TEXT NOT NULL REFERENCES task(id),
+	tag_id  TEXT NOT NULL REFERENCES tag(id),
+	PRIMARY KEY (task_id, tag_id)
+);
+
+CREATE TRIGGER IF NOT EXISTS fold_list_created
+AFTER INSERT ON change_history WHEN NEW.kind = 'list_created'
+BEGIN
+	INSERT INTO list (id, name, colour, created_at)
+	VALUES (NEW.subject, json_extract(NEW.payload, '$.name'), json_extract(NEW.payload, '$.colour'), NEW.at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS fold_list_described
+AFTER INSERT ON change_history WHEN NEW.kind = 'list_described'
+BEGIN
+	UPDATE list SET
+		name   = CASE WHEN json_type(NEW.payload, '$.name')   IS NULL THEN name   ELSE json_extract(NEW.payload, '$.name')   END,
+		colour = CASE WHEN json_type(NEW.payload, '$.colour') IS NULL THEN colour ELSE json_extract(NEW.payload, '$.colour') END
+	WHERE id = NEW.subject;
+END;
+
+CREATE TRIGGER IF NOT EXISTS fold_tag_created
+AFTER INSERT ON change_history WHEN NEW.kind = 'tag_created'
+BEGIN
+	INSERT INTO tag (id, name, colour, created_at)
+	VALUES (NEW.subject, json_extract(NEW.payload, '$.name'), json_extract(NEW.payload, '$.colour'), NEW.at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS fold_tag_described
+AFTER INSERT ON change_history WHEN NEW.kind = 'tag_described'
+BEGIN
+	UPDATE tag SET
+		name   = CASE WHEN json_type(NEW.payload, '$.name')   IS NULL THEN name   ELSE json_extract(NEW.payload, '$.name')   END,
+		colour = CASE WHEN json_type(NEW.payload, '$.colour') IS NULL THEN colour ELSE json_extract(NEW.payload, '$.colour') END
+	WHERE id = NEW.subject;
+END;
+
+-- Membership is folded on the Task, whose Lease governed the append.
+CREATE TRIGGER IF NOT EXISTS fold_task_listed
+AFTER INSERT ON change_history WHEN NEW.kind = 'task_listed'
+BEGIN
+	INSERT INTO task_list (task_id, list_id)
+	VALUES (NEW.subject, json_extract(NEW.payload, '$.list'))
+	ON CONFLICT DO NOTHING;
+END;
+
+CREATE TRIGGER IF NOT EXISTS fold_task_unlisted
+AFTER INSERT ON change_history WHEN NEW.kind = 'task_unlisted'
+BEGIN
+	DELETE FROM task_list
+	WHERE task_id = NEW.subject AND list_id = json_extract(NEW.payload, '$.list');
+END;
+
+CREATE TRIGGER IF NOT EXISTS fold_tag_attached
+AFTER INSERT ON change_history WHEN NEW.kind = 'tag_attached'
+BEGIN
+	INSERT INTO task_tag (task_id, tag_id)
+	VALUES (NEW.subject, json_extract(NEW.payload, '$.tag'))
+	ON CONFLICT DO NOTHING;
+END;
+
+CREATE TRIGGER IF NOT EXISTS fold_tag_detached
+AFTER INSERT ON change_history WHEN NEW.kind = 'tag_detached'
+BEGIN
+	DELETE FROM task_tag
+	WHERE task_id = NEW.subject AND tag_id = json_extract(NEW.payload, '$.tag');
+END;
 `
 
 // Open opens the store at path, creating it if it is not there.
@@ -645,24 +752,59 @@ func (s *Store) WithLease(actor, taskID string, ttl time.Duration, fn func() err
 	return fn()
 }
 
+// Sort is the order siblings come back in. The tree shape is kept whichever
+// one is asked for: a sort orders siblings, it does not flatten the tree.
+type Sort string
+
+const (
+	SortCreated  Sort = "created"
+	SortDeadline Sort = "deadline"
+	SortTitle    Sort = "title"
+)
+
+// sortKeys holds the expression each Sort orders on. A Task with no deadline
+// sorts after every Task that has one, since '~' follows the digits a stamp
+// starts with.
+var sortKeys = map[Sort]string{
+	SortCreated:  "created_at",
+	SortDeadline: "COALESCE(deadline, '~')",
+	SortTitle:    "lower(title)",
+}
+
 // Query narrows what Tasks returns. The zero Query is the everyday view: open
-// Tasks that are neither snoozed nor deleted.
+// Tasks that are neither snoozed nor deleted, in creation order.
 type Query struct {
 	IncludeCompleted bool
 	IncludeSnoozed   bool
 	IncludeDeleted   bool
+
+	// List narrows to the Tasks in one List, named by its id.
+	List string
+	// Sort orders siblings. The zero value is SortCreated.
+	Sort Sort
 }
 
 // Tasks reads current state. It writes nothing, and it evaluates Overdue and
 // the snooze against the clock as it goes: neither is stored, and nothing
 // records the moment either becomes true.
+//
+// The result is depth first: a Task is followed by everything nested under it
+// before the next sibling, so a surface indents by Depth rather than
+// rebuilding the tree.
 func (s *Store) Tasks(q Query) ([]Task, error) {
 	at := now()
-	rows, err := s.db.Query(`
+	if q.Sort == "" {
+		q.Sort = SortCreated
+	}
+	key, ok := sortKeys[q.Sort]
+	if !ok {
+		return nil, fmt.Errorf("%q is not a sort: want created, deadline or title", q.Sort)
+	}
+	rows, err := s.db.Query(fmt.Sprintf(`
 WITH RECURSIVE depth_first(id, path) AS (
-	SELECT id, created_at || '/' || id FROM task WHERE parent_id IS NULL
+	SELECT id, %[1]s || '/' || id FROM task WHERE parent_id IS NULL
 	UNION ALL
-	SELECT t.id, d.path || '/' || t.created_at || '/' || t.id
+	SELECT t.id, d.path || '/' || %[1]s || '/' || t.id
 	FROM task t JOIN depth_first d ON t.parent_id = d.id
 )
 SELECT
@@ -670,13 +812,16 @@ SELECT
 	t.deadline, t.estimate_seconds, t.priority, t.impact, t.snoozed_until, t.colour,
 	t.completed_at, t.deleted_at,
 	(t.deadline IS NOT NULL AND t.deadline < ?) AS overdue,
-	COALESCE((SELECT json_group_object(key, value) FROM task_field f WHERE f.task_id = t.id), '{}')
+	COALESCE((SELECT json_group_object(key, value) FROM task_field f WHERE f.task_id = t.id), '{}'),
+	COALESCE((SELECT json_group_array(list_id) FROM task_list m WHERE m.task_id = t.id), '[]'),
+	COALESCE((SELECT json_group_array(tag_id) FROM task_tag m WHERE m.task_id = t.id), '[]')
 FROM task t JOIN depth_first d ON d.id = t.id
 WHERE (? OR t.deleted_at IS NULL)
   AND (? OR t.completed_at IS NULL)
   AND (? OR t.snoozed_until IS NULL OR t.snoozed_until <= ?)
-ORDER BY d.path`,
-		at, q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at)
+  AND (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = t.id AND m.list_id = ?))
+ORDER BY d.path`, key),
+		at, q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at, q.List, q.List)
 	if err != nil {
 		return nil, fmt.Errorf("read tasks: %w", err)
 	}
@@ -688,13 +833,13 @@ ORDER BY d.path`,
 			t                                            Task
 			description, why, deadline, priority, impact *string
 			snoozedUntil, colour, completedAt, deletedAt *string
-			createdAt, fields                            string
+			createdAt, fields, lists, tags               string
 			estimate                                     *int64
 		)
 		err := rows.Scan(
 			&t.ID, &t.Parent, &t.Depth, &t.Title, &description, &why, &createdAt,
 			&deadline, &estimate, &priority, &impact, &snoozedUntil, &colour,
-			&completedAt, &deletedAt, &t.Overdue, &fields,
+			&completedAt, &deletedAt, &t.Overdue, &fields, &lists, &tags,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("read task: %w", err)
@@ -713,6 +858,8 @@ ORDER BY d.path`,
 			t.Estimate = time.Duration(*estimate) * time.Second
 		}
 		t.Fields = decodeFields(fields)
+		t.Lists = decodeIDs(lists)
+		t.Tags = decodeIDs(tags)
 		tasks = append(tasks, t)
 	}
 	return tasks, rows.Err()

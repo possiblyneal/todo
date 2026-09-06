@@ -29,10 +29,20 @@ func (f fields) Set(v string) error {
 	return nil
 }
 
+// ids collects a repeatable flag naming things by id.
+type ids []string
+
+func (v *ids) String() string { return strings.Join(*v, ",") }
+
+func (v *ids) Set(s string) error {
+	*v = append(*v, s)
+	return nil
+}
+
 // attributeFlags registers every Task attribute on fs and returns a function
 // that reads back only the flags actually given. A flag nobody typed leaves
 // its attribute alone; a flag given empty clears it.
-func attributeFlags(fs *flag.FlagSet) func() (store.Attributes, error) {
+func attributeFlags(fs *flag.FlagSet) func() (store.Attributes, bool, error) {
 	var (
 		title       = fs.String("title", "", "the task's title")
 		description = fs.String("description", "", "what the task is")
@@ -47,13 +57,17 @@ func attributeFlags(fs *flag.FlagSet) func() (store.Attributes, error) {
 	)
 	fs.Var(pairs, "field", "a key=value pair, repeatable")
 
-	return func() (store.Attributes, error) {
+	return func() (store.Attributes, bool, error) {
 		var a store.Attributes
 		var err error
+		given := false
 		fs.Visit(func(f *flag.Flag) {
 			if err != nil {
 				return
 			}
+			// Only the flags registered here count as an attribute: a
+			// verb may hang others on the same set, and edit does.
+			matched := true
 			switch f.Name {
 			case "title":
 				a.Title = title
@@ -91,12 +105,15 @@ func attributeFlags(fs *flag.FlagSet) func() (store.Attributes, error) {
 					}
 				}
 				a.Estimate = &d
+			default:
+				matched = false
 			}
+			given = given || matched
 		})
 		if len(pairs) > 0 {
 			a.Fields = pairs
 		}
-		return a, err
+		return a, given || len(pairs) > 0, err
 	}
 }
 
@@ -147,7 +164,7 @@ func addTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	a, err := read()
+	a, _, err := read()
 	if err != nil {
 		fmt.Fprintf(stderr, "todo add: %v\n", err)
 		return 2
@@ -188,15 +205,23 @@ func addTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	fs := flags("list", stderr)
 	all := fs.Bool("all", false, "include completed, snoozed and deleted tasks")
+	in := fs.String("list", "", "only the tasks in this list, by id")
+	sort := fs.String("sort", string(store.SortCreated), "order siblings by created, deadline or title")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	q := store.Query{IncludeCompleted: *all, IncludeSnoozed: *all, IncludeDeleted: *all}
+	q := store.Query{
+		IncludeCompleted: *all,
+		IncludeSnoozed:   *all,
+		IncludeDeleted:   *all,
+		List:             *in,
+		Sort:             store.Sort(*sort),
+	}
 
 	tasks, err := s.Tasks(q)
 	if err != nil {
 		fmt.Fprintf(stderr, "todo list: %v\n", err)
-		return 1
+		return 2
 	}
 	// Tasks comes back depth first, so indenting by depth draws the tree
 	// without the list having to rebuild it.
@@ -232,6 +257,11 @@ func marks(t store.Task) string {
 func editTask(s *store.Store, args []string, stderr io.Writer) int {
 	fs := flags("edit", stderr)
 	read := attributeFlags(fs)
+	var into, outOf, carry, drop ids
+	fs.Var(&into, "list", "put the task in this list, by id; repeatable")
+	fs.Var(&outOf, "unlist", "take the task out of this list, by id; repeatable")
+	fs.Var(&carry, "tag", "put this tag on the task, by id; repeatable")
+	fs.Var(&drop, "untag", "take this tag off the task, by id; repeatable")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -239,14 +269,35 @@ func editTask(s *store.Store, args []string, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "todo edit: name one task by id")
 		return 2
 	}
-	a, err := read()
+	a, attributes, err := read()
 	if err != nil {
 		fmt.Fprintf(stderr, "todo edit: %v\n", err)
 		return 2
 	}
-	id := fs.Arg(0)
-	return refuse(stderr, "edit", s.WithLease(actor(), id, leaseTTL, func() error {
-		return s.EditTask(actor(), id, a)
+	id, who := fs.Arg(0), actor()
+
+	// One Lease covers the whole edit: the attributes and every List and Tag
+	// it joins or leaves are one visit to the tree.
+	return refuse(stderr, "edit", s.WithLease(who, id, leaseTTL, func() error {
+		if attributes {
+			if err := s.EditTask(who, id, a); err != nil {
+				return err
+			}
+		}
+		for _, member := range []struct {
+			ids ids
+			do  func(actor, taskID, otherID string) error
+		}{
+			{into, s.AddToList}, {outOf, s.RemoveFromList},
+			{carry, s.AttachTag}, {drop, s.DetachTag},
+		} {
+			for _, other := range member.ids {
+				if err := member.do(who, id, other); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	}))
 }
 
@@ -292,4 +343,99 @@ func flags(verb string, stderr io.Writer) *flag.FlagSet {
 	fs := flag.NewFlagSet("todo "+verb, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	return fs
+}
+
+// collections is `todo lists` and `todo tags`, which differ only in what they
+// act on. Bare, it shows them ranked; `new`, `rename` and `recolour` are the
+// three writes, and none of them needs a Lease: a List and a Tag are
+// aggregates of their own, not part of anybody's tree.
+func collections(s *store.Store, noun string, args []string, stdout, stderr io.Writer) int {
+	sub := ""
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		sub, args = args[0], args[1:]
+	}
+	fs := flags(noun, stderr)
+	colour := fs.String("colour", "", "the colour it carries")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	add, describe, show := s.AddList, s.DescribeList, listsOf(s)
+	if noun == "tags" {
+		add, describe, show = s.AddTag, s.DescribeTag, tagsOf(s)
+	}
+
+	switch sub {
+	case "":
+		rows, err := show()
+		if err != nil {
+			fmt.Fprintf(stderr, "todo %s: %v\n", noun, err)
+			return 1
+		}
+		for _, row := range rows {
+			fmt.Fprintln(stdout, row)
+		}
+		return 0
+
+	case "new":
+		id, err := add(actor(), strings.Join(fs.Args(), " "), *colour)
+		if err != nil {
+			fmt.Fprintf(stderr, "todo %s new: %v\n", noun, err)
+			return 2
+		}
+		fmt.Fprintln(stdout, id)
+		return 0
+
+	case "rename", "recolour":
+		if fs.NArg() < 2 {
+			fmt.Fprintf(stderr, "todo %s %s: name one by id, then what to call it\n", noun, sub)
+			return 2
+		}
+		value := strings.Join(fs.Args()[1:], " ")
+		var name, paint *string
+		if sub == "rename" {
+			name = &value
+		} else {
+			paint = &value
+		}
+		if err := describe(actor(), fs.Arg(0), name, paint); err != nil {
+			fmt.Fprintf(stderr, "todo %s %s: %v\n", noun, sub, err)
+			return 1
+		}
+		return 0
+
+	default:
+		fmt.Fprintf(stderr, "todo %s: unknown form %q: want new, rename or recolour\n", noun, sub)
+		return 2
+	}
+}
+
+// listsOf and tagsOf render a collection the same way, most carried first for
+// tags and by name for lists, which is the order each reader returns.
+func listsOf(s *store.Store) func() ([]string, error) {
+	return func() ([]string, error) {
+		lists, err := s.Lists()
+		if err != nil {
+			return nil, err
+		}
+		rows := make([]string, len(lists))
+		for i, l := range lists {
+			rows[i] = fmt.Sprintf("%s  %s  (%d)", l.ID, l.Name, l.Count)
+		}
+		return rows, nil
+	}
+}
+
+func tagsOf(s *store.Store) func() ([]string, error) {
+	return func() ([]string, error) {
+		tags, err := s.Tags()
+		if err != nil {
+			return nil, err
+		}
+		rows := make([]string, len(tags))
+		for i, g := range tags {
+			rows[i] = fmt.Sprintf("%s  %s  (%d)", g.ID, g.Name, g.Count)
+		}
+		return rows, nil
+	}
 }

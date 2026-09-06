@@ -201,6 +201,15 @@ func parseStamp(v *string) time.Time {
 	return t
 }
 
+// decodeIDs reads the ids a Task carries out of a json_group_array.
+func decodeIDs(v string) []string {
+	var ids []string
+	if err := json.Unmarshal([]byte(v), &ids); err != nil {
+		return nil
+	}
+	return ids
+}
+
 func decodeFields(raw string) map[string]string {
 	fields := map[string]string{}
 	_ = json.Unmarshal([]byte(raw), &fields)

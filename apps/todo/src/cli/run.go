@@ -52,6 +52,8 @@ func runVerb(args []string, stdout, stderr io.Writer) int {
 		return listTasks(s, rest, stdout, stderr)
 	case "edit":
 		return editTask(s, rest, stderr)
+	case "lists", "tags":
+		return collections(s, verb, rest, stdout, stderr)
 	case "complete", "reopen", "delete":
 		return lifecycle(s, verb, rest, stderr)
 	default:
