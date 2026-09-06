@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -218,4 +219,35 @@ func count(all []string, want string) int {
 		}
 	}
 	return n
+}
+
+func TestAddNestsSubtasksAndListDrawsTheTree(t *testing.T) {
+	storeInTemp(t)
+	t.Setenv("TODO_ACTOR", "alice")
+	root := added(t, "Ship the thing")
+
+	id := root
+	for i := 2; i <= 5; i++ {
+		id = added(t, "-parent", id, "level "+strconv.Itoa(i))
+	}
+	if code, _, errs := run(t, "add", "-parent", id, "level 6"); code != 1 {
+		t.Errorf("a sixth level exited %d, want 1: %s", code, errs)
+	}
+
+	out := listed(t)
+	if lines := strings.Count(strings.TrimSpace(out), "\n") + 1; lines != 5 {
+		t.Errorf("the list has %d lines, want the five nested tasks:\n%s", lines, out)
+	}
+	if !strings.Contains(out, "        level 5") {
+		t.Errorf("the deepest task is not drawn at its depth:\n%s", out)
+	}
+
+	// The parent cannot close while anything under it is open, and the
+	// deepest task is the only one that can.
+	if code, _, _ := run(t, "complete", root); code != 1 {
+		t.Errorf("the root completed with open children")
+	}
+	if code, _, errs := run(t, "complete", id); code != 0 {
+		t.Fatalf("completing the deepest task exited %d: %s", code, errs)
+	}
 }

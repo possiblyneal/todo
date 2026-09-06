@@ -142,6 +142,7 @@ func snoozeLabels() string {
 
 func addTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	fs := flags("add", stderr)
+	parent := fs.String("parent", "", "nest the new task under this task id, to five levels")
 	read := attributeFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -157,6 +158,22 @@ func addTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	if a.Title == nil {
 		fmt.Fprintln(stderr, "todo add: a task needs a title")
 		return 2
+	}
+
+	// A Subtask is written under its tree's Lease, the same one every other
+	// write to that tree needs.
+	if *parent != "" {
+		var id string
+		err := s.WithLease(actor(), *parent, leaseTTL, func() error {
+			var err error
+			id, err = s.AddSubtask(actor(), *parent, a)
+			return err
+		})
+		if code := refuse(stderr, "add", err); code != 0 {
+			return code
+		}
+		fmt.Fprintln(stdout, id)
+		return 0
 	}
 
 	id, err := s.AddTask(actor(), a)
@@ -181,8 +198,11 @@ func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "todo list: %v\n", err)
 		return 1
 	}
+	// Tasks comes back depth first, so indenting by depth draws the tree
+	// without the list having to rebuild it.
 	for _, t := range tasks {
-		fmt.Fprintf(stdout, "%s  %s%s\n", t.ID, t.Title, marks(t))
+		indent := strings.Repeat("  ", t.Depth-1)
+		fmt.Fprintf(stdout, "%s  %s%s%s\n", t.ID, indent, t.Title, marks(t))
 	}
 	return 0
 }

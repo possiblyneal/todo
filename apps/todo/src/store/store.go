@@ -87,6 +87,10 @@ type Entry struct {
 type Task struct {
 	ID     string
 	Parent string
+	// Depth is 1 for a top-level Task and at most 5, the level a Subtask
+	// nests to. Tasks returns a tree depth first, so a parent is followed
+	// by its own children before the next sibling.
+	Depth int
 
 	Title        string
 	Description  string
@@ -170,6 +174,7 @@ END;
 CREATE TABLE IF NOT EXISTS task (
 	id               TEXT PRIMARY KEY,
 	parent_id        TEXT REFERENCES task(id),
+	depth            INTEGER NOT NULL,
 	title            TEXT NOT NULL,
 	description      TEXT,
 	why              TEXT,
@@ -210,18 +215,54 @@ BEGIN
 	SELECT RAISE(ABORT, 'a Lease covers a top-level Task, not a subtask');
 END;
 
+-- A Task nests Subtasks to five levels and no further. The depth is folded
+-- from the parent's rather than walked, so the limit is one comparison.
+CREATE TRIGGER IF NOT EXISTS subtasks_nest_to_five_levels
+BEFORE INSERT ON task
+WHEN NEW.depth > 5
+BEGIN
+	SELECT RAISE(ABORT, 'a Subtask nests to five levels, no deeper');
+END;
+
+-- A Subtask is created where it lives and stays there. Re-parenting is a
+-- cross-aggregate operation this boundary does not have; see
+-- docs/adrs/0002-subtask-tree-is-one-aggregate.md.
+CREATE TRIGGER IF NOT EXISTS a_subtask_never_moves
+BEFORE UPDATE OF parent_id ON task
+WHEN NEW.parent_id IS NOT OLD.parent_id
+BEGIN
+	SELECT RAISE(ABORT, 'a Subtask never moves');
+END;
+
+-- The invariant the coarse aggregate boundary was bought for. Only direct
+-- children are consulted: an open grandchild keeps its own parent open, so the
+-- rule reaches the whole tree one level at a time.
+CREATE TRIGGER IF NOT EXISTS a_parent_completes_after_its_children
+BEFORE UPDATE OF completed_at ON task
+WHEN NEW.completed_at IS NOT NULL
+ AND EXISTS (
+	SELECT 1 FROM task child
+	WHERE child.parent_id = NEW.id
+	  AND child.completed_at IS NULL
+	  AND child.deleted_at IS NULL
+ )
+BEGIN
+	SELECT RAISE(ABORT, 'a parent cannot complete while a child is open');
+END;
+
 -- The folds. Each fires inside the appending writer's transaction, so current
 -- state and the entry that produced it commit together or not at all.
 CREATE TRIGGER IF NOT EXISTS fold_task_added
 AFTER INSERT ON change_history WHEN NEW.kind = 'task_added'
 BEGIN
 	INSERT INTO task (
-		id, parent_id, title, description, why, created_at,
+		id, parent_id, depth, title, description, why, created_at,
 		deadline, estimate_seconds, priority, impact, snoozed_until, colour
 	)
 	VALUES (
 		NEW.subject,
 		json_extract(NEW.payload, '$.parent'),
+		COALESCE((SELECT depth FROM task WHERE id = json_extract(NEW.payload, '$.parent')), 0) + 1,
 		json_extract(NEW.payload, '$.title'),
 		json_extract(NEW.payload, '$.description'),
 		json_extract(NEW.payload, '$.why'),
@@ -618,17 +659,23 @@ type Query struct {
 func (s *Store) Tasks(q Query) ([]Task, error) {
 	at := now()
 	rows, err := s.db.Query(`
+WITH RECURSIVE depth_first(id, path) AS (
+	SELECT id, created_at || '/' || id FROM task WHERE parent_id IS NULL
+	UNION ALL
+	SELECT t.id, d.path || '/' || t.created_at || '/' || t.id
+	FROM task t JOIN depth_first d ON t.parent_id = d.id
+)
 SELECT
-	t.id, COALESCE(t.parent_id, ''), t.title, t.description, t.why, t.created_at,
+	t.id, COALESCE(t.parent_id, ''), t.depth, t.title, t.description, t.why, t.created_at,
 	t.deadline, t.estimate_seconds, t.priority, t.impact, t.snoozed_until, t.colour,
 	t.completed_at, t.deleted_at,
 	(t.deadline IS NOT NULL AND t.deadline < ?) AS overdue,
 	COALESCE((SELECT json_group_object(key, value) FROM task_field f WHERE f.task_id = t.id), '{}')
-FROM task t
+FROM task t JOIN depth_first d ON d.id = t.id
 WHERE (? OR t.deleted_at IS NULL)
   AND (? OR t.completed_at IS NULL)
   AND (? OR t.snoozed_until IS NULL OR t.snoozed_until <= ?)
-ORDER BY t.created_at, t.id`,
+ORDER BY d.path`,
 		at, q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at)
 	if err != nil {
 		return nil, fmt.Errorf("read tasks: %w", err)
@@ -645,7 +692,7 @@ ORDER BY t.created_at, t.id`,
 			estimate                                     *int64
 		)
 		err := rows.Scan(
-			&t.ID, &t.Parent, &t.Title, &description, &why, &createdAt,
+			&t.ID, &t.Parent, &t.Depth, &t.Title, &description, &why, &createdAt,
 			&deadline, &estimate, &priority, &impact, &snoozedUntil, &colour,
 			&completedAt, &deletedAt, &t.Overdue, &fields,
 		)
