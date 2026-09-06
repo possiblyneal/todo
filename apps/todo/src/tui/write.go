@@ -1,0 +1,124 @@
+package tui
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/possiblyneal/todo/apps/todo/src/store"
+)
+
+// writeTTL is how long the TUI holds a Lease. A write is opened, committed and
+// given back inside one keystroke's worth of work, so the TTL only has to
+// outlive the write itself; it is the CLI's for the same reason, which is that
+// neither surface should strand a tree behind a dead process.
+const writeTTL = 30 * time.Second
+
+// save writes a draft: a new Task, or an edit to the one it was opened on.
+//
+// Nothing here runs while a person is typing. The form gathers, save writes,
+// and the Lease is taken and released inside this call, so a CLI write racing
+// the TUI waits on a transaction measured in milliseconds rather than on how
+// long someone stared at a text box.
+func (m *Model) save(d *draft) error {
+	a, err := d.attributes()
+	if err != nil {
+		return err
+	}
+
+	if d.taskID == "" {
+		id, err := m.store.AddTask(m.actor, a)
+		if err != nil {
+			return err
+		}
+		return m.store.WithLease(m.actor, id, writeTTL, func() error {
+			return m.memberships(id, store.Task{}, d)
+		})
+	}
+
+	was, ok := m.taskByID(d.taskID)
+	if !ok {
+		return fmt.Errorf("that task is no longer in view")
+	}
+	return m.store.WithLease(m.actor, d.taskID, writeTTL, func() error {
+		if err := m.store.EditTask(m.actor, d.taskID, a); err != nil {
+			return err
+		}
+		return m.memberships(d.taskID, was, d)
+	})
+}
+
+// memberships appends only the differences, so opening a Task and saving it
+// unchanged adds nothing to the Change History.
+func (m *Model) memberships(taskID string, was store.Task, d *draft) error {
+	for _, id := range added(was.Lists, d.Lists) {
+		if err := m.store.AddToList(m.actor, taskID, id); err != nil {
+			return err
+		}
+	}
+	for _, id := range added(d.Lists, was.Lists) {
+		if err := m.store.RemoveFromList(m.actor, taskID, id); err != nil {
+			return err
+		}
+	}
+	for _, id := range added(was.Tags, d.Tags) {
+		if err := m.store.AttachTag(m.actor, taskID, id); err != nil {
+			return err
+		}
+	}
+	for _, id := range added(d.Tags, was.Tags) {
+		if err := m.store.DetachTag(m.actor, taskID, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// added is what is in now and not in was.
+func added(was, now []string) []string {
+	var out []string
+	for _, id := range now {
+		if !contains(was, id) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// lifecycle completes, reopens or deletes the Task under the cursor, each one
+// taking the Lease covering its tree and giving it back.
+func (m *Model) lifecycle(taskID, what string) error {
+	return m.store.WithLease(m.actor, taskID, writeTTL, func() error {
+		switch what {
+		case "complete":
+			return m.store.CompleteTask(m.actor, taskID)
+		case "reopen":
+			return m.store.ReopenTask(m.actor, taskID)
+		case "delete":
+			return m.store.DeleteTask(m.actor, taskID)
+		}
+		return fmt.Errorf("no such command %q", what)
+	})
+}
+
+// snooze hides a Task for one of the offered lengths, counted from now.
+func (m *Model) snooze(taskID string, s store.Snooze) error {
+	return m.store.WithLease(m.actor, taskID, writeTTL, func() error {
+		return m.store.EditTask(m.actor, taskID, store.Attributes{
+			SnoozedUntil: store.Set(s.Until(time.Now())),
+		})
+	})
+}
+
+func (m Model) taskByID(id string) (store.Task, bool) {
+	for _, item := range m.tasks.Items() {
+		if r, ok := item.(row); ok && r.task.ID == id {
+			return r.task, true
+		}
+	}
+	return store.Task{}, false
+}
+
+func (m Model) selected() (store.Task, bool) {
+	r, ok := m.tasks.SelectedItem().(row)
+	return r.task, ok
+}

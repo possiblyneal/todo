@@ -86,7 +86,7 @@ func carry(t *testing.T, s *store.Store, taskID string, fn func() error) {
 
 func newModel(t *testing.T, s *store.Store) Model {
 	t.Helper()
-	m, err := New(s, rand.New(rand.NewPCG(1, 2)))
+	m, err := New(s, "alice", rand.New(rand.NewPCG(1, 2)))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -212,8 +212,10 @@ func TestTheMainViewWritesNothing(t *testing.T) {
 	m = clickOn(t, m, "tag:"+urgent)
 	m = press(m, "L")
 	m = clickOn(t, m, "list:"+home)
-	m = press(m, "/")
+	m = press(m, "f")
 	m = press(m, "r")
+	m = press(m, "esc")
+	m = press(m, "/")
 	m = press(m, "esc")
 	m.View()
 
@@ -353,7 +355,7 @@ func TestTheSearchboxFiltersLive(t *testing.T) {
 	s := fixture(t)
 	m := newModel(t, s)
 
-	m = press(m, "/")
+	m = press(m, "f")
 	for _, key := range []string{"a", "p", "p"} {
 		m = press(m, key)
 	}

@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
@@ -85,6 +86,11 @@ func (d rowDelegate) render(r row, selected bool) string {
 }
 
 // describe cuts a description into exactly two lines, breaking on words.
+//
+// Widths are measured in cells rather than bytes, so an emoji takes the two
+// columns it draws in and a nerd font glyph takes one. Bubble Tea v2 negotiates
+// Unicode mode 2027 with the terminal at startup, which is what makes the
+// terminal agree with that measurement.
 func describe(text string, width int) [2]string {
 	var lines [2]string
 	if width < 8 {
@@ -93,20 +99,23 @@ func describe(text string, width int) [2]string {
 	words := strings.Fields(text)
 	for i := range lines {
 		var line string
-		for len(words) > 0 && len(line)+len(words[0])+1 <= width {
+		for len(words) > 0 {
+			candidate := words[0]
 			if line != "" {
-				line += " "
+				candidate = line + " " + words[0]
 			}
-			line += words[0]
-			words = words[1:]
+			if lipgloss.Width(candidate) > width {
+				break
+			}
+			line, words = candidate, words[1:]
 		}
 		if line == "" && len(words) > 0 {
-			line, words = words[0][:width], words[1:]
+			line, words = ansi.Truncate(words[0], width, ""), words[1:]
 		}
 		lines[i] = line
 	}
-	if len(words) > 0 && len(lines[1]) > 1 {
-		lines[1] = lines[1][:len(lines[1])-1] + "…"
+	if len(words) > 0 {
+		lines[1] = ansi.Truncate(lines[1], width-1, "") + "…"
 	}
 	return lines
 }

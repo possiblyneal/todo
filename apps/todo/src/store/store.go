@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -73,7 +74,8 @@ const stamp = "2006-01-02T15:04:05.000000000Z07:00"
 
 // Store is an open handle on the tracker's SQLite file.
 type Store struct {
-	db *sql.DB
+	db   *sql.DB
+	path string
 }
 
 // Entry is one appended fact. Seq is its position in the single global
@@ -147,6 +149,10 @@ type Lease struct {
 // transaction, so here the deferred path fails loudly instead -- every writer
 // but one gets SQLITE_BUSY on its first append, which the concurrency test
 // reproduces if this line is changed.
+// busy_timeout is ten seconds because it only ever has to outlast a real
+// write. No surface holds a transaction across think-time -- the TUI's form
+// gathers first and writes on submit -- so a writer waiting here is waiting on
+// milliseconds of work, and ten seconds means a queue, not a deadlock.
 func dsn(path string) string {
 	pragmas := []string{
 		"journal_mode(WAL)",
@@ -468,7 +474,23 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply schema to %s: %w", path, err)
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, path: path}, nil
+}
+
+// WALToken is a cheap stand-in for "has anyone written since I last looked".
+// It is the size and modification time of the write-ahead log, which every
+// commit touches, so a surface can poll it instead of re-reading the store.
+//
+// SQLite cannot push a change to another process, so the token is the whole of
+// the mechanism: it is compared, not subscribed to. An empty token means the
+// log is not there to stat, which is what a store nobody has written to since
+// its last checkpoint looks like.
+func (s *Store) WALToken() string {
+	info, err := os.Stat(s.path + "-wal")
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d@%d", info.Size(), info.ModTime().UnixNano())
 }
 
 // Close releases the handle.

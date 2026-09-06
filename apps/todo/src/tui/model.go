@@ -8,8 +8,10 @@ import (
 	"math/rand/v2"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
@@ -41,6 +43,7 @@ var (
 // hand one session's hit boxes to another.
 type Model struct {
 	store *store.Store
+	actor string
 	zones *zone.Manager
 	rand  *rand.Rand
 
@@ -57,14 +60,32 @@ type Model struct {
 	tasks         list.Model
 	width, height int
 	err           error
+
+	// The palette is the slash commands, the editor is the add and edit
+	// screen, and the popup is the List or Tag being created from inside
+	// it. At most one of them has the keyboard, in that order outwards.
+	palette     list.Model
+	paletteOpen bool
+
+	editor *huh.Form
+	draft  *draft
+
+	popup              *huh.Form
+	newCollection      string
+	newName, newColour string
+
+	// wal is the last write-ahead log token seen, which is how a write made
+	// in another process reaches this one.
+	wal string
 }
 
 // New reads the store once and builds the view. It returns the read's error
 // rather than swallowing it, so an unopenable store fails before Bubble Tea
 // takes the terminal.
-func New(s *store.Store, r *rand.Rand) (Model, error) {
+func New(s *store.Store, actor string, r *rand.Rand) (Model, error) {
 	m := Model{
 		store:  s,
+		actor:  actor,
 		zones:  zone.New(),
 		rand:   r,
 		chosen: map[string]bool{},
@@ -80,6 +101,11 @@ func New(s *store.Store, r *rand.Rand) (Model, error) {
 	m.tasks.SetShowHelp(false)
 	m.tasks.SetFilteringEnabled(true)
 	m.tasks.SetShowFilter(true)
+	// The searchbox gives up "/" to the slash palette and takes "f"; both
+	// are the same fuzzy filter, pointed at Tasks and at verbs.
+	m.tasks.KeyMap.Filter = key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "search"))
+	m.palette = newPalette(m.width/2, m.height-4)
+	m.wal = s.WALToken()
 	if err := m.refresh(); err != nil {
 		return Model{}, err
 	}
@@ -156,18 +182,40 @@ func contains(all []string, want string) bool {
 	return false
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+// Init starts the watch on the write-ahead log, which is how this process
+// learns of a write made by a verb in another terminal.
+func (m Model) Init() tea.Cmd { return watch() }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// A screen that is open owns the keyboard, outermost first, so a key
+	// typed into the new-List popup never reaches the task list behind it.
+	switch {
+	case m.popup != nil:
+		next, cmd := m.updatePopup(msg)
+		return next, cmd
+	case m.editor != nil:
+		next, cmd := m.updateEditor(msg)
+		return next, cmd
+	case m.paletteOpen:
+		next, cmd := m.updatePalette(msg)
+		return next, cmd
+	}
+
 	switch msg := msg.(type) {
+	case pollMsg:
+		next, cmd := m.poll()
+		return next, cmd
+
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.tasks.SetSize(m.width-sidebarWidth, m.height-4)
 		m.tasks.SetDelegate(rowDelegate{zones: m.zones, width: m.width - sidebarWidth})
+		m.palette.SetSize(m.width/2, m.height-4)
 		return m, nil
 
 	case tea.MouseClickMsg:
-		return m.click(msg)
+		next, cmd := m.click(msg)
+		return next, cmd
 
 	case tea.KeyPressMsg:
 		// While the searchbox has the keyboard every key belongs to it,
@@ -187,10 +235,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // press handles the view's own keys. It reports whether it took the key, so
 // everything else falls through to the task list.
-func (m Model) press(msg tea.KeyPressMsg) (bool, tea.Model, tea.Cmd) {
+func (m Model) press(msg tea.KeyPressMsg) (bool, Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return true, m, tea.Quit
+
+	case "/":
+		// The palette opens already filtering, so the slash the person
+		// typed keeps going into the command they meant.
+		m.palette.ResetFilter()
+		m.paletteOpen = true
+		var cmd tea.Cmd
+		m.palette, cmd = m.palette.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+		return true, m, cmd
 
 	case "s":
 		m.sort = nextSort(m.sort)
@@ -227,7 +284,7 @@ func (m Model) press(msg tea.KeyPressMsg) (bool, tea.Model, tea.Cmd) {
 // click routes a mouse press to whatever was drawn under it. Every hit box is
 // a zone marked during the last render, so the layout stays the one authority
 // on where things are.
-func (m Model) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+func (m Model) click(msg tea.MouseClickMsg) (Model, tea.Cmd) {
 	if in(m.zones, "listbox", msg) {
 		m.dropdown = !m.dropdown
 		return m, nil
@@ -284,6 +341,13 @@ func nextSort(current store.Sort) store.Sort {
 }
 
 func (m Model) View() tea.View {
+	if screen, open := m.screen(); open {
+		view := tea.NewView(m.zones.Scan(screen))
+		view.AltScreen = true
+		view.MouseMode = tea.MouseModeCellMotion
+		return view
+	}
+
 	body := m.tasks.View()
 	if m.expanded {
 		if r, ok := m.tasks.SelectedItem().(row); ok {
@@ -307,7 +371,7 @@ func (m Model) View() tea.View {
 // underneath when it is.
 func (m Model) header() string {
 	line := m.zones.Mark("listbox", headerStyle.Render("▾ "+m.listName())) +
-		dimStyle.Render("   sort "+string(m.sort)+"   / search   s sort   L lists   q quit")
+		dimStyle.Render("   sort "+string(m.sort)+"   / commands   f search   s sort   L lists   q quit")
 	if !m.dropdown {
 		return line
 	}

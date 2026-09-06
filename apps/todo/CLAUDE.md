@@ -9,7 +9,7 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - `src/cmd/todo/` — `package main`, nothing but the call into `cli`. It sits under `cmd/` because `scripts/package` names the artifact after the main package's import path, and a main at `src/` would build `src-linux-amd64`.
 - `src/cli/` — mode dispatch and the verbs. `ModeOf` decides which mode an invocation asked for; `Run` takes its streams as arguments so every mode is testable without a process.
 - `src/store/` — SQLite and the whole write path. Nothing else opens a database.
-- `src/tui/` — the main view, built on `charm.land/bubbletea/v2`. It reads the store and, until #19, writes nothing.
+- `src/tui/` — the main view, the add and edit screens, and the slash palette, built on `charm.land/bubbletea/v2` and `charm.land/huh/v2`. It writes through the same store calls the verbs use.
 
 ## Local Contracts
 
@@ -35,7 +35,11 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - **The charm modules are the `charm.land/...` v2 paths**, not `github.com/charmbracelet/...`. `bubblezone/v2` requires `charm.land/bubbletea/v2`, so mixing the two roots would put two incompatible `tea.Model` types in one program.
 - **The TUI's mouse zones come from a per-Model `zone.New()`**, never `zone.NewGlobal()`. `todo serve` runs many sessions in one process, and a global manager would hand one session's hit boxes to another.
 - **The v2 View carries the screen and mouse modes.** `Model.View` sets `AltScreen` and `MouseMode`; nothing is toggled through a program option behind the model's back.
-- **The TUI reads and writes nothing, asserted.** `TestTheMainViewWritesNothing` clicks, filters, sorts and expands, then compares `HistoryLength` with what it was.
+- **The TUI never holds a write transaction across think-time.** A form gathers, `save` writes, and the Lease is taken and released inside that one call. Getting this wrong queues every other writer behind a person staring at a text box, which is why `busy_timeout` is ten seconds and not longer.
+- **The TUI hears about other writes by polling the write-ahead log.** `Store.WALToken` is a stat, compared once a second. SQLite cannot push, there is no watcher service, and when the TUI is closed nothing watches because nothing needs to.
+- **"/" opens the slash palette and "f" opens the searchbox.** Both are bubbles/list's fuzzy filter, one over verbs and one over Tasks; the palette gives the list back its "/" by rebinding `KeyMap.Filter`.
+- **A form names every attribute it showed**, so one left empty is cleared. That is the opposite of the CLI's rule, and for the same reason: a surface says what the person saw and left.
+- **The main view reads and writes nothing, asserted.** `TestTheMainViewWritesNothing` clicks, filters, sorts and expands, then compares `HistoryLength` with what it was.
 - **Bare `todo` without a terminal is a usage error**, exit 2, rather than a crash inside the renderer. An Agent that runs `todo` by accident gets a sentence, not a hung process.
 - **The Tag sidebar is ranked by frequency with variation drawn in.** Weighted sampling without replacement, so the most-carried Tag usually leads and the list does not read the same every time.
 - **`TODO_DB` overrides the store path**, which is how a test and an Agent run against a store of their own. The default sits under the user config directory.

@@ -56,7 +56,7 @@ func runTUI(stdout, stderr io.Writer) int {
 	// The Tag ranking varies from one run to the next, so it is seeded from
 	// the clock rather than fixed. A test seeds it itself.
 	seed := uint64(time.Now().UnixNano())
-	m, err := tui.New(s, rand.New(rand.NewPCG(seed, seed>>32)))
+	m, err := tui.New(s, actor(), rand.New(rand.NewPCG(seed, seed>>32)))
 	if err != nil {
 		fmt.Fprintf(stderr, "todo: %v\n", err)
 		return 1
