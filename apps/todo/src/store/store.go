@@ -38,6 +38,9 @@ import (
 const (
 	KindTaskAdded     = "task_added"
 	KindTaskDescribed = "task_described"
+	KindTaskCompleted = "task_completed"
+	KindTaskReopened  = "task_reopened"
+	KindTaskDeleted   = "task_deleted"
 	KindLeaseTaken    = "lease_taken"
 	KindLeaseReleased = "lease_released"
 	KindLeaseBroken   = "lease_broken"
@@ -82,10 +85,28 @@ type Entry struct {
 // Parent is empty on a top-level Task. A Subtask never moves, so the walk from
 // any Task to its top-level root is stable.
 type Task struct {
-	ID        string
-	Parent    string
-	Title     string
-	CreatedAt time.Time
+	ID     string
+	Parent string
+
+	Title        string
+	Description  string
+	Why          string
+	CreatedAt    time.Time
+	Deadline     time.Time
+	Estimate     time.Duration
+	Priority     Level
+	Impact       Level
+	SnoozedUntil time.Time
+	Colour       string
+	Fields       map[string]string
+
+	CompletedAt time.Time
+	DeletedAt   time.Time
+
+	// Overdue is the expression deadline < now, worked out by the read that
+	// produced this Task. It is never stored, and nothing records the moment
+	// it became true.
+	Overdue bool
 }
 
 // Lease is an exclusive claim on one top-level Task and everything nested
@@ -147,10 +168,29 @@ BEGIN
 END;
 
 CREATE TABLE IF NOT EXISTS task (
-	id         TEXT PRIMARY KEY,
-	parent_id  TEXT REFERENCES task(id),
-	title      TEXT NOT NULL,
-	created_at TEXT NOT NULL
+	id               TEXT PRIMARY KEY,
+	parent_id        TEXT REFERENCES task(id),
+	title            TEXT NOT NULL,
+	description      TEXT,
+	why              TEXT,
+	created_at       TEXT NOT NULL,
+	deadline         TEXT,
+	estimate_seconds INTEGER,
+	priority         TEXT,
+	impact           TEXT,
+	snoozed_until    TEXT,
+	colour           TEXT,
+	completed_at     TEXT,
+	deleted_at       TEXT
+);
+
+-- Any number of key/value pairs, one row each, so a new pair is data rather
+-- than a column.
+CREATE TABLE IF NOT EXISTS task_field (
+	task_id TEXT NOT NULL REFERENCES task(id),
+	key     TEXT NOT NULL,
+	value   TEXT NOT NULL,
+	PRIMARY KEY (task_id, key)
 );
 
 -- A Lease is a row keyed on the Task it covers, and it covers that Task's
@@ -175,19 +215,81 @@ END;
 CREATE TRIGGER IF NOT EXISTS fold_task_added
 AFTER INSERT ON change_history WHEN NEW.kind = 'task_added'
 BEGIN
-	INSERT INTO task (id, parent_id, title, created_at)
+	INSERT INTO task (
+		id, parent_id, title, description, why, created_at,
+		deadline, estimate_seconds, priority, impact, snoozed_until, colour
+	)
 	VALUES (
 		NEW.subject,
 		json_extract(NEW.payload, '$.parent'),
 		json_extract(NEW.payload, '$.title'),
-		NEW.at
+		json_extract(NEW.payload, '$.description'),
+		json_extract(NEW.payload, '$.why'),
+		NEW.at,
+		json_extract(NEW.payload, '$.deadline'),
+		json_extract(NEW.payload, '$.estimate_seconds'),
+		json_extract(NEW.payload, '$.priority'),
+		json_extract(NEW.payload, '$.impact'),
+		json_extract(NEW.payload, '$.snoozed_until'),
+		json_extract(NEW.payload, '$.colour')
 	);
 END;
 
+-- An edit is partial. A key absent from the payload leaves the column alone; a
+-- key holding JSON null clears it. json_type tells the two apart, which
+-- json_extract on its own cannot.
 CREATE TRIGGER IF NOT EXISTS fold_task_described
 AFTER INSERT ON change_history WHEN NEW.kind = 'task_described'
 BEGIN
-	UPDATE task SET title = json_extract(NEW.payload, '$.title') WHERE id = NEW.subject;
+	UPDATE task SET
+		title            = CASE WHEN json_type(NEW.payload, '$.title')            IS NULL THEN title            ELSE json_extract(NEW.payload, '$.title')            END,
+		description      = CASE WHEN json_type(NEW.payload, '$.description')      IS NULL THEN description      ELSE json_extract(NEW.payload, '$.description')      END,
+		why              = CASE WHEN json_type(NEW.payload, '$.why')              IS NULL THEN why              ELSE json_extract(NEW.payload, '$.why')              END,
+		deadline         = CASE WHEN json_type(NEW.payload, '$.deadline')         IS NULL THEN deadline         ELSE json_extract(NEW.payload, '$.deadline')         END,
+		estimate_seconds = CASE WHEN json_type(NEW.payload, '$.estimate_seconds') IS NULL THEN estimate_seconds ELSE json_extract(NEW.payload, '$.estimate_seconds') END,
+		priority         = CASE WHEN json_type(NEW.payload, '$.priority')         IS NULL THEN priority         ELSE json_extract(NEW.payload, '$.priority')         END,
+		impact           = CASE WHEN json_type(NEW.payload, '$.impact')           IS NULL THEN impact           ELSE json_extract(NEW.payload, '$.impact')           END,
+		snoozed_until    = CASE WHEN json_type(NEW.payload, '$.snoozed_until')    IS NULL THEN snoozed_until    ELSE json_extract(NEW.payload, '$.snoozed_until')    END,
+		colour           = CASE WHEN json_type(NEW.payload, '$.colour')           IS NULL THEN colour           ELSE json_extract(NEW.payload, '$.colour')           END
+	WHERE id = NEW.subject;
+END;
+
+-- Key/value pairs fold on both creation and edit. A pair whose value is empty
+-- is removed, which is how a pair is taken off a Task.
+CREATE TRIGGER IF NOT EXISTS fold_task_fields
+AFTER INSERT ON change_history
+WHEN NEW.kind IN ('task_added', 'task_described')
+ AND json_type(NEW.payload, '$.fields') = 'object'
+BEGIN
+	DELETE FROM task_field
+	WHERE task_id = NEW.subject
+	  AND key IN (SELECT key FROM json_each(NEW.payload, '$.fields') WHERE value = '');
+
+	INSERT INTO task_field (task_id, key, value)
+	SELECT NEW.subject, key, value FROM json_each(NEW.payload, '$.fields') WHERE value <> ''
+	ON CONFLICT (task_id, key) DO UPDATE SET value = excluded.value;
+END;
+
+-- Completing and reopening are separate entries, because undoing a terminal
+-- state is something the business cares happened.
+CREATE TRIGGER IF NOT EXISTS fold_task_completed
+AFTER INSERT ON change_history WHEN NEW.kind = 'task_completed'
+BEGIN
+	UPDATE task SET completed_at = NEW.at WHERE id = NEW.subject;
+END;
+
+CREATE TRIGGER IF NOT EXISTS fold_task_reopened
+AFTER INSERT ON change_history WHEN NEW.kind = 'task_reopened'
+BEGIN
+	UPDATE task SET completed_at = NULL WHERE id = NEW.subject;
+END;
+
+-- A deletion is an appended entry, so the fold marks the Task gone and the
+-- Change History keeps every word of what it was.
+CREATE TRIGGER IF NOT EXISTS fold_task_deleted
+AFTER INSERT ON change_history WHEN NEW.kind = 'task_deleted'
+BEGIN
+	UPDATE task SET deleted_at = NEW.at WHERE id = NEW.subject;
 END;
 
 CREATE TRIGGER IF NOT EXISTS fold_lease_taken
@@ -335,16 +437,24 @@ func entry(seq int64, at, actor, kind, subject, body string) Entry {
 
 func now() string { return time.Now().UTC().Format(stamp) }
 
+// Set is a pointer to v, for filling in an Attributes field. A nil field is
+// left alone and a field pointing at its zero value clears the attribute, so
+// every edit has to say which of the two it means.
+func Set[T any](v T) *T { return &v }
+
 // AddTask is the Add Task command for a top-level Task. It appends Task Added
 // and returns the id the fold now knows the Task by. No Lease governs it:
 // there is no tree yet to hold one.
-func (s *Store) AddTask(actor, title string) (string, error) {
+func (s *Store) AddTask(actor string, a Attributes) (string, error) {
+	payload, err := a.payload(true)
+	if err != nil {
+		return "", err
+	}
 	id, err := newID()
 	if err != nil {
 		return "", err
 	}
-	_, err = s.Append(actor, KindTaskAdded, id, map[string]any{"title": title})
-	if err != nil {
+	if _, err := s.Append(actor, KindTaskAdded, id, payload); err != nil {
 		return "", err
 	}
 	return id, nil
@@ -352,14 +462,18 @@ func (s *Store) AddTask(actor, title string) (string, error) {
 
 // AddSubtask nests a Task under an existing one. It is a write to the parent's
 // tree, so it needs the Lease that covers that tree's root.
-func (s *Store) AddSubtask(actor, parentID, title string) (string, error) {
+func (s *Store) AddSubtask(actor, parentID string, a Attributes) (string, error) {
+	payload, err := a.payload(true)
+	if err != nil {
+		return "", err
+	}
+	payload["parent"] = parentID
 	id, err := newID()
 	if err != nil {
 		return "", err
 	}
 	_, err = s.inTx(func(tx *sql.Tx) (Entry, error) {
-		return guardedAppend(tx, actor, KindTaskAdded, id, parentID,
-			map[string]any{"title": title, "parent": parentID})
+		return guardedAppend(tx, actor, KindTaskAdded, id, parentID, payload)
 	})
 	if err != nil {
 		return "", err
@@ -367,12 +481,40 @@ func (s *Store) AddSubtask(actor, parentID, title string) (string, error) {
 	return id, nil
 }
 
-// DescribeTask is the Edit Task command. It is guarded: an edit to any Task in
-// a tree needs the Lease on that tree's root.
-func (s *Store) DescribeTask(actor, taskID, title string) error {
+// EditTask is the Edit Task command. Every attribute reaches the Task through
+// it, and it needs the Lease on the tree's root.
+func (s *Store) EditTask(actor, taskID string, a Attributes) error {
+	payload, err := a.payload(false)
+	if err != nil {
+		return err
+	}
+	if len(payload) == 0 {
+		return fmt.Errorf("an edit has to change something")
+	}
+	return s.guarded(actor, taskID, KindTaskDescribed, payload)
+}
+
+// CompleteTask, ReopenTask and DeleteTask are the rest of a Task's life. Each
+// honours the same guard as an edit.
+//
+// Reopening is its own entry rather than a second Task Described, because it
+// undoes a terminal state and the business cares that it happened. Deleting is
+// an entry too: the fold marks the Task gone and the Change History keeps it.
+func (s *Store) CompleteTask(actor, taskID string) error {
+	return s.guarded(actor, taskID, KindTaskCompleted, map[string]any{})
+}
+
+func (s *Store) ReopenTask(actor, taskID string) error {
+	return s.guarded(actor, taskID, KindTaskReopened, map[string]any{})
+}
+
+func (s *Store) DeleteTask(actor, taskID string) error {
+	return s.guarded(actor, taskID, KindTaskDeleted, map[string]any{})
+}
+
+func (s *Store) guarded(actor, taskID, kind string, payload map[string]any) error {
 	_, err := s.inTx(func(tx *sql.Tx) (Entry, error) {
-		return guardedAppend(tx, actor, KindTaskDescribed, taskID, taskID,
-			map[string]any{"title": title})
+		return guardedAppend(tx, actor, kind, taskID, taskID, payload)
 	})
 	return err
 }
@@ -427,9 +569,67 @@ func (s *Store) ReleaseLease(actor, taskID string) error {
 	return err
 }
 
-// Tasks reads current state. It writes nothing.
-func (s *Store) Tasks() ([]Task, error) {
-	rows, err := s.db.Query(`SELECT id, COALESCE(parent_id, ''), title, created_at FROM task ORDER BY created_at, id`)
+// RootOf walks from a Task to the top of its tree. That root is where a Lease
+// is keyed, and a Subtask never moves, so the answer is stable.
+func (s *Store) RootOf(taskID string) (string, error) {
+	var root string
+	err := s.db.QueryRow(`
+WITH RECURSIVE ancestry(id, parent_id) AS (
+	SELECT id, parent_id FROM task WHERE id = ?
+	UNION ALL
+	SELECT t.id, t.parent_id FROM task t JOIN ancestry a ON t.id = a.parent_id
+)
+SELECT id FROM ancestry WHERE parent_id IS NULL`, taskID).Scan(&root)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("no such task: %s", taskID)
+	}
+	if err != nil {
+		return "", fmt.Errorf("find the root of %s: %w", taskID, err)
+	}
+	return root, nil
+}
+
+// WithLease takes the Lease covering taskID's tree, runs fn, and gives the
+// Lease back. It is the shape a verb wants: an Agent is invoked, writes, and
+// exits, so it should not leave a Lease behind it.
+func (s *Store) WithLease(actor, taskID string, ttl time.Duration, fn func() error) error {
+	root, err := s.RootOf(taskID)
+	if err != nil {
+		return err
+	}
+	if _, err := s.TakeLease(actor, root, ttl); err != nil {
+		return err
+	}
+	defer func() { _ = s.ReleaseLease(actor, root) }()
+	return fn()
+}
+
+// Query narrows what Tasks returns. The zero Query is the everyday view: open
+// Tasks that are neither snoozed nor deleted.
+type Query struct {
+	IncludeCompleted bool
+	IncludeSnoozed   bool
+	IncludeDeleted   bool
+}
+
+// Tasks reads current state. It writes nothing, and it evaluates Overdue and
+// the snooze against the clock as it goes: neither is stored, and nothing
+// records the moment either becomes true.
+func (s *Store) Tasks(q Query) ([]Task, error) {
+	at := now()
+	rows, err := s.db.Query(`
+SELECT
+	t.id, COALESCE(t.parent_id, ''), t.title, t.description, t.why, t.created_at,
+	t.deadline, t.estimate_seconds, t.priority, t.impact, t.snoozed_until, t.colour,
+	t.completed_at, t.deleted_at,
+	(t.deadline IS NOT NULL AND t.deadline < ?) AS overdue,
+	COALESCE((SELECT json_group_object(key, value) FROM task_field f WHERE f.task_id = t.id), '{}')
+FROM task t
+WHERE (? OR t.deleted_at IS NULL)
+  AND (? OR t.completed_at IS NULL)
+  AND (? OR t.snoozed_until IS NULL OR t.snoozed_until <= ?)
+ORDER BY t.created_at, t.id`,
+		at, q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at)
 	if err != nil {
 		return nil, fmt.Errorf("read tasks: %w", err)
 	}
@@ -437,12 +637,35 @@ func (s *Store) Tasks() ([]Task, error) {
 
 	var tasks []Task
 	for rows.Next() {
-		var t Task
-		var created string
-		if err := rows.Scan(&t.ID, &t.Parent, &t.Title, &created); err != nil {
+		var (
+			t                                            Task
+			description, why, deadline, priority, impact *string
+			snoozedUntil, colour, completedAt, deletedAt *string
+			createdAt, fields                            string
+			estimate                                     *int64
+		)
+		err := rows.Scan(
+			&t.ID, &t.Parent, &t.Title, &description, &why, &createdAt,
+			&deadline, &estimate, &priority, &impact, &snoozedUntil, &colour,
+			&completedAt, &deletedAt, &t.Overdue, &fields,
+		)
+		if err != nil {
 			return nil, fmt.Errorf("read task: %w", err)
 		}
-		t.CreatedAt, _ = time.Parse(stamp, created)
+		t.Description = text(description)
+		t.Why = text(why)
+		t.Colour = text(colour)
+		t.CreatedAt, _ = time.Parse(stamp, createdAt)
+		t.Deadline = parseStamp(deadline)
+		t.SnoozedUntil = parseStamp(snoozedUntil)
+		t.CompletedAt = parseStamp(completedAt)
+		t.DeletedAt = parseStamp(deletedAt)
+		t.Priority = Level(text(priority))
+		t.Impact = Level(text(impact))
+		if estimate != nil {
+			t.Estimate = time.Duration(*estimate) * time.Second
+		}
+		t.Fields = decodeFields(fields)
 		tasks = append(tasks, t)
 	}
 	return tasks, rows.Err()

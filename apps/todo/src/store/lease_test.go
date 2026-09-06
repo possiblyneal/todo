@@ -12,7 +12,7 @@ const hour = time.Hour
 // A Lease and a top-level Task to hang it on.
 func taskFor(t *testing.T, s *Store, actor, title string) string {
 	t.Helper()
-	id, err := s.AddTask(actor, title)
+	id, err := s.AddTask(actor, Attributes{Title: Set(title)})
 	if err != nil {
 		t.Fatalf("AddTask: %v", err)
 	}
@@ -23,11 +23,11 @@ func TestWriteWithNoLeaseIsRefused(t *testing.T) {
 	s := openTemp(t)
 	id := taskFor(t, s, "alice", "Buy milk")
 
-	if err := s.DescribeTask("alice", id, "Buy oat milk"); !errors.Is(err, ErrRefused) {
-		t.Fatalf("DescribeTask with no Lease = %v, want ErrRefused", err)
+	if err := s.EditTask("alice", id, Attributes{Title: Set("Buy oat milk")}); !errors.Is(err, ErrRefused) {
+		t.Fatalf("EditTask with no Lease = %v, want ErrRefused", err)
 	}
 	// Refused, not silently applied.
-	tasks, err := s.Tasks()
+	tasks, err := s.Tasks(Query{})
 	if err != nil {
 		t.Fatalf("Tasks: %v", err)
 	}
@@ -43,10 +43,10 @@ func TestWriteUnderOwnLeaseIsAllowed(t *testing.T) {
 	if _, err := s.TakeLease("alice", id, hour); err != nil {
 		t.Fatalf("TakeLease: %v", err)
 	}
-	if err := s.DescribeTask("alice", id, "Buy oat milk"); err != nil {
-		t.Fatalf("DescribeTask under own Lease: %v", err)
+	if err := s.EditTask("alice", id, Attributes{Title: Set("Buy oat milk")}); err != nil {
+		t.Fatalf("EditTask under own Lease: %v", err)
 	}
-	tasks, _ := s.Tasks()
+	tasks, _ := s.Tasks(Query{})
 	if tasks[0].Title != "Buy oat milk" {
 		t.Errorf("title is %q, want the edit applied", tasks[0].Title)
 	}
@@ -68,8 +68,8 @@ func TestAnotherActorsLeaseRefusesBothTheLeaseAndTheWrite(t *testing.T) {
 	if err != nil && strings.Contains(err.Error(), "alice") {
 		t.Errorf("ErrHeld named the holder: %v", err)
 	}
-	if err := s.DescribeTask("agent-7", id, "Buy oat milk"); !errors.Is(err, ErrRefused) {
-		t.Errorf("DescribeTask against another Actor's Lease = %v, want ErrRefused", err)
+	if err := s.EditTask("agent-7", id, Attributes{Title: Set("Buy oat milk")}); !errors.Is(err, ErrRefused) {
+		t.Errorf("EditTask against another Actor's Lease = %v, want ErrRefused", err)
 	}
 }
 
@@ -80,11 +80,11 @@ func TestAnExpiredLeaseGuardsNothingAndIsNotSweptAway(t *testing.T) {
 		t.Fatalf("TakeLease: %v", err)
 	}
 
-	if err := s.DescribeTask("alice", id, "Buy oat milk"); !errors.Is(err, ErrRefused) {
-		t.Errorf("DescribeTask under an expired Lease = %v, want ErrRefused", err)
+	if err := s.EditTask("alice", id, Attributes{Title: Set("Buy oat milk")}); !errors.Is(err, ErrRefused) {
+		t.Errorf("EditTask under an expired Lease = %v, want ErrRefused", err)
 	}
 	// No reader deletes anything: expiry is a clause, not a sweep.
-	if _, err := s.Tasks(); err != nil {
+	if _, err := s.Tasks(Query{}); err != nil {
 		t.Fatalf("Tasks: %v", err)
 	}
 	var rows int
@@ -106,8 +106,8 @@ func TestRetakingAStaleLeaseRecordsItBroken(t *testing.T) {
 	if _, err := s.TakeLease("agent-7", id, hour); err != nil {
 		t.Fatalf("taking over a stale Lease: %v", err)
 	}
-	if err := s.DescribeTask("agent-7", id, "Buy oat milk"); err != nil {
-		t.Fatalf("DescribeTask under the taken-over Lease: %v", err)
+	if err := s.EditTask("agent-7", id, Attributes{Title: Set("Buy oat milk")}); err != nil {
+		t.Fatalf("EditTask under the taken-over Lease: %v", err)
 	}
 
 	kinds := historyKinds(t, s)
@@ -153,8 +153,8 @@ func TestReleasedLeaseStopsGuardingWrites(t *testing.T) {
 	if err := s.ReleaseLease("alice", id); err != nil {
 		t.Fatalf("ReleaseLease: %v", err)
 	}
-	if err := s.DescribeTask("alice", id, "Buy oat milk"); !errors.Is(err, ErrRefused) {
-		t.Errorf("DescribeTask after release = %v, want ErrRefused", err)
+	if err := s.EditTask("alice", id, Attributes{Title: Set("Buy oat milk")}); !errors.Is(err, ErrRefused) {
+		t.Errorf("EditTask after release = %v, want ErrRefused", err)
 	}
 	// The next writer takes it cleanly, with nothing to break.
 	if _, err := s.TakeLease("agent-7", id, hour); err != nil {
@@ -170,7 +170,7 @@ func TestALeaseOnASubtaskIsRejected(t *testing.T) {
 	if _, err := s.TakeLease("alice", root, hour); err != nil {
 		t.Fatalf("TakeLease: %v", err)
 	}
-	child, err := s.AddSubtask("alice", root, "Write the code")
+	child, err := s.AddSubtask("alice", root, Attributes{Title: Set("Write the code")})
 	if err != nil {
 		t.Fatalf("AddSubtask: %v", err)
 	}
@@ -196,19 +196,19 @@ func TestTheRootsLeaseGuardsTheWholeTree(t *testing.T) {
 	id := root
 	for depth := 1; depth < 5; depth++ {
 		var err error
-		if id, err = s.AddSubtask("alice", id, "level"); err != nil {
+		if id, err = s.AddSubtask("alice", id, Attributes{Title: Set("level")}); err != nil {
 			t.Fatalf("AddSubtask at depth %d: %v", depth, err)
 		}
 	}
-	if err := s.DescribeTask("alice", id, "the deepest one"); err != nil {
+	if err := s.EditTask("alice", id, Attributes{Title: Set("the deepest one")}); err != nil {
 		t.Fatalf("editing at depth 5 under the root's Lease: %v", err)
 	}
 	// And another Actor is blocked that far down by the same Lease.
-	if err := s.DescribeTask("agent-7", id, "not yours"); !errors.Is(err, ErrRefused) {
+	if err := s.EditTask("agent-7", id, Attributes{Title: Set("not yours")}); !errors.Is(err, ErrRefused) {
 		t.Errorf("an unleased edit at depth 5 = %v, want ErrRefused", err)
 	}
 	// Adding a Subtask is a write to the tree, and needs the Lease too.
-	if _, err := s.AddSubtask("agent-7", root, "not yours either"); !errors.Is(err, ErrRefused) {
+	if _, err := s.AddSubtask("agent-7", root, Attributes{Title: Set("not yours either")}); !errors.Is(err, ErrRefused) {
 		t.Errorf("an unleased AddSubtask = %v, want ErrRefused", err)
 	}
 }

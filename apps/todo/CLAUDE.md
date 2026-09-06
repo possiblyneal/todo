@@ -23,6 +23,9 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - **Instants are stored in the fixed-width `stamp` format, not `time.RFC3339Nano`.** RFC3339Nano trims trailing zeros from the fraction, which puts `12:00:00.5Z` before `12:00:00Z` under SQLite's TEXT comparison. `expires_at > now` and `deadline < now` both depend on lexicographic order being chronological order.
 - **Reads write nothing.** Overdue is `deadline < now`, a stale Lease is a clause in a predicate, and an Occurrence is computed from its Series. A read that appends anything is a defect with a test against it.
 - **Every write carries an Actor; reads are not attributed.** `TODO_ACTOR` names an Agent, and a person falls back to their login.
+- **A writing verb takes the Lease covering its target's tree, writes, and gives it back.** A verb acts and exits, so it holds a 30-second TTL and never strands a tree behind a dead process.
+- **An edit says what it touches and nothing else.** An attribute flag nobody typed leaves its attribute alone; one given empty clears it. The fold reads `json_type(payload, '$.x') IS NULL` for untouched and a JSON null for cleared, which is the distinction `COALESCE` cannot express, and `fs.Visit` is what makes the CLI say it.
+- **Exit status is 0 for done, 1 for a failure, 2 for usage, 3 for a refusal.** A refusal is the store turning a write away — no Lease, or one another Actor holds — and a surface distinguishes it from a crash. A bad attribute value is refused where it was typed, so `store.ParseLevel` is the CLI's, not only the write path's.
 - **`TODO_DB` overrides the store path**, which is how a test and an Agent run against a store of their own. The default sits under the user config directory.
 
 ## Work Guidance
@@ -30,6 +33,7 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - Tests first, at the seams the domain already draws: append-only, purity of reads, the Lease predicate, gaplessness under contention.
 - Concurrency claims are asserted against real OS processes, not goroutines. Goroutines share one `*sql.DB` and one pool, so they never reach the file lock the defect hides behind. `TestMain` re-executes the test binary as the child.
 - The store's exported vocabulary is `CONTEXT.md`'s: Task, Subtask, List, Tag, Lease, Attachment, Series, Occurrence, Actor.
+- A Task's attributes are the set `docs/features.md` asks for and no more: title, description, why, creation date, deadline, estimate, priority, impact, snooze, colour, and any number of key/value pairs. Priority and impact are the same three levels, each carrying an example in `PriorityExamples` and `ImpactExamples`. The four offered snoozes are 1 hour, 1 day, 1 week, 1 month, and the month one clamps to the target month's last day.
 
 ## Verification
 

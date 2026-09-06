@@ -19,12 +19,12 @@ func openTemp(t *testing.T) *Store {
 func TestAddThenList(t *testing.T) {
 	s := openTemp(t)
 
-	id, err := s.AddTask("alice", "Buy milk")
+	id, err := s.AddTask("alice", Attributes{Title: Set("Buy milk")})
 	if err != nil {
 		t.Fatalf("AddTask: %v", err)
 	}
 
-	tasks, err := s.Tasks()
+	tasks, err := s.Tasks(Query{})
 	if err != nil {
 		t.Fatalf("Tasks: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestAddThenList(t *testing.T) {
 // History is an identity there and an opaque id everywhere else.
 func TestEveryWriteCarriesAnActor(t *testing.T) {
 	s := openTemp(t)
-	if _, err := s.AddTask("agent-7", "Ship it"); err != nil {
+	if _, err := s.AddTask("agent-7", Attributes{Title: Set("Ship it")}); err != nil {
 		t.Fatalf("AddTask: %v", err)
 	}
 
@@ -64,7 +64,7 @@ func TestEveryWriteCarriesAnActor(t *testing.T) {
 // all is a defect.
 func TestReadsWriteNothing(t *testing.T) {
 	s := openTemp(t)
-	if _, err := s.AddTask("alice", "Buy milk"); err != nil {
+	if _, err := s.AddTask("alice", Attributes{Title: Set("Buy milk")}); err != nil {
 		t.Fatalf("AddTask: %v", err)
 	}
 
@@ -73,7 +73,7 @@ func TestReadsWriteNothing(t *testing.T) {
 		t.Fatalf("HistoryLength: %v", err)
 	}
 	for range 5 {
-		if _, err := s.Tasks(); err != nil {
+		if _, err := s.Tasks(Query{}); err != nil {
 			t.Fatalf("Tasks: %v", err)
 		}
 		if _, err := s.History(); err != nil {
@@ -93,7 +93,7 @@ func TestReadsWriteNothing(t *testing.T) {
 // appended entry rather than an erasure, which only holds if erasure is refused.
 func TestChangeHistoryRefusesUpdateAndDelete(t *testing.T) {
 	s := openTemp(t)
-	if _, err := s.AddTask("alice", "Buy milk"); err != nil {
+	if _, err := s.AddTask("alice", Attributes{Title: Set("Buy milk")}); err != nil {
 		t.Fatalf("AddTask: %v", err)
 	}
 

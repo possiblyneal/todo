@@ -41,7 +41,7 @@ func appendFromChild(path string) int {
 	defer func() { _ = s.Close() }()
 
 	for i := range count {
-		if _, err := s.AddTask(actor, fmt.Sprintf("%s task %d", actor, i)); err != nil {
+		if _, err := s.AddTask(actor, Attributes{Title: Set(fmt.Sprintf("%s task %d", actor, i))}); err != nil {
 			fmt.Fprintf(os.Stderr, "child %s task %d: %v\n", actor, i, err)
 			return 1
 		}
@@ -116,7 +116,7 @@ func TestConcurrentProcessesAppendGaplesslyAndFoldExactly(t *testing.T) {
 
 	// An exact fold, with no drift: one Task per Task Added, and no Task the
 	// Change History cannot account for.
-	tasks, err := s.Tasks()
+	tasks, err := s.Tasks(Query{})
 	if err != nil {
 		t.Fatalf("Tasks: %v", err)
 	}

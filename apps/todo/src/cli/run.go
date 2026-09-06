@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -30,6 +31,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 // runVerb is the acts-and-exits mode. It is the identical in-process call the
 // TUI makes, not a second implementation of the rules: both reach the store
 // through the same package, so an Agent and a person get the same contract.
+//
+// Every verb that writes takes the Lease covering its target's tree, writes,
+// and gives it back. An Agent is invoked and exits, so it should not leave a
+// Lease standing behind it.
 func runVerb(args []string, stdout, stderr io.Writer) int {
 	verb, rest := args[0], args[1:]
 
@@ -42,31 +47,23 @@ func runVerb(args []string, stdout, stderr io.Writer) int {
 
 	switch verb {
 	case "add":
-		title := strings.TrimSpace(strings.Join(rest, " "))
-		if title == "" {
-			fmt.Fprintln(stderr, "todo add: a task needs a title")
-			return 2
-		}
-		id, err := s.AddTask(actor(), title)
-		if err != nil {
-			fmt.Fprintf(stderr, "todo add: %v\n", err)
-			return 1
-		}
-		fmt.Fprintln(stdout, id)
+		return addTask(s, rest, stdout, stderr)
 	case "list":
-		tasks, err := s.Tasks()
-		if err != nil {
-			fmt.Fprintf(stderr, "todo list: %v\n", err)
-			return 1
-		}
-		for _, t := range tasks {
-			fmt.Fprintf(stdout, "%s  %s\n", t.ID, t.Title)
-		}
+		return listTasks(s, rest, stdout, stderr)
+	case "edit":
+		return editTask(s, rest, stderr)
+	case "complete", "reopen", "delete":
+		return lifecycle(s, verb, rest, stderr)
 	default:
 		fmt.Fprintf(stderr, "todo: unknown verb %q\n", verb)
 		return 2
 	}
-	return 0
+}
+
+// isRefusal says whether the store turned a write away rather than failing at
+// it: no Lease, or one another Actor holds.
+func isRefusal(err error) bool {
+	return errors.Is(err, store.ErrRefused) || errors.Is(err, store.ErrHeld)
 }
 
 func open() (*store.Store, error) {

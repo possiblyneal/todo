@@ -33,7 +33,7 @@ func BenchmarkGuardedWriteOnALargeTree(b *testing.B) {
 
 	var deepest string
 	for r := range roots {
-		root, err := s.AddTask("alice", "root")
+		root, err := s.AddTask("alice", Attributes{Title: Set("root")})
 		if err != nil {
 			b.Fatalf("AddTask: %v", err)
 		}
@@ -42,7 +42,7 @@ func BenchmarkGuardedWriteOnALargeTree(b *testing.B) {
 		}
 		id := root
 		for range depth - 1 {
-			if id, err = s.AddSubtask("alice", id, "level"); err != nil {
+			if id, err = s.AddSubtask("alice", id, Attributes{Title: Set("level")}); err != nil {
 				b.Fatalf("AddSubtask: %v", err)
 			}
 		}
@@ -53,8 +53,8 @@ func BenchmarkGuardedWriteOnALargeTree(b *testing.B) {
 
 	b.ResetTimer()
 	for i := range b.N {
-		if err := s.DescribeTask("alice", deepest, "edited"); err != nil {
-			b.Fatalf("DescribeTask %d: %v", i, err)
+		if err := s.EditTask("alice", deepest, Attributes{Title: Set("edited")}); err != nil {
+			b.Fatalf("EditTask %d: %v", i, err)
 		}
 	}
 }
