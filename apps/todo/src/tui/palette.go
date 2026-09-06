@@ -31,6 +31,8 @@ func commands() []list.Item {
 		command{"/list", "a new List"},
 		command{"/tag", "a new Tag"},
 		command{"/snooze", "the Task under the cursor, until a date you pick"},
+		command{"/breakdown", "the Task under the cursor, into Subtasks, with the box's help"},
+		command{"/ask", "the box a question about this list"},
 		command{"/sort", "by the next order"},
 		command{"/quit", "leave"},
 	}
@@ -112,6 +114,12 @@ func (m Model) run(name string) (Model, tea.Cmd) {
 		m.pop = &popupDraft{Task: t.ID}
 		m.popup = m.snoozeForm(&m.pop.Until)
 		return m, m.popup.Init()
+
+	case "/breakdown":
+		return m.startBreakdown()
+
+	case "/ask":
+		return m.startInquiry()
 
 	case "/sort":
 		m.sort = nextSort(m.sort)

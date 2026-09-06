@@ -11,6 +11,7 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - `src/store/` — SQLite and the whole write path. Nothing else opens a database.
 - `src/schedule/` — Scheduling's rule arithmetic: parsing a recurrence rule, writing it back, and the dates it produces. It opens no database and knows nothing about a Task.
 - `src/datepicker/` — a calendar component for Bubble Tea v2, written here because nothing in Go ships one that compiles against it. It knows about dates and nothing about a Task, and reads no clock but its own `Now`.
+- `src/ai/` — the breakdown box: an OpenAI-compatible HTTP client against `inference-runtime-broker`. It opens no database, holds no conversation between calls, and knows nothing about a Lease.
 - `src/serve/` — `todo serve`: the SSH front door, built on `charm.land/wish/v2`. It builds a `tui.Model` per connection and owns nothing else; no rule and no store call lives here.
 - `src/tui/` — the main view, the add and edit screens, and the slash palette, built on `charm.land/bubbletea/v2` and `charm.land/huh/v2`. It writes through the same store calls the verbs use.
 
@@ -60,12 +61,18 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - **One `tea.Program` per connection, with that session's pty wired to it.** Sessions share the store and nothing else, which is what makes two phones two Actors. A `window-change` arrives as a `tea.WindowSizeMsg`, and a panic is contained to the session it happened on by `recover.Middleware`.
 - **A session with no terminal is turned away.** `activeterm` says so; a renderer writing escape codes into a pipe is not an error worth debugging twice.
 - **`todo serve` is LAN only, and there is no offline mode.** Reaching it from outside is the homelab's problem, and putting the SQLite file on a network filesystem breaks the write-ahead log, which is one of ADR 0001's re-check triggers rather than something to work around here. A phone with no route to the server has no Tasks.
+- **The AI is an outbound HTTP call, never embedded inference.** `inference-runtime-broker` at `10.10.10.13:4010` already runs and is the only thing that infers; `TODO_AI_URL` and `TODO_AI_MODEL` point elsewhere, and with no model named the box is asked which one it can chat with. A 429 is its memory budget, so it is reported as a wait with a number of seconds rather than as a fault.
+- **A breakdown leaves nothing durable unless it is approved.** Proposals are values on a struct: they are shown, ticked or unticked, and gone when the interaction ends. Only submitting writes, and it writes only what is still ticked. There is no Assistance aggregate, no table and no artifact, which is what issue #4 settled.
+- **A breakdown leases the whole top-level tree for its duration**, taken before the first call and released when it ends however it ends. That is think-time held on purpose and it is ADR 0002's cost, named there and paid here; a Lease is not a transaction, so nothing else queues behind it.
+- **`/ask` is a read.** The question goes with the Tasks in view, because the box holds nothing between calls, and no Lease is taken. There is no breakdown verb: approval gates each step, and a verb that acts and exits has nobody to ask.
+- **A `huh` multiselect draws one option unless it is given a height.** `rows` is that height, and every multiselect in this package uses it.
 - **`TODO_DB` overrides the store path**, which is how a test and an Agent run against a store of their own. The default sits under the user config directory.
 
 ## Work Guidance
 
 - Tests first, at the seams the domain already draws: append-only, purity of reads, the Lease predicate, gaplessness under contention.
 - Concurrency claims are asserted against real OS processes, not goroutines. Goroutines share one `*sql.DB` and one pool, so they never reach the file lock the defect hides behind. `TestMain` re-executes the test binary as the child.
+- The box is shared and its chat model is large: a 429 saying `scheduler_busy` means the GPU budget is spoken for, not that anything here is wrong. Tests stand a box in with `httptest` and never reach the LAN.
 - `todo attach` is the pointers: bare with an id it lists them, a target adds one, and `-off` takes one off.
 - `todo repeat` is the one verb that reaches Scheduling: bare it shows the rule and the next dates, words after the id set the rule, and `-tick`, `-skip`, `-detach` and `-off` are the rest.
 - The store's exported vocabulary is `CONTEXT.md`'s: Task, Subtask, List, Tag, Lease, Attachment, Series, Occurrence, Actor.

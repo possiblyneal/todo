@@ -15,6 +15,7 @@ import (
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/possiblyneal/todo/apps/todo/src/ai"
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
 
@@ -47,6 +48,10 @@ type Model struct {
 	zones *zone.Manager
 	rand  *rand.Rand
 
+	// ai is the breakdown box. It is a field rather than a package call so
+	// a test points it at a stand-in rather than at the LAN.
+	ai *ai.Client
+
 	lists  []store.List
 	tags   []store.Tag // ranked by frequency, with variation
 	names  map[string]string
@@ -73,6 +78,12 @@ type Model struct {
 	popup *huh.Form
 	pop   *popupDraft
 
+	// bd is a breakdown in progress and ask is a question about the list.
+	// Both are the box in src/ai; neither leaves anything behind unless a
+	// proposal is approved.
+	bd  *breakdown
+	ask *inquiry
+
 	// files is the file selector, open over the add or edit screen while a
 	// person is choosing something to point at.
 	files *browser
@@ -89,6 +100,7 @@ func New(s *store.Store, actor string, r *rand.Rand) (Model, error) {
 	m := Model{
 		store:  s,
 		actor:  actor,
+		ai:     ai.New(),
 		zones:  zone.New(),
 		rand:   r,
 		chosen: map[string]bool{},
@@ -195,6 +207,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch {
 	case m.files != nil:
 		next, cmd := m.updateFiles(msg)
+		return next, cmd
+	case m.bd != nil:
+		next, cmd := m.updateBreakdown(msg)
+		return next, cmd
+	case m.ask != nil:
+		next, cmd := m.updateInquiry(msg)
 		return next, cmd
 	case m.popup != nil:
 		next, cmd := m.updatePopup(msg)

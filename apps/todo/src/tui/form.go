@@ -79,16 +79,17 @@ func (m Model) form(d *draft) *huh.Form {
 		huh.NewInput().Title("Attach").Value(&d.Attach).
 			Placeholder("a web address, or ctrl+a to pick a file"),
 		huh.NewMultiSelect[string]().Title("Lists").Value(&d.Lists).
-			Options(listOptions(m.lists)...),
+			Height(rows(len(m.lists))).Options(listOptions(m.lists)...),
 		huh.NewMultiSelect[string]().Title("Tags").Value(&d.Tags).
-			Options(tagOptions(m.tags)...),
+			Height(rows(len(m.tags))).Options(tagOptions(m.tags)...),
 	}
 	// The pointers already held are shown only when there are some, all
 	// ticked: unticking one is how it comes off, and an empty list of them
 	// is a field with nothing in it.
 	if len(d.Attachments) > 0 {
 		fields = append(fields, huh.NewMultiSelect[string]().Title("Attachments").
-			Value(&d.Attachments).Options(pointerOptions(d.Attachments)...))
+			Value(&d.Attachments).Height(rows(len(d.Attachments))).
+			Options(pointerOptions(d.Attachments)...))
 	}
 	return huh.NewForm(huh.NewGroup(fields...)).
 		WithWidth(min(m.width-4, 72)).
@@ -112,6 +113,12 @@ func (m Model) collectionForm(noun string, name, colour *string) *huh.Form {
 		huh.NewInput().Title("Colour").Value(colour),
 	)).WithWidth(min(m.width-8, 48)).WithHeight(7)
 }
+
+// rows is how tall a list of options has to be drawn to be read. huh sizes a
+// multiselect to one option unless it is told otherwise, so without this a
+// person picking a List sees one List; six is where a long list starts
+// scrolling instead of pushing the rest of the form off the screen.
+func rows(options int) int { return min(options, 6) + 1 }
 
 func levelOptions(examples map[store.Level]string) []huh.Option[store.Level] {
 	options := []huh.Option[store.Level]{huh.NewOption("none", store.Level(""))}
