@@ -105,12 +105,18 @@ func TestTheTUINeedsATerminal(t *testing.T) {
 	}
 }
 
-func TestServeIsItsOwnMode(t *testing.T) {
-	code, out, errs := run(t, "serve")
-	if code != 0 {
-		t.Fatalf("todo serve exited %d: %s", code, errs)
+// `todo serve` will not start without an allowlist. A public key is the only
+// way in, so a missing authorized_keys is a refusal to listen at all rather
+// than a server anyone can reach.
+func TestServeWillNotListenWithoutAnAllowlist(t *testing.T) {
+	storeInTemp(t)
+	missing := filepath.Join(t.TempDir(), "authorized_keys")
+
+	code, _, errs := run(t, "serve", "-addr", "127.0.0.1:0", "-authorized-keys", missing)
+	if code != 1 {
+		t.Fatalf("todo serve exited %d, want 1", code)
 	}
-	if !strings.Contains(out, "serve") {
-		t.Errorf("todo serve printed %q, want the serve mode", out)
+	if !strings.Contains(errs, "public key") {
+		t.Errorf("stderr = %q, want it to say a public key is the only way in", errs)
 	}
 }

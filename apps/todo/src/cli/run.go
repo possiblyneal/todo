@@ -14,20 +14,19 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/term"
 
+	"github.com/possiblyneal/todo/apps/todo/src/serve"
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 	"github.com/possiblyneal/todo/apps/todo/src/tui"
 )
 
 // Run is the whole program behind main, taking its streams as arguments so the
 // three modes are testable without a process. It returns the exit status.
-//
-// `serve` lands at #23 and is a stub until then.
 func Run(args []string, stdout, stderr io.Writer) int {
 	switch ModeOf(args) {
 	case ModeTUI:
 		return runTUI(stdout, stderr)
 	case ModeServe:
-		fmt.Fprintln(stdout, "todo: serve")
+		return runServe(args[1:], stderr)
 	case ModeVerb:
 		return runVerb(args, stdout, stderr)
 	}
@@ -72,6 +71,42 @@ func runTUI(stdout, stderr io.Writer) int {
 func terminal(w io.Writer) bool {
 	f, ok := w.(*os.File)
 	return ok && term.IsTerminal(f.Fd())
+}
+
+// runServe is `todo serve`: the same TUI over SSH, for a phone on the LAN.
+// It opens the same store the other two modes open, in this one process, and
+// every session takes Leases through it like any other Actor.
+func runServe(args []string, stderr io.Writer) int {
+	home, _ := os.UserHomeDir()
+	config, err := os.UserConfigDir()
+	if err != nil {
+		fmt.Fprintf(stderr, "todo serve: %v\n", err)
+		return 1
+	}
+
+	fs := flags("serve", stderr)
+	o := serve.Options{}
+	fs.StringVar(&o.Addr, "addr", ":23234", "address to listen on")
+	fs.StringVar(&o.HostKey, "host-key", filepath.Join(config, "todo", "ssh_host_ed25519"),
+		"the server's own key, created if it is not there")
+	fs.StringVar(&o.AuthorizedKeys, "authorized-keys", filepath.Join(home, ".ssh", "authorized_keys"),
+		"the keys allowed in; a public key is the only way in")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	s, err := open()
+	if err != nil {
+		fmt.Fprintf(stderr, "todo serve: %v\n", err)
+		return 1
+	}
+	defer func() { _ = s.Close() }()
+
+	if err := serve.ListenAndServe(s, o, stderr); err != nil {
+		fmt.Fprintf(stderr, "todo serve: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 // runVerb is the acts-and-exits mode. It is the identical in-process call the

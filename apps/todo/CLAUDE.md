@@ -11,6 +11,7 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - `src/store/` — SQLite and the whole write path. Nothing else opens a database.
 - `src/schedule/` — Scheduling's rule arithmetic: parsing a recurrence rule, writing it back, and the dates it produces. It opens no database and knows nothing about a Task.
 - `src/datepicker/` — a calendar component for Bubble Tea v2, written here because nothing in Go ships one that compiles against it. It knows about dates and nothing about a Task, and reads no clock but its own `Now`.
+- `src/serve/` — `todo serve`: the SSH front door, built on `charm.land/wish/v2`. It builds a `tui.Model` per connection and owns nothing else; no rule and no store call lives here.
 - `src/tui/` — the main view, the add and edit screens, and the slash palette, built on `charm.land/bubbletea/v2` and `charm.land/huh/v2`. It writes through the same store calls the verbs use.
 
 ## Local Contracts
@@ -55,6 +56,10 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - **The main view reads and writes nothing, asserted.** `TestTheMainViewWritesNothing` clicks, filters, sorts and expands, then compares `HistoryLength` with what it was.
 - **Bare `todo` without a terminal is a usage error**, exit 2, rather than a crash inside the renderer. An Agent that runs `todo` by accident gets a sentence, not a hung process.
 - **The Tag sidebar is ranked by frequency with variation drawn in.** Weighted sampling without replacement, so the most-carried Tag usually leads and the list does not read the same every time.
+- **A public key is the only way in, and no allowlist means no server.** `wish.WithAuthorizedKeys` is the whole of the auth, no password handler is registered, and a missing `authorized_keys` is a refusal to listen rather than a door left open.
+- **One `tea.Program` per connection, with that session's pty wired to it.** Sessions share the store and nothing else, which is what makes two phones two Actors. A `window-change` arrives as a `tea.WindowSizeMsg`, and a panic is contained to the session it happened on by `recover.Middleware`.
+- **A session with no terminal is turned away.** `activeterm` says so; a renderer writing escape codes into a pipe is not an error worth debugging twice.
+- **`todo serve` is LAN only, and there is no offline mode.** Reaching it from outside is the homelab's problem, and putting the SQLite file on a network filesystem breaks the write-ahead log, which is one of ADR 0001's re-check triggers rather than something to work around here. A phone with no route to the server has no Tasks.
 - **`TODO_DB` overrides the store path**, which is how a test and an Agent run against a store of their own. The default sits under the user config directory.
 
 ## Work Guidance
