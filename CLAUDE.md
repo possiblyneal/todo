@@ -4,7 +4,7 @@
 
 The repository holds **one deployable**. Three bounded contexts — Tracking, Scheduling, Change History — collapse into a single Go binary with three modes: bare `todo` opens the TUI, `todo <verb>` acts and exits, and `todo serve` serves the same TUI over SSH on the LAN. The store is SQLite embedded as a library, so it is not a deployable of its own. `docs/adrs/0001-ship-todo-as-one-go-binary.md` records why, including the three triggers that re-open the language choice.
 
-No root manifest exists yet. A `go.mod` under `apps/todo/` and none at the root is invisible to every check, so the root manifest is what the first real commit brings; `scripts/doctor` fails on the orphan shape rather than passing over it.
+The root manifest is `go.work`, and it is what makes the module under `apps/todo/` visible to every check. A `go.mod` there with no `go.work` above it is an orphan `scripts/doctor` fails on rather than passing over, so a new module gets a `use` line in the same commit that creates it.
 
 ## Commands
 
@@ -40,5 +40,6 @@ Orca, on this machine. See `docs/agents/session-launcher.md`.
 ## Child Index
 
 - `scripts/CLAUDE.md` — the language-capabilities interface, the result states, the test harness, and what adding a language or check requires
+- `apps/todo/CLAUDE.md` — the single deployable: its package layout, the store's enforced rules, and what each mode owns
 
-`apps/todo/` holds the single deployable named above, written in Go. It is empty but for an empty `src/` and its `.unit.json`, which declares `run: none, ships: {kind: none}` until the first real commit establishes otherwise. It owns its own `CLAUDE.md` from the commit that first puts code in it; `docs/CLAUDE.md` likewise, once `docs/` holds enough to need a local contract.
+`docs/` owns a `CLAUDE.md` once it holds enough to need a local contract.
