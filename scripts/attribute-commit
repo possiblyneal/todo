@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Rewrite an agent's attribution trailer from Co-Authored-By to Generated-By,
+# at prepare-commit-msg, before commitlint reads the message.
+#
+# A tool is not a co-author, but the model name is worth keeping: it is the only
+# per-commit record of what produced the change. Claude Code resolves that name
+# at commit time and offers no way to reword the trailer without losing it, so
+# the substitution happens here instead.
+#
+# Only trailers addressed to noreply@anthropic.com are touched, and the address
+# is dropped on rewrite: it exists so GitHub can attribute a Co-Authored-By to
+# an account, which does not apply to a Generated-By naming a model. A human
+# co-author keeps their Co-Authored-By line and their GitHub attribution.
+#
+# This rewrites and never inserts. `trailer-exists` in .commitlintrc.yaml is
+# what requires the result, and a script that supplied the trailer when none was
+# present would satisfy that rule on every message, leaving it to report a
+# record nothing actually made.
+#
+# pre-commit passes the message file as the first argument at this stage. The
+# other two arguments Git supplies -- the source and the commit object -- are
+# not read: the rewrite is the same whether the message came from a template, a
+# merge, or -F, and there is nothing to decide from them.
+
+msg_file="${1:-}"
+[[ -n "$msg_file" && -f "$msg_file" ]] || exit 0
+
+sed -i -E \
+  's/^[Cc]o-[Aa]uthored-[Bb]y:[[:space:]]*(.+)[[:space:]]+<noreply@anthropic\.com>[[:space:]]*$/Generated-By: \1/' \
+  "$msg_file"

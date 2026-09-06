@@ -1,14 +1,18 @@
 # Install once per clone with `pre-commit install`, otherwise these never run.
 
-# commitlint runs at commit-msg, changelog-check at pre-push, and
-# worktree-cleanup at post-checkout and post-merge -- four git hook files
-# distinct from the one every other hook here uses. `pre-commit install`
-# writes only the pre-commit hook unless it is told otherwise, and a hook that
-# was never installed fails silently: commits, pushes, and checkouts succeed
-# while messages, changelog entries, and stale worktree metadata go unchecked,
-# and nothing reports it. This line is what makes the plain command install
-# every one of them.
-default_install_hook_types: [pre-commit, commit-msg, pre-push, post-checkout, post-merge]
+# attribute-commit runs at prepare-commit-msg, commitlint at commit-msg,
+# changelog-check at pre-push, and worktree-cleanup at post-checkout and
+# post-merge -- five git hook files distinct from the one every other hook here
+# uses. `pre-commit install` writes only the pre-commit hook unless it is told
+# otherwise, and a hook that was never installed fails silently: pushes and
+# checkouts succeed while changelog entries and stale worktree metadata go
+# unchecked, and nothing reports it. This line is what makes the plain command
+# install every one of them.
+#
+# The first two are a pair and fail loudly rather than silently: without the
+# prepare-commit-msg hook nothing rewrites the attribution trailer, and the
+# commit-msg hook then rejects every message for the trailer that is missing.
+default_install_hook_types: [pre-commit, prepare-commit-msg, commit-msg, pre-push, post-checkout, post-merge]
 
 # Scopes the hooks below to the commit, so a git hook type this file never
 # asked for cannot run them. A clone that once ran `pre-commit install -t
@@ -63,6 +67,25 @@ repos:
         always_run: true
         pass_filenames: false
 
+      # .github/ can exist twice: a repository that ships a template payload
+      # holds its own configuration and the copy generated repositories are cut
+      # from. Dependabot's github-actions ecosystem reaches the root one only,
+      # so a merged bump leaves the payload pinned to the old SHA through a
+      # pull request that looks routine. This refuses the divergence rather
+      # than repairing it, which turns each root bump into a complete one, and
+      # reports not-applicable where there is no payload.
+      #
+      # always_run with no files filter, for the same reason as adr-index
+      # above: a path filter reads the staged paths, which exclude deletions,
+      # and deleting a workflow from one tree is exactly the divergence to
+      # catch.
+      - id: github-parity
+        name: check the two .github/ trees agree
+        entry: scripts/github-parity
+        language: script
+        always_run: true
+        pass_filenames: false
+
       # always_run with no files filter, for the same reason as adr-index above.
       # Structure breaks on a move or a delete, and a path filter reads the
       # staged paths, which exclude deletions -- so `git rm` emptying the last
@@ -105,6 +128,21 @@ repos:
         always_run: true
         pass_filenames: false
         stages: [pre-push]
+
+      # Rewrites the agent's attribution trailer before commitlint reads the
+      # message. It has to run at prepare-commit-msg rather than commit-msg:
+      # both stages get the message file, but hooks within a stage have no
+      # ordering guarantee against a third-party repo's, so a rewrite sharing
+      # commit-msg with commitlint could land after the rule that reads it.
+      #
+      # pass_filenames is left at its default: at this stage the one filename
+      # pre-commit passes is the message file, which is the argument the script
+      # takes. always_run has nothing to do here -- the file is always present.
+      - id: attribute-commit
+        name: record the model that generated the commit
+        entry: scripts/attribute-commit
+        language: script
+        stages: [prepare-commit-msg]
 
       # These hooks let Git remove only stale administrative records for linked
       # worktrees whose directories have already disappeared. They never remove

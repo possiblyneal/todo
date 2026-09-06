@@ -14,7 +14,7 @@ Located at `./scripts` Use these instead of per-language tools; each detects the
 
 - Pre-commit blocks direct commits to `main` and `master`. Branch before making changes.
 - Run `scripts/check` before committing. It runs the same checks CI does, plus pre-commit across every file rather than the staged ones.
-- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#specification).
+- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#specification), and carry a `Generated-By: <model>` trailer. `scripts/attribute-commit` writes it at `prepare-commit-msg` by rewriting an agent's `Co-Authored-By` line; it never inserts one, so a message with no agent trailer is refused and a hand-written commit adds its own.
 - This repo adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Pull requests merge; they are neither squashed nor rebased.
 - Plan mode writes to `docs/plans/`, which is tracked. A plan lands in the diff alongside the code it describes.

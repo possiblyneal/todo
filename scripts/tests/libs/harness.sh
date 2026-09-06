@@ -52,6 +52,7 @@ harness_tmp="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
 passed=0
 failed=0
 skipped=0
+not_applicable_count=0
 current=""
 
 # The scratch directory the current case is using, and empty between cases.
@@ -158,11 +159,29 @@ skip() {
   skipped=$((skipped + 1))
 }
 
+# A suite with no case to run on this host, as opposed to a case it could not
+# run. The subject ships outside this repository, so its absence is the Result
+# state not-applicable rather than unavailable: session-start-test is the one
+# suite that has it, when the operator's global hook is not installed.
+#
+# Declared rather than ridden on an empty tally. Nothing counted used to exit
+# 0, which made a deliberate no-op read exactly like a suite that returned
+# early by mistake -- a host gate taken on the wrong condition, a loop over a
+# list that came back empty, an early return left by a refactor. Now the suite
+# says which one it is, and a suite that says nothing fails.
+not_applicable() {
+  echo "  n/a   ${current:+$current: }$1"
+  not_applicable_count=$((not_applicable_count + 1))
+}
+
 # Prints the tally and returns the suite's exit status, so a caller ends with
-# `report` as its last line and the script's status is the suite's result. A
-# suite that passed nothing and skipped something is unavailable, not green.
+# `report` as its last line and the script's status is the suite's result. The
+# four counts are the interface; the exit status reads them as Result states. A
+# suite that verified nothing is green only where it declared itself
+# not-applicable: passing nothing beside a skip is unavailable, and counting
+# nothing at all is a suite that never reached its cases.
 report() {
   echo
-  echo "$passed passed, $failed failed, $skipped skipped"
-  (( failed == 0 )) && ! (( passed == 0 && skipped > 0 ))
+  echo "$passed passed, $failed failed, $skipped skipped, $not_applicable_count not-applicable"
+  (( failed == 0 )) && (( passed > 0 || not_applicable_count > 0 ))
 }

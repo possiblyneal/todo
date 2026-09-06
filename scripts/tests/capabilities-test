@@ -263,6 +263,20 @@ else
   pass
 fi
 
+# tmp/ is this repository's gitignored scratch, and the repo-builder skill
+# materializes a whole candidate repository into it. Every manifest that
+# candidate carries is another repository's, and scripts/check runs doctor
+# first, so searching tmp/ would abort the gate for the length of a build.
+fixture "tmp is not searched"
+mkdir -p "$work/tmp/candidate/apps/api"
+printf '{"name":"candidate","version":"1.0.0"}\n' > "$work/tmp/candidate/package.json"
+go_mod "$work/tmp/candidate/apps/api"
+if orphaned; then
+  fail "a manifest inside tmp was reported as an orphan"
+else
+  pass
+fi
+
 # --- an audit with nothing to scan is not-applicable, not unavailable --------
 
 # Package.resolved and gradle.lockfile only exist once a package has resolved

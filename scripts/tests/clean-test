@@ -18,13 +18,13 @@ echo "clean-test"
 
 scratch_repo
 current="scripts/clean does not search inside a pruned directory"
-for dir in .venv venv vendor target .git node_modules .build; do
+for dir in .venv venv vendor target .git node_modules .build tmp; do
   mkdir -p "$work/$dir/__pycache__"
   : > "$work/$dir/__pycache__/marker.pyc"
 done
 (cd "$work" && scripts/clean) >/dev/null 2>&1
 missing=""
-for dir in .venv venv vendor target .git node_modules .build; do
+for dir in .venv venv vendor target .git node_modules .build tmp; do
   [[ -d "$work/$dir/__pycache__" ]] || missing="$missing $dir"
 done
 if [[ -z "$missing" ]]; then

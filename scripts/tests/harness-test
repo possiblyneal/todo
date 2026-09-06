@@ -45,7 +45,7 @@ current=a; pass
 current=b; pass
 report
 SUITE
-assert_tally "2 passed, 0 failed, 0 skipped" 0
+assert_tally "2 passed, 0 failed, 0 skipped, 0 not-applicable" 0
 
 scratch_repo
 current="one failure fails the suite and names the case"
@@ -54,18 +54,18 @@ current=a; pass
 current=b; fail "broke"
 report
 SUITE
-assert_tally "1 passed, 1 failed, 0 skipped" 1
+assert_tally "1 passed, 1 failed, 0 skipped, 0 not-applicable" 1
 if [[ "$out" == *"  FAIL  b: broke"* ]]; then pass; else fail "the failing case was not named: '$out'"; fi
 
-# The silent green: every case skipped for a missing tool used to print
-# "0 passed, 0 failed" and exit 0, indistinguishable from a verified run.
+# The silent green: every case skipped for a missing tool used to exit 0,
+# indistinguishable from a verified run.
 scratch_repo
 current="everything skipped is unavailable, not green"
 suite <<'SUITE'
 current=a; skip "jq is not installed"
 report
 SUITE
-assert_tally "0 passed, 0 failed, 1 skipped" 1
+assert_tally "0 passed, 0 failed, 1 skipped, 0 not-applicable" 1
 
 scratch_repo
 current="a skip beside a pass stays green and is counted"
@@ -74,7 +74,24 @@ current=a; pass
 current=b; skip "go is not installed"
 report
 SUITE
-assert_tally "1 passed, 0 failed, 1 skipped" 0
+assert_tally "1 passed, 0 failed, 1 skipped, 0 not-applicable" 0
+
+# The two cases the counted not-applicable state exists to separate. Both
+# verify nothing; only the one that says so is green.
+scratch_repo
+current="a declared not-applicable suite is green and counted"
+suite <<'SUITE'
+not_applicable "the hook ships outside this repository"
+report
+SUITE
+assert_tally "0 passed, 0 failed, 0 skipped, 1 not-applicable" 0
+
+scratch_repo
+current="a suite that counted nothing at all fails"
+suite <<'SUITE'
+report
+SUITE
+assert_tally "0 passed, 0 failed, 0 skipped, 0 not-applicable" 1
 
 scratch_repo
 current="scratch_repo builds a repository with scripts and an identity"

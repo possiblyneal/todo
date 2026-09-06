@@ -52,13 +52,13 @@ runs:
     # version rather than inheriting whatever the runner image happens to ship.
     - name: Set up Swift
       if: steps.detect.outputs.swift == 'true'
-      uses: swift-actions/setup-swift@7ca6abe6b3b0e8b5421b88be48feee39cbf52c6a # v2.4.0
+      uses: swift-actions/setup-swift@364295d9c23900ce04d4e5cc708387921b4e50f9 # v3
       with:
         swift-version: latest
 
     - name: Set up Java
       if: steps.detect.outputs.kotlin == 'true'
-      uses: actions/setup-java@v5
+      uses: actions/setup-java@v6
       with:
         distribution: temurin
         java-version: "21"

@@ -40,8 +40,11 @@ has_kotlin() { [[ -s settings.gradle.kts || -s build.gradle.kts ]]; }
 
 # Directories holding manifests that belong to a dependency or another
 # repository rather than to this one. Searching them reports another project's
-# packages as this project's.
-DETECT_PRUNE_DIRS=(.git node_modules .build target .venv venv vendor)
+# packages as this project's. `tmp` is here for the second reason: it is
+# gitignored scratch, so nothing in it is this repository's to check, and a
+# whole repository materialized there is the case that would otherwise fail
+# every check that walks the tree.
+DETECT_PRUNE_DIRS=(.git node_modules .build target .venv venv vendor tmp)
 
 # DETECT_PRUNE_DIRS as a find(1) `-name a -o -name b ...` expression, assigned
 # into the array named by $1. Its own copy of this list is the second copy
@@ -621,7 +624,14 @@ _capability_package_go() {
     fi
     read -r goos goarch <<< "$pair"
     for package in "${mains[@]}"; do
-      GOOS="$goos" GOARCH="$goarch" go build -o "dist/$(basename "$package")-$target" "$package" || status=1
+      # A packaged binary is one that leaves this machine: `release` uploads
+      # what lands in `dist/`. Without CGO_ENABLED=0 a cross target builds
+      # static anyway, for want of a cross C toolchain, and the host target
+      # does not -- so the one build that reaches a release is the one that
+      # fails wherever libc differs. -trimpath keeps the runner's own paths
+      # out of a published artifact.
+      CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+        go build -trimpath -ldflags='-s -w' -o "dist/$(basename "$package")-$target" "$package" || status=1
     done
   done
   return "$status"

@@ -37,9 +37,10 @@ echo "session-start-test"
 # Not a skip: a skip is a case the host could not run, and is counted so a
 # suite that skipped everything fails. The hook ships outside this repository,
 # so a host without it has no case here at all -- a CI runner, or a clone whose
-# operator has not set it up. Nothing counted, and report exits 0.
+# operator has not set it up. Declared, so this suite is told apart from one
+# that reached its cases and ran none.
 if [[ ! -x "$hook" ]]; then
-  echo "not-applicable: ~/.claude/hooks/session-start.sh not present"
+  not_applicable "$hook is not present"
   report
   exit
 fi
