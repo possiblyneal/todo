@@ -64,6 +64,9 @@ func fixture(t *testing.T) *store.Store {
 		if err := s.AttachTag("alice", roof, urgent); err != nil {
 			return err
 		}
+		if err := s.Attach("alice", roof, "https://example.com/felt"); err != nil {
+			return err
+		}
 		return s.AttachTag("alice", roof, slow)
 	})
 	carry(t, s, invoice, func() error {
@@ -313,8 +316,6 @@ func TestARowShowsWhatTheOperatorAskedFor(t *testing.T) {
 			roof = r
 		}
 	}
-	roof.attachments = 2
-
 	drawn := rowDelegate{zones: m.zones, width: 80}.render(roof, true)
 	if lines := strings.Count(drawn, "\n") + 1; lines != rowHeight {
 		t.Errorf("a row drew %d lines, want %d", lines, rowHeight)

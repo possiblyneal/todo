@@ -73,6 +73,10 @@ type Model struct {
 	popup *huh.Form
 	pop   *popupDraft
 
+	// files is the file selector, open over the add or edit screen while a
+	// person is choosing something to point at.
+	files *browser
+
 	// wal is the last write-ahead log token seen, which is how a write made
 	// in another process reaches this one.
 	wal string
@@ -189,6 +193,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// A screen that is open owns the keyboard, outermost first, so a key
 	// typed into the new-List popup never reaches the task list behind it.
 	switch {
+	case m.files != nil:
+		next, cmd := m.updateFiles(msg)
+		return next, cmd
 	case m.popup != nil:
 		next, cmd := m.updatePopup(msg)
 		return next, cmd
@@ -424,7 +431,8 @@ func (m Model) footer() string {
 }
 
 // detail is the whole of a Task: every attribute it carries, its Lists and
-// Tags by name, and its Attachments once #22 puts them there.
+// Tags by name, and every pointer it holds. A pointer is shown as it was
+// written down; nothing here says whether what it names is still there.
 func (m Model) detail(r row) string {
 	t := r.task
 	lines := []string{
@@ -455,8 +463,12 @@ func (m Model) detail(r row) string {
 	for _, key := range sortedKeys(t.Fields) {
 		add(key, t.Fields[key])
 	}
-	if r.attachments > 0 {
-		add("attachments", fmt.Sprintf("%s %d", paperclip, r.attachments))
+	for i, target := range t.Attachments {
+		label := "attachments"
+		if i > 0 {
+			label = strings.Repeat(" ", len(label))
+		}
+		add(label, target)
 	}
 	lines = append(lines, "", dimStyle.Render("enter or esc to go back"))
 	return strings.Join(lines, "\n")

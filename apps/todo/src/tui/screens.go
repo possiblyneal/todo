@@ -37,6 +37,9 @@ func (m Model) updateEditor(msg tea.Msg) (Model, tea.Cmd) {
 		case "esc":
 			m.editor, m.draft = nil, nil
 			return m, nil
+		case "ctrl+a":
+			m.files = newBrowser(m.height)
+			return m, m.files.picker.Init()
 		case "ctrl+l", "ctrl+t":
 			noun := "List"
 			if key.String() == "ctrl+t" {
@@ -150,6 +153,12 @@ func (m Model) createCollection() (Model, tea.Cmd) {
 // person creating a List can still see the Task they were writing.
 func (m Model) screen() (string, bool) {
 	switch {
+	case m.files != nil:
+		under := ""
+		if m.editor != nil {
+			under = dimStyle.Render(m.editor.View())
+		}
+		return strings.Join([]string{boxStyle.Render(m.files.View()), under}, "\n"), true
 	case m.popup != nil:
 		under := ""
 		if m.editor != nil {

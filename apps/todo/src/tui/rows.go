@@ -30,9 +30,8 @@ var (
 // row is one Task in the main view. It carries the names of the Lists it
 // belongs to rather than their ids, because a row is what a person reads.
 type row struct {
-	task        store.Task
-	lists       []string
-	attachments int
+	task  store.Task
+	lists []string
 }
 
 // FilterValue is what the searchbox matches against: the title and the
@@ -66,7 +65,7 @@ func (d rowDelegate) render(r row, selected bool) string {
 	indent := strings.Repeat("  ", r.task.Depth-1)
 
 	head := cursor + indent + style.Render(r.task.Title)
-	if r.attachments > 0 {
+	if len(r.task.Attachments) > 0 {
 		head += " " + paperclip
 	}
 	head += marks(r.task)

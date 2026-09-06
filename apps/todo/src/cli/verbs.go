@@ -324,6 +324,56 @@ func lifecycle(s *store.Store, verb string, args []string, stderr io.Writer) int
 	}))
 }
 
+// attachTask is `todo attach`: the pointers a Task holds. Bare with an id it
+// lists them, with a target it adds one, and -off takes one off.
+//
+// It never looks at what it is pointed at. A path is written down as an
+// absolute path and a web address as typed, and whether either still names
+// anything is not the tracker's to know.
+func attachTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
+	fs := flags("attach", stderr)
+	off := fs.Bool("off", false, "take this pointer off the task")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() == 0 {
+		fmt.Fprintf(stderr, "todo attach: name one task by id\n")
+		return 2
+	}
+	id := fs.Arg(0)
+
+	if fs.NArg() == 1 {
+		if *off {
+			fmt.Fprintf(stderr, "todo attach: say which pointer to take off\n")
+			return 2
+		}
+		tasks, err := s.Tasks(store.Query{IncludeCompleted: true, IncludeSnoozed: true, IncludeDeleted: true})
+		if err != nil {
+			fmt.Fprintf(stderr, "todo attach: %v\n", err)
+			return 1
+		}
+		for _, t := range tasks {
+			if t.ID != id {
+				continue
+			}
+			for _, target := range t.Attachments {
+				fmt.Fprintln(stdout, target)
+			}
+			return 0
+		}
+		fmt.Fprintf(stderr, "todo attach: no task %s\n", id)
+		return 2
+	}
+
+	target := strings.Join(fs.Args()[1:], " ")
+	return refuse(stderr, "attach", s.WithLease(actor(), id, leaseTTL, func() error {
+		if *off {
+			return s.Detach(actor(), id, target)
+		}
+		return s.Attach(actor(), id, target)
+	}))
+}
+
 // repeatTask is `todo repeat`: the one verb that reaches Scheduling. Bare, it
 // shows the rule and the dates it produces next; with words after the id it
 // sets the rule; and -tick, -skip and -detach act on one date.

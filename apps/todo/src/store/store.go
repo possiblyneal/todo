@@ -55,6 +55,9 @@ const (
 	KindTagAttached   = "tag_attached"
 	KindTagDetached   = "tag_detached"
 
+	KindAttachmentAdded   = "attachment_added"
+	KindAttachmentRemoved = "attachment_removed"
+
 	// Scheduling's four. A Series Created or Edited is the rule changing; the
 	// three Occurrence entries are the only marks a date ever leaves, and each
 	// is written because someone acted on that date.
@@ -129,6 +132,11 @@ type Task struct {
 	// carrying it shows the new name without being written to.
 	Lists []string
 	Tags  []string
+
+	// Attachments are the pointers the Task holds, oldest first. Each is a
+	// file path or a web address, and nothing here says whether what it
+	// points at still exists.
+	Attachments []string
 
 	// Series is the id of the recurrence rule this Task repeats on, empty on
 	// a Task that does not repeat. The dates themselves are computed by
@@ -481,6 +489,32 @@ AFTER INSERT ON change_history WHEN NEW.kind = 'tag_detached'
 BEGIN
 	DELETE FROM task_tag
 	WHERE task_id = NEW.subject AND tag_id = json_extract(NEW.payload, '$.tag');
+END;
+
+-- An Attachment is a pointer and nothing more: the text naming somewhere else,
+-- and when it was pointed at. Nothing is copied in, so there is nothing here to
+-- collect when a Task is deleted, and nothing looks to see whether the target
+-- is still there.
+CREATE TABLE IF NOT EXISTS attachment (
+	task_id  TEXT NOT NULL REFERENCES task(id),
+	target   TEXT NOT NULL,
+	added_at TEXT NOT NULL,
+	PRIMARY KEY (task_id, target)
+);
+
+CREATE TRIGGER IF NOT EXISTS fold_attachment_added
+AFTER INSERT ON change_history WHEN NEW.kind = 'attachment_added'
+BEGIN
+	INSERT INTO attachment (task_id, target, added_at)
+	VALUES (NEW.subject, json_extract(NEW.payload, '$.target'), NEW.at)
+	ON CONFLICT DO NOTHING;
+END;
+
+CREATE TRIGGER IF NOT EXISTS fold_attachment_removed
+AFTER INSERT ON change_history WHEN NEW.kind = 'attachment_removed'
+BEGIN
+	DELETE FROM attachment
+	WHERE task_id = NEW.subject AND target = json_extract(NEW.payload, '$.target');
 END;
 
 -- Scheduling. A Series is a rule and nothing else: the text a person edits as
@@ -924,7 +958,10 @@ SELECT
 	(t.deadline IS NOT NULL AND t.deadline < ?) AS overdue,
 	COALESCE((SELECT json_group_object(key, value) FROM task_field f WHERE f.task_id = t.id), '{}'),
 	COALESCE((SELECT json_group_array(list_id) FROM task_list m WHERE m.task_id = t.id), '[]'),
-	COALESCE((SELECT json_group_array(tag_id) FROM task_tag m WHERE m.task_id = t.id), '[]')
+	COALESCE((SELECT json_group_array(tag_id) FROM task_tag m WHERE m.task_id = t.id), '[]'),
+	COALESCE((SELECT json_group_array(target) FROM (
+		SELECT target FROM attachment a WHERE a.task_id = t.id ORDER BY a.added_at, a.target
+	)), '[]')
 FROM task t JOIN depth_first d ON d.id = t.id
 WHERE (? OR t.deleted_at IS NULL)
   AND (? OR t.completed_at IS NULL)
@@ -943,13 +980,13 @@ ORDER BY d.path`, key),
 			t                                            Task
 			description, why, deadline, priority, impact *string
 			snoozedUntil, colour, completedAt, deletedAt *string
-			createdAt, fields, lists, tags               string
+			createdAt, fields, lists, tags, attachments  string
 			estimate                                     *int64
 		)
 		err := rows.Scan(
 			&t.ID, &t.Parent, &t.Depth, &t.Title, &description, &why, &createdAt,
 			&deadline, &estimate, &priority, &impact, &snoozedUntil, &colour,
-			&completedAt, &deletedAt, &t.Series, &t.Overdue, &fields, &lists, &tags,
+			&completedAt, &deletedAt, &t.Series, &t.Overdue, &fields, &lists, &tags, &attachments,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("read task: %w", err)
@@ -970,6 +1007,7 @@ ORDER BY d.path`, key),
 		t.Fields = decodeFields(fields)
 		t.Lists = decodeIDs(lists)
 		t.Tags = decodeIDs(tags)
+		t.Attachments = decodeIDs(attachments)
 		tasks = append(tasks, t)
 	}
 	return tasks, rows.Err()

@@ -100,6 +100,8 @@ func runVerb(args []string, stdout, stderr io.Writer) int {
 		return editTask(s, rest, stderr)
 	case "lists", "tags":
 		return collections(s, verb, rest, stdout, stderr)
+	case "attach":
+		return attachTask(s, rest, stdout, stderr)
 	case "repeat":
 		return repeatTask(s, rest, stdout, stderr)
 	case "complete", "reopen", "delete":

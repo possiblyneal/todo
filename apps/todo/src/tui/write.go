@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
@@ -67,6 +68,24 @@ func (m *Model) memberships(taskID string, was store.Task, d *draft) error {
 	}
 	for _, id := range added(d.Tags, was.Tags) {
 		if err := m.store.DetachTag(m.actor, taskID, id); err != nil {
+			return err
+		}
+	}
+
+	// A pointer typed into the form is one more pointer. Nothing is fetched
+	// and nothing is checked: the store writes down where it points and that
+	// is the whole of it.
+	wanted := d.Attachments
+	if strings.TrimSpace(d.Attach) != "" {
+		wanted = append(append([]string(nil), wanted...), d.Attach)
+	}
+	for _, target := range added(was.Attachments, wanted) {
+		if err := m.store.Attach(m.actor, taskID, target); err != nil {
+			return err
+		}
+	}
+	for _, target := range added(wanted, was.Attachments) {
+		if err := m.store.Detach(m.actor, taskID, target); err != nil {
 			return err
 		}
 	}

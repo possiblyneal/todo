@@ -33,6 +33,12 @@ type draft struct {
 	Colour      string
 	Lists       []string
 	Tags        []string
+
+	// Attachments are the pointers the Task will hold when this is saved.
+	// Attach is one more, typed rather than picked, which is how a web
+	// address gets in: the file selector only walks the filesystem.
+	Attachments []string
+	Attach      string
 }
 
 // popupDraft is what the popup over the main screen is filling in: a new List
@@ -70,10 +76,19 @@ func (m Model) form(d *draft) *huh.Form {
 		huh.NewSelect[store.Level]().Title("Impact").Value(&d.Impact).
 			Options(levelOptions(store.ImpactExamples)...),
 		huh.NewInput().Title("Colour").Value(&d.Colour),
+		huh.NewInput().Title("Attach").Value(&d.Attach).
+			Placeholder("a web address, or ctrl+a to pick a file"),
 		huh.NewMultiSelect[string]().Title("Lists").Value(&d.Lists).
 			Options(listOptions(m.lists)...),
 		huh.NewMultiSelect[string]().Title("Tags").Value(&d.Tags).
 			Options(tagOptions(m.tags)...),
+	}
+	// The pointers already held are shown only when there are some, all
+	// ticked: unticking one is how it comes off, and an empty list of them
+	// is a field with nothing in it.
+	if len(d.Attachments) > 0 {
+		fields = append(fields, huh.NewMultiSelect[string]().Title("Attachments").
+			Value(&d.Attachments).Options(pointerOptions(d.Attachments)...))
 	}
 	return huh.NewForm(huh.NewGroup(fields...)).
 		WithWidth(min(m.width-4, 72)).
@@ -111,6 +126,16 @@ func listOptions(lists []store.List) []huh.Option[string] {
 	options := make([]huh.Option[string], 0, len(lists))
 	for _, l := range lists {
 		options = append(options, huh.NewOption(l.Name, l.ID))
+	}
+	return options
+}
+
+// pointerOptions shows every pointer already held, ticked. A pointer is its
+// own label: there is no name for it but where it points.
+func pointerOptions(targets []string) []huh.Option[string] {
+	options := make([]huh.Option[string], 0, len(targets))
+	for _, target := range targets {
+		options = append(options, huh.NewOption(target, target).Selected(true))
 	}
 	return options
 }
@@ -203,6 +228,7 @@ func draftOf(t store.Task) *draft {
 		Colour:      t.Colour,
 		Lists:       append([]string(nil), t.Lists...),
 		Tags:        append([]string(nil), t.Tags...),
+		Attachments: append([]string(nil), t.Attachments...),
 	}
 	if !t.Deadline.IsZero() {
 		d.Deadline = t.Deadline.Local().Format(dateLayouts[0])
