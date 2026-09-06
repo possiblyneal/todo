@@ -70,9 +70,8 @@ type Model struct {
 	editor *huh.Form
 	draft  *draft
 
-	popup              *huh.Form
-	newCollection      string
-	newName, newColour string
+	popup *huh.Form
+	pop   *popupDraft
 
 	// wal is the last write-ahead log token seen, which is how a write made
 	// in another process reaches this one.

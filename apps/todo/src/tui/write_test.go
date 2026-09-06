@@ -26,13 +26,10 @@ func TestTheFormValidatesWhatItAsksFor(t *testing.T) {
 	if err := required("  "); err == nil {
 		t.Error("a blank title was accepted")
 	}
-	for _, bad := range []string{"tomorrow", "2026-13-40", "01/02/2026"} {
-		if err := validDate(bad); err == nil {
-			t.Errorf("%q was accepted as a date", bad)
-		}
-	}
+	// A deadline is picked, not typed, so what the draft carries is only ever
+	// what the calendar wrote into it.
 	for _, good := range []string{"", "2026-01-02", "2026-01-02 15:04"} {
-		if err := validDate(good); err != nil {
+		if _, err := parseDate(good); err != nil {
 			t.Errorf("%q was refused as a date: %v", good, err)
 		}
 	}
@@ -269,7 +266,7 @@ func TestCreatingAListFromTheFormKeepsTheDraft(t *testing.T) {
 	m, _ = m.run("/add")
 	m.draft.Title = "Half typed"
 
-	m.newCollection, m.newName, m.newColour = "List", "Errands", "amber"
+	m.pop = &popupDraft{Noun: "List", Name: "Errands", Colour: "amber"}
 	m, _ = m.createCollection()
 
 	if m.err != nil {
@@ -286,6 +283,29 @@ func TestCreatingAListFromTheFormKeepsTheDraft(t *testing.T) {
 	if !contains(m.draft.Lists, errands) {
 		t.Errorf("the draft carries %v, want the List it just made", m.draft.Lists)
 	}
+}
+
+// What is typed into a popup reaches the write. The form holds the address of
+// a field on the Model, and the Model is a value: a popup bound to a field on
+// the copy that opened it would swallow every keystroke silently.
+func TestWhatIsTypedIntoThePopupIsWhatIsCreated(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	m, cmd := m.run("/list")
+	m = send(m, cmd())
+	for _, key := range []string{"E", "r", "r", "a", "n", "d", "s", "enter", "enter"} {
+		m = press(m, key)
+	}
+	if m.err != nil {
+		t.Fatalf("creating a List: %v", m.err)
+	}
+	for _, l := range m.lists {
+		if l.Name == "Errands" {
+			return
+		}
+	}
+	t.Errorf("no List named Errands: %v", m.lists)
 }
 
 func TestSnoozeHidesTheTask(t *testing.T) {

@@ -10,6 +10,7 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - `src/cli/` — mode dispatch and the verbs. `ModeOf` decides which mode an invocation asked for; `Run` takes its streams as arguments so every mode is testable without a process.
 - `src/store/` — SQLite and the whole write path. Nothing else opens a database.
 - `src/schedule/` — Scheduling's rule arithmetic: parsing a recurrence rule, writing it back, and the dates it produces. It opens no database and knows nothing about a Task.
+- `src/datepicker/` — a calendar component for Bubble Tea v2, written here because nothing in Go ships one that compiles against it. It knows about dates and nothing about a Task, and reads no clock but its own `Now`.
 - `src/tui/` — the main view, the add and edit screens, and the slash palette, built on `charm.land/bubbletea/v2` and `charm.land/huh/v2`. It writes through the same store calls the verbs use.
 
 ## Local Contracts
@@ -44,6 +45,9 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - **The TUI never holds a write transaction across think-time.** A form gathers, `save` writes, and the Lease is taken and released inside that one call. Getting this wrong queues every other writer behind a person staring at a text box, which is why `busy_timeout` is ten seconds and not longer.
 - **The TUI hears about other writes by polling the write-ahead log.** `Store.WALToken` is a stat, compared once a second. SQLite cannot push, there is no watcher service, and when the TUI is closed nothing watches because nothing needs to.
 - **"/" opens the slash palette and "f" opens the searchbox.** Both are bubbles/list's fuzzy filter, one over verbs and one over Tasks; the palette gives the list back its "/" by rebinding `KeyMap.Filter`.
+- **A deadline is picked, not typed.** The calendar is a `huh.Field` over `src/datepicker`, in the add and edit screens and again in the `/snooze` popup, with the four offered snoozes as its shortcut keys. There is no date validator left, because a date that cannot be typed cannot be mistyped.
+- **The picker is the ecosystem gap being paid for.** The only Go date picker pins `bubbletea` v0.24.2; Textual and ratatui both ship one. ADR 0001 counted this cost before any code was written, and this is the entry against it.
+- **A form's values live behind a pointer on the Model, never in a field on it.** `Model` is a value, so a form handed `&m.x` writes into the copy that built it and the copy that reads the answer sees nothing. `draft` and `popupDraft` are both pointers for that reason.
 - **A form names every attribute it showed**, so one left empty is cleared. That is the opposite of the CLI's rule, and for the same reason: a surface says what the person saw and left.
 - **The main view reads and writes nothing, asserted.** `TestTheMainViewWritesNothing` clicks, filters, sorts and expands, then compares `HistoryLength` with what it was.
 - **Bare `todo` without a terminal is a usage error**, exit 2, rather than a crash inside the renderer. An Agent that runs `todo` by accident gets a sentence, not a hung process.

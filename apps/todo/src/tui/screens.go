@@ -42,8 +42,8 @@ func (m Model) updateEditor(msg tea.Msg) (Model, tea.Cmd) {
 			if key.String() == "ctrl+t" {
 				noun = "Tag"
 			}
-			m.newCollection, m.newName, m.newColour = noun, "", ""
-			m.popup = m.collectionForm(noun, &m.newName, &m.newColour)
+			m.pop = &popupDraft{Noun: noun}
+			m.popup = m.collectionForm(noun, &m.pop.Name, &m.pop.Colour)
 			return m, m.popup.Init()
 		}
 	}
@@ -68,7 +68,7 @@ func (m Model) updateEditor(msg tea.Msg) (Model, tea.Cmd) {
 // takes no Lease, because a List is in nobody's tree.
 func (m Model) updatePopup(msg tea.Msg) (Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "esc" {
-		m.popup = nil
+		m.popup, m.pop = nil, nil
 		return m, nil
 	}
 
@@ -77,11 +77,33 @@ func (m Model) updatePopup(msg tea.Msg) (Model, tea.Cmd) {
 	switch m.popup.State {
 	case huh.StateCompleted:
 		m.popup = nil
+		if m.pop != nil && m.pop.Task != "" {
+			return m.applySnooze()
+		}
 		return m.createCollection()
 	case huh.StateAborted:
-		m.popup = nil
+		m.popup, m.pop = nil, nil
 	}
 	return m, cmd
+}
+
+// applySnooze hides the Task the picker was opened on until the date it
+// settled on. An empty date takes the snooze off, which is what clearing it in
+// the calendar means.
+func (m Model) applySnooze() (Model, tea.Cmd) {
+	pop := m.pop
+	m.pop = nil
+	until, err := parseDate(pop.Until)
+	if err != nil {
+		m.err = err
+		return m, nil
+	}
+	if err := m.snoozeUntil(pop.Task, until); err != nil {
+		m.err = err
+		return m, nil
+	}
+	m.err = m.refresh()
+	return m, nil
 }
 
 // createCollection writes the List or Tag the popup asked for, then rebuilds
@@ -92,10 +114,15 @@ func (m Model) createCollection() (Model, tea.Cmd) {
 		id  string
 		err error
 	)
-	if m.newCollection == "List" {
-		id, err = m.store.AddList(m.actor, m.newName, m.newColour)
+	pop := m.pop
+	m.pop = nil
+	if pop == nil {
+		return m, nil
+	}
+	if pop.Noun == "List" {
+		id, err = m.store.AddList(m.actor, pop.Name, pop.Colour)
 	} else {
-		id, err = m.store.AddTag(m.actor, m.newName, m.newColour)
+		id, err = m.store.AddTag(m.actor, pop.Name, pop.Colour)
 	}
 	if err != nil {
 		m.err = err
@@ -109,7 +136,7 @@ func (m Model) createCollection() (Model, tea.Cmd) {
 	if m.draft == nil {
 		return m, nil
 	}
-	if m.newCollection == "List" {
+	if pop.Noun == "List" {
 		m.draft.Lists = append(m.draft.Lists, id)
 	} else {
 		m.draft.Tags = append(m.draft.Tags, id)

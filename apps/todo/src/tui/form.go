@@ -10,9 +10,9 @@ import (
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
 
-// dateLayouts are what a deadline may be typed as. A picker replaces this
-// input at #21; until then the text is validated where it is typed, so a
-// half-typed date never reaches the store.
+// dateLayouts are how a date is written down between the picker and the
+// draft. Nobody types one any more: the calendar in src/datepicker is what
+// fills a deadline in, and these are only the way it is carried as text.
 var dateLayouts = []string{"2006-01-02 15:04", "2006-01-02"}
 
 // draft is what the add and edit screens fill in. It is text, because that is
@@ -35,6 +35,21 @@ type draft struct {
 	Tags        []string
 }
 
+// popupDraft is what the popup over the main screen is filling in: a new List
+// or Tag, or the date a Task is being snoozed until.
+//
+// It is a pointer on the Model for the same reason draft is. Model is a value,
+// so a form handed the address of a field on it writes into whichever copy
+// built the form, and the copy that reads the answer back is a different one.
+type popupDraft struct {
+	// Noun is "List" or "Tag", and empty when the popup is a snooze.
+	Noun         string
+	Name, Colour string
+
+	// Task is the Task the snooze picker was opened on.
+	Task, Until string
+}
+
 // form builds the add-task screen: every attribute a Task has, with the two
 // levels showing what they mean rather than asking a person to guess.
 //
@@ -47,8 +62,7 @@ func (m Model) form(d *draft) *huh.Form {
 		huh.NewText().Title("Description").Value(&d.Description).Lines(3),
 		huh.NewInput().Title("Why").Value(&d.Why).
 			Placeholder("what happens if this never gets done"),
-		huh.NewInput().Title("Deadline").Value(&d.Deadline).
-			Placeholder("2006-01-02, or 2006-01-02 15:04").Validate(validDate),
+		newDateField("Deadline", &d.Deadline, snoozeShortcuts()),
 		huh.NewInput().Title("Estimate").Value(&d.Estimate).
 			Placeholder("90m, 3h, 2h30m").Validate(validDuration),
 		huh.NewSelect[store.Level]().Title("Priority").Value(&d.Priority).
@@ -64,6 +78,15 @@ func (m Model) form(d *draft) *huh.Form {
 	return huh.NewForm(huh.NewGroup(fields...)).
 		WithWidth(min(m.width-4, 72)).
 		WithHeight(max(m.height-4, 10))
+}
+
+// snoozeForm is the popup that hides a Task until a date the same calendar
+// picks. The four offered snoozes are its shortcut keys, so "1 week" is one
+// keystroke and "the 14th" is on the same screen rather than another one.
+func (m Model) snoozeForm(until *string) *huh.Form {
+	return huh.NewForm(huh.NewGroup(
+		newDateField("Snooze until", until, snoozeShortcuts()),
+	)).WithWidth(min(m.width-8, 48)).WithHeight(16)
 }
 
 // collectionForm is the popup that creates a List or a Tag without leaving the
@@ -105,11 +128,6 @@ func required(v string) error {
 		return fmt.Errorf("this one is needed")
 	}
 	return nil
-}
-
-func validDate(v string) error {
-	_, err := parseDate(v)
-	return err
 }
 
 func validDuration(v string) error {

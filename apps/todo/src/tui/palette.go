@@ -30,6 +30,7 @@ func commands() []list.Item {
 		command{"/delete", "the Task under the cursor"},
 		command{"/list", "a new List"},
 		command{"/tag", "a new Tag"},
+		command{"/snooze", "the Task under the cursor, until a date you pick"},
 		command{"/sort", "by the next order"},
 		command{"/quit", "leave"},
 	}
@@ -99,9 +100,17 @@ func (m Model) run(name string) (Model, tea.Cmd) {
 		return m.onSelected(func(id string) error { return m.lifecycle(id, what) })
 
 	case "/list", "/tag":
-		m.newCollection = strings.ToUpper(name[1:2]) + name[2:]
-		m.newName, m.newColour = "", ""
-		m.popup = m.collectionForm(m.newCollection, &m.newName, &m.newColour)
+		m.pop = &popupDraft{Noun: strings.ToUpper(name[1:2]) + name[2:]}
+		m.popup = m.collectionForm(m.pop.Noun, &m.pop.Name, &m.pop.Colour)
+		return m, m.popup.Init()
+
+	case "/snooze":
+		t, ok := m.selected()
+		if !ok {
+			return m, nil
+		}
+		m.pop = &popupDraft{Task: t.ID}
+		m.popup = m.snoozeForm(&m.pop.Until)
 		return m, m.popup.Init()
 
 	case "/sort":
