@@ -1,5 +1,5 @@
 {
   "schema_version": 1,
-  "run": "none",
-  "ships": { "kind": "none" }
+  "run": "oneshot",
+  "ships": { "kind": "executable", "targets": ["linux-amd64", "macos-arm64"] }
 }
