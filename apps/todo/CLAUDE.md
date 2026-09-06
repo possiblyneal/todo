@@ -9,6 +9,7 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - `src/cmd/todo/` — `package main`, nothing but the call into `cli`. It sits under `cmd/` because `scripts/package` names the artifact after the main package's import path, and a main at `src/` would build `src-linux-amd64`.
 - `src/cli/` — mode dispatch and the verbs. `ModeOf` decides which mode an invocation asked for; `Run` takes its streams as arguments so every mode is testable without a process.
 - `src/store/` — SQLite and the whole write path. Nothing else opens a database.
+- `src/schedule/` — Scheduling's rule arithmetic: parsing a recurrence rule, writing it back, and the dates it produces. It opens no database and knows nothing about a Task.
 - `src/tui/` — the main view, the add and edit screens, and the slash palette, built on `charm.land/bubbletea/v2` and `charm.land/huh/v2`. It writes through the same store calls the verbs use.
 
 ## Local Contracts
@@ -32,6 +33,11 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - **A writing verb takes the Lease covering its target's tree, writes, and gives it back.** A verb acts and exits, so it holds a 30-second TTL and never strands a tree behind a dead process.
 - **An edit says what it touches and nothing else.** An attribute flag nobody typed leaves its attribute alone; one given empty clears it. The fold reads `json_type(payload, '$.x') IS NULL` for untouched and a JSON null for cleared, which is the distinction `COALESCE` cannot express, and `fs.Visit` is what makes the CLI say it.
 - **Exit status is 0 for done, 1 for a failure, 2 for usage, 3 for a refusal.** A refusal is the store turning a write away — no Lease, or one another Actor holds — and a surface distinguishes it from a crash. A bad attribute value is refused where it was typed, so `store.ParseLevel` is the CLI's, not only the write path's.
+- **A Series is a rule and nothing else.** Scheduling's two tables hold ids, a rule, a date and a state; no title, description or estimate crosses into it, and `TestNoTaskContentEntersScheduling` reads both tables to check. Tracking points at the rule through `task.series_id`.
+- **An Occurrence is computed on every look.** There is no row for a date until somebody ticks, skips or Detaches it, and then it is keyed by (series, date). A reader that shows next year's dates appends nothing and stores nothing.
+- **Detaching one date lifts it out into an ordinary Task.** The copy carries the recurring Task's content, deadlined on that date and repeating on nothing, and the rule stops producing the date. Later edits to the rule do not reach it, which is the point of detaching rather than editing the Series.
+- **A mark is an ordinary guarded write; changing the rule is too.** Each takes the Lease covering the Task's tree. Creating a Series and pointing the Task at it are one transaction, so a refusal leaves no Series behind.
+- **Nothing in Scheduling runs on a schedule.** No sweep materializes dates and nothing is awake to notice one arriving; `src/schedule` says so in its package comment.
 - **The charm modules are the `charm.land/...` v2 paths**, not `github.com/charmbracelet/...`. `bubblezone/v2` requires `charm.land/bubbletea/v2`, so mixing the two roots would put two incompatible `tea.Model` types in one program.
 - **The TUI's mouse zones come from a per-Model `zone.New()`**, never `zone.NewGlobal()`. `todo serve` runs many sessions in one process, and a global manager would hand one session's hit boxes to another.
 - **The v2 View carries the screen and mouse modes.** `Model.View` sets `AltScreen` and `MouseMode`; nothing is toggled through a program option behind the model's back.
@@ -48,6 +54,7 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 
 - Tests first, at the seams the domain already draws: append-only, purity of reads, the Lease predicate, gaplessness under contention.
 - Concurrency claims are asserted against real OS processes, not goroutines. Goroutines share one `*sql.DB` and one pool, so they never reach the file lock the defect hides behind. `TestMain` re-executes the test binary as the child.
+- `todo repeat` is the one verb that reaches Scheduling: bare it shows the rule and the next dates, words after the id set the rule, and `-tick`, `-skip`, `-detach` and `-off` are the rest.
 - The store's exported vocabulary is `CONTEXT.md`'s: Task, Subtask, List, Tag, Lease, Attachment, Series, Occurrence, Actor.
 - A Task's attributes are the set `docs/features.md` asks for and no more: title, description, why, creation date, deadline, estimate, priority, impact, snooze, colour, and any number of key/value pairs. Priority and impact are the same three levels, each carrying an example in `PriorityExamples` and `ImpactExamples`. The four offered snoozes are 1 hour, 1 day, 1 week, 1 month, and the month one clamps to the target month's last day.
 

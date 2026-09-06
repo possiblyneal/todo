@@ -54,6 +54,15 @@ const (
 	KindTagDescribed  = "tag_described"
 	KindTagAttached   = "tag_attached"
 	KindTagDetached   = "tag_detached"
+
+	// Scheduling's four. A Series Created or Edited is the rule changing; the
+	// three Occurrence entries are the only marks a date ever leaves, and each
+	// is written because someone acted on that date.
+	KindSeriesCreated      = "series_created"
+	KindSeriesEdited       = "series_edited"
+	KindOccurrenceTicked   = "occurrence_ticked"
+	KindOccurrenceSkipped  = "occurrence_skipped"
+	KindOccurrenceDetached = "occurrence_detached"
 )
 
 // ErrRefused is a write with no unexpired Lease held by the writing Actor on
@@ -120,6 +129,11 @@ type Task struct {
 	// carrying it shows the new name without being written to.
 	Lists []string
 	Tags  []string
+
+	// Series is the id of the recurrence rule this Task repeats on, empty on
+	// a Task that does not repeat. The dates themselves are computed by
+	// Occurrences and are never stored ahead of being acted on.
+	Series string
 
 	CompletedAt time.Time
 	DeletedAt   time.Time
@@ -207,7 +221,10 @@ CREATE TABLE IF NOT EXISTS task (
 	snoozed_until    TEXT,
 	colour           TEXT,
 	completed_at     TEXT,
-	deleted_at       TEXT
+	deleted_at       TEXT,
+	-- The rule this Task repeats on, or NULL. Tracking points at Scheduling;
+	-- Scheduling never holds a word of what the Task says.
+	series_id        TEXT
 );
 
 -- Any number of key/value pairs, one row each, so a new pair is data rather
@@ -278,7 +295,8 @@ AFTER INSERT ON change_history WHEN NEW.kind = 'task_added'
 BEGIN
 	INSERT INTO task (
 		id, parent_id, depth, title, description, why, created_at,
-		deadline, estimate_seconds, priority, impact, snoozed_until, colour
+		deadline, estimate_seconds, priority, impact, snoozed_until, colour,
+		series_id
 	)
 	VALUES (
 		NEW.subject,
@@ -293,7 +311,8 @@ BEGIN
 		json_extract(NEW.payload, '$.priority'),
 		json_extract(NEW.payload, '$.impact'),
 		json_extract(NEW.payload, '$.snoozed_until'),
-		json_extract(NEW.payload, '$.colour')
+		json_extract(NEW.payload, '$.colour'),
+		json_extract(NEW.payload, '$.series')
 	);
 END;
 
@@ -312,7 +331,8 @@ BEGIN
 		priority         = CASE WHEN json_type(NEW.payload, '$.priority')         IS NULL THEN priority         ELSE json_extract(NEW.payload, '$.priority')         END,
 		impact           = CASE WHEN json_type(NEW.payload, '$.impact')           IS NULL THEN impact           ELSE json_extract(NEW.payload, '$.impact')           END,
 		snoozed_until    = CASE WHEN json_type(NEW.payload, '$.snoozed_until')    IS NULL THEN snoozed_until    ELSE json_extract(NEW.payload, '$.snoozed_until')    END,
-		colour           = CASE WHEN json_type(NEW.payload, '$.colour')           IS NULL THEN colour           ELSE json_extract(NEW.payload, '$.colour')           END
+		colour           = CASE WHEN json_type(NEW.payload, '$.colour')           IS NULL THEN colour           ELSE json_extract(NEW.payload, '$.colour')           END,
+		series_id        = CASE WHEN json_type(NEW.payload, '$.series')           IS NULL THEN series_id        ELSE json_extract(NEW.payload, '$.series')           END
 	WHERE id = NEW.subject;
 END;
 
@@ -461,6 +481,69 @@ AFTER INSERT ON change_history WHEN NEW.kind = 'tag_detached'
 BEGIN
 	DELETE FROM task_tag
 	WHERE task_id = NEW.subject AND tag_id = json_extract(NEW.payload, '$.tag');
+END;
+
+-- Scheduling. A Series is a rule and nothing else: the text a person edits as
+-- one thing, kept as one value so editing the rule is one append however many
+-- dates it produces. No title, no description, no estimate -- no task content
+-- crosses into this context, which is why the whole of it is two narrow tables.
+CREATE TABLE IF NOT EXISTS series (
+	id         TEXT PRIMARY KEY,
+	rule       TEXT NOT NULL,
+	created_at TEXT NOT NULL
+);
+
+-- An Occurrence is computed from the rule on every look and is never written
+-- here in advance. A row exists only for a date somebody acted on -- ticked,
+-- skipped, or Detached -- keyed by the pair (series, date), so reading next
+-- year's dates leaves this table exactly as it was.
+--
+-- task_id is filled for a Detached date alone: it names the ordinary Task that
+-- date became, and the rule stops producing it.
+CREATE TABLE IF NOT EXISTS occurrence (
+	series_id TEXT NOT NULL REFERENCES series(id),
+	date      TEXT NOT NULL,
+	state     TEXT NOT NULL,
+	-- No foreign key on task_id. It is a pointer across a context boundary,
+	-- and the mark is appended before the Task it names exists: the refusal
+	-- has to abort the whole detach, so the guarded entry goes first.
+	task_id   TEXT,
+	PRIMARY KEY (series_id, date)
+);
+
+CREATE TRIGGER IF NOT EXISTS fold_series_created
+AFTER INSERT ON change_history WHEN NEW.kind = 'series_created'
+BEGIN
+	INSERT INTO series (id, rule, created_at)
+	VALUES (NEW.subject, json_extract(NEW.payload, '$.rule'), NEW.at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS fold_series_edited
+AFTER INSERT ON change_history WHEN NEW.kind = 'series_edited'
+BEGIN
+	UPDATE series SET rule = json_extract(NEW.payload, '$.rule') WHERE id = NEW.subject;
+END;
+
+-- The three marks fold the same way, into the same row. Acting on a date twice
+-- replaces the mark and appends a second entry: the log keeps both, the fold
+-- keeps the latest.
+CREATE TRIGGER IF NOT EXISTS fold_occurrence_marked
+AFTER INSERT ON change_history
+WHEN NEW.kind IN ('occurrence_ticked', 'occurrence_skipped', 'occurrence_detached')
+BEGIN
+	INSERT INTO occurrence (series_id, date, state, task_id)
+	VALUES (
+		json_extract(NEW.payload, '$.series'),
+		json_extract(NEW.payload, '$.date'),
+		CASE NEW.kind
+			WHEN 'occurrence_ticked'  THEN 'ticked'
+			WHEN 'occurrence_skipped' THEN 'skipped'
+			ELSE 'detached'
+		END,
+		json_extract(NEW.payload, '$.task')
+	)
+	ON CONFLICT (series_id, date) DO UPDATE
+		SET state = excluded.state, task_id = excluded.task_id;
 END;
 `
 
@@ -837,7 +920,7 @@ WITH RECURSIVE depth_first(id, path) AS (
 SELECT
 	t.id, COALESCE(t.parent_id, ''), t.depth, t.title, t.description, t.why, t.created_at,
 	t.deadline, t.estimate_seconds, t.priority, t.impact, t.snoozed_until, t.colour,
-	t.completed_at, t.deleted_at,
+	t.completed_at, t.deleted_at, COALESCE(t.series_id, ''),
 	(t.deadline IS NOT NULL AND t.deadline < ?) AS overdue,
 	COALESCE((SELECT json_group_object(key, value) FROM task_field f WHERE f.task_id = t.id), '{}'),
 	COALESCE((SELECT json_group_array(list_id) FROM task_list m WHERE m.task_id = t.id), '[]'),
@@ -866,7 +949,7 @@ ORDER BY d.path`, key),
 		err := rows.Scan(
 			&t.ID, &t.Parent, &t.Depth, &t.Title, &description, &why, &createdAt,
 			&deadline, &estimate, &priority, &impact, &snoozedUntil, &colour,
-			&completedAt, &deletedAt, &t.Overdue, &fields, &lists, &tags,
+			&completedAt, &deletedAt, &t.Series, &t.Overdue, &fields, &lists, &tags,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("read task: %w", err)

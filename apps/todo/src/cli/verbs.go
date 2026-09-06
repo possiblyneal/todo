@@ -324,6 +324,107 @@ func lifecycle(s *store.Store, verb string, args []string, stderr io.Writer) int
 	}))
 }
 
+// repeatTask is `todo repeat`: the one verb that reaches Scheduling. Bare, it
+// shows the rule and the dates it produces next; with words after the id it
+// sets the rule; and -tick, -skip and -detach act on one date.
+//
+// The dates it prints are computed as it prints them. Nothing is stored by
+// showing them, which is why asking for a hundred of them is free.
+func repeatTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
+	fs := flags("repeat", stderr)
+	off := fs.Bool("off", false, "stop the task repeating; the record of it stays")
+	tick := fs.String("tick", "", "mark one date done: 2006-01-02")
+	skip := fs.String("skip", "", "mark one date skipped: 2006-01-02")
+	detach := fs.String("detach", "", "lift one date out into an ordinary task: 2006-01-02")
+	count := fs.Int("n", 5, "how many upcoming dates to show")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() < 1 {
+		fmt.Fprintln(stderr, "todo repeat: name one task by id")
+		return 2
+	}
+	id, who := fs.Arg(0), actor()
+	rule := strings.Join(fs.Args()[1:], " ")
+
+	// One date, one mark. Each is a write to the task's tree and takes the
+	// Lease covering it.
+	for _, act := range []struct {
+		flag string
+		date string
+		do   func(on time.Time) error
+	}{
+		{"tick", *tick, func(on time.Time) error { return s.TickOccurrence(who, id, on) }},
+		{"skip", *skip, func(on time.Time) error { return s.SkipOccurrence(who, id, on) }},
+		{"detach", *detach, func(on time.Time) error {
+			detached, err := s.DetachOccurrence(who, id, on)
+			if err == nil {
+				fmt.Fprintln(stdout, detached)
+			}
+			return err
+		}},
+	} {
+		if act.date == "" {
+			continue
+		}
+		on, err := time.ParseInLocation("2006-01-02", act.date, time.UTC)
+		if err != nil {
+			fmt.Fprintf(stderr, "todo repeat: cannot read %q as a date: want 2006-01-02\n", act.date)
+			return 2
+		}
+		return refuse(stderr, "repeat", s.WithLease(who, id, leaseTTL, func() error {
+			return act.do(on)
+		}))
+	}
+
+	switch {
+	case *off:
+		return refuse(stderr, "repeat", s.WithLease(who, id, leaseTTL, func() error {
+			return s.Unrepeat(who, id)
+		}))
+	case rule != "":
+		return refuse(stderr, "repeat", s.WithLease(who, id, leaseTTL, func() error {
+			_, err := s.Repeat(who, id, rule)
+			return err
+		}))
+	}
+	return showRepeat(s, id, *count, stdout, stderr)
+}
+
+// showRepeat prints the rule and the dates it produces next. The window is two
+// years, which is long enough to hold the next n dates of any rule the parser
+// accepts and short enough that a daily rule stays cheap to walk.
+func showRepeat(s *store.Store, id string, count int, stdout, stderr io.Writer) int {
+	rule, repeats, err := s.Rule(id)
+	if err != nil {
+		fmt.Fprintf(stderr, "todo repeat: %v\n", err)
+		return 1
+	}
+	if !repeats {
+		fmt.Fprintln(stdout, "does not repeat")
+		return 0
+	}
+	fmt.Fprintln(stdout, rule.String())
+
+	from := time.Now().UTC()
+	occurrences, err := s.Occurrences(id, from, from.AddDate(2, 0, 0))
+	if err != nil {
+		fmt.Fprintf(stderr, "todo repeat: %v\n", err)
+		return 1
+	}
+	for i, o := range occurrences {
+		if i == count {
+			break
+		}
+		state := ""
+		if o.State != store.Pending {
+			state = "  (" + string(o.State) + ")"
+		}
+		fmt.Fprintf(stdout, "%s%s\n", o.Date.Format("2006-01-02"), state)
+	}
+	return 0
+}
+
 // refuse turns a refusal into its own exit status, so an Agent can tell "the
 // tree is held by someone else, come back" from "that did not work".
 func refuse(stderr io.Writer, verb string, err error) int {
