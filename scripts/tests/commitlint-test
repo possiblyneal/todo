@@ -105,12 +105,30 @@ fixture "a conventional subject with a body is accepted"
 out="$(attempt "feat: add a commit message check
 
 The body is separated from the subject by a blank line, which is what
-makes it a body rather than a runaway subject.")"
+makes it a body rather than a runaway subject.
+
+Generated-By: Test Model")"
 status=$?
 if (( status == 0 )); then
   pass
 else
   fail "a valid conventional commit was rejected: $out"
+fi
+
+# The trailer is written into these messages rather than produced: this fixture
+# installs the commitlint hook alone, so what it proves is that the rule reads
+# the trailer. That scripts/attribute-commit writes one is attribute-commit-test's
+# case, and that the two meet on a real commit is neither's -- the rewrite runs
+# at a stage this fixture does not install.
+fixture "a message with no Generated-By trailer is rejected"
+out="$(attempt "feat: add a commit message check
+
+An agent wrote this and the attribution trailer never made it in.")"
+status=$?
+if (( status != 0 )) && grep -q "trailer-exists" <<< "$out"; then
+  pass
+else
+  fail "an unattributed commit was not caught by the rule: $out"
 fi
 
 # GitHub writes this subject itself when a pull request is merged, and no local

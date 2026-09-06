@@ -6,10 +6,11 @@
 # repository that contains no JavaScript. The check-yaml hook validates this
 # file on every commit as a side effect of the format.
 #
-# Only the two rules the Conventional Commits specification states as MUST and
-# config-conventional ships as warnings are overridden. Everything else --
-# type-enum, subject-case, header-max-length, body-max-line-length -- is the
-# stock preset, at error level already.
+# Two of the three rules below are the ones the Conventional Commits
+# specification states as MUST and config-conventional ships as warnings. The
+# third is this repository's own. Everything else -- type-enum, subject-case,
+# header-max-length, body-max-line-length -- is the stock preset, at error
+# level already.
 extends:
   - "@commitlint/config-conventional"
 
@@ -23,3 +24,26 @@ rules:
   # and `Refs: #12` are parsed as more body text, so a breaking change stops
   # being machine-readable at exactly the moment that matters.
   footer-leading-blank: [2, always]
+
+  # The model that wrote a commit is worth recording: it is the only per-commit
+  # statement of what produced the change. `scripts/attribute-commit` rewrites
+  # Claude Code's `Co-Authored-By: <model> <noreply@anthropic.com>` into
+  # `Generated-By: <model>` at prepare-commit-msg -- a tool is not a co-author
+  # -- and this rule is what makes the trailer required rather than incidental,
+  # so a commit made with that hook uninstalled fails here instead of landing
+  # unattributed.
+  #
+  # It follows that a commit written by hand, with no agent trailer to rewrite,
+  # is refused. That is the rule working: every commit in this repository is
+  # agent-written, and one that is not should say so deliberately by adding its
+  # own `Generated-By:` line rather than by passing unnoticed.
+  #
+  # The rule matches through `git interpret-trailers --parse`, which reads a
+  # trailer only in the message's last paragraph. A `Generated-By:` line run on
+  # from the body is invisible to it and fails, which is the same defect
+  # footer-leading-blank names one rule up.
+  #
+  # A human co-author keeps their own `Co-Authored-By:` line: the hook rewrites
+  # only trailers addressed to noreply@anthropic.com, and nothing here forbids
+  # the others.
+  trailer-exists: [2, always, "Generated-By:"]

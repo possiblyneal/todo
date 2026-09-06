@@ -13,6 +13,8 @@ One flat directory, not a `ci/` and a `scripts/` split. The boundary that split 
 - `repo-settings check` — hosted GitHub state, run explicitly
 - `adr-index` — called by pre-commit; regenerates `docs/adrs/index.md`
 - `structure` — called by `scripts/check` and by pre-commit; audits where files sit; the script itself holds the rules
+- `github-parity` — called by `scripts/check` and by pre-commit; refuses a divergence between `.github/` and the copy a template payload ships
+- `attribute-commit` — called by pre-commit at `prepare-commit-msg`; rewrites the agent's `Co-Authored-By` trailer to `Generated-By`, the trailer `.commitlintrc.yaml` then requires at `commit-msg`
 - `changelog-check` — called by pre-commit at `pre-push`, and by `ci.yml` over a pull-request range; validates `CHANGELOG.md` structure
 - `protect-branch` — called by pre-commit at `pre-push`; refuses a push whose destination ref is `main` or `master`
 - `worktree-cleanup` — called by pre-commit at `post-checkout` and `post-merge`, and by the SessionStart hook with `--report`; prunes Git's records for worktrees whose directories are gone
@@ -22,7 +24,7 @@ One flat directory, not a `ci/` and a `scripts/` split. The boundary that split 
 - `libs/result.sh` — how a check reports: the four Result states, the printed layout, findings, and the tally; sourced by `libs/detect.sh`, and so by every command, and by `structure`
 - `libs/quadlet.sh` — `quadlet_validate <dir> <label>`, validation of a `quadlet` unit's `deploy/quadlet/` pair, the label naming it in findings; sourced by `package`
 - `tests/*-test` — assertions about the wiring itself
-- `tests/libs/harness.sh` — the assertion counting those tests share, and the fixture primitives they compose: `scratch_repo`, `fixture`, `declare_unit`, `quadlet_pair`, `stub`, `minimal_path`, `skip`. `fixture <name>` is a fresh scratch repository named as the current case, the default a suite overrides when its cases need more; `minimal_path <tool…>` builds a directory of symlinks to just those tools and echoes it, for a case that runs a command with a named tool absent from `PATH`
+- `tests/libs/harness.sh` — the assertion counting those tests share, and the fixture primitives they compose: `scratch_repo`, `fixture`, `declare_unit`, `quadlet_pair`, `stub`, `minimal_path`, `skip`, `not_applicable`. `fixture <name>` is a fresh scratch repository named as the current case, the default a suite overrides when its cases need more; `minimal_path <tool…>` builds a directory of symlinks to just those tools and echoes it, for a case that runs a command with a named tool absent from `PATH`
 
 A helper that must be built before it runs belongs in `tools/`, not here.
 
@@ -37,13 +39,15 @@ A helper that must be built before it runs belongs in `tools/`, not here.
 - **Go capabilities run once per module** through `go_each`, which fails on an empty `go list -m`; gofmt stays at the root. `_go_main_packages` yields one program, `NO_RUNNER`, or a refusal.
 - **An adapter is honest about what it did.** Capture the tool's exit status, not only its output. No function stands in for an absent one: the probe reads `absent` off the function table, the dispatch reports `unavailable`, and `NO_RUNNER` never leaves it. Node's `run` refuses a missing `bin`.
 - **`libs/*.sh` and `harness.sh` are sourced, never executed** — no shebang, no executable bit, `.sh`. Every other script is extensionless and executable; pre-commit reads a shebang only on one.
-- **`harness.sh` owns the counting and the primitives**: `scratch_repo`, `fixture`, `declare_unit`, `quadlet_pair`, `stub`, `minimal_path`, `skip`. No suite changes directory, and only a case about `run` lets a stub read its stdin; `report` fails a suite that passed nothing and skipped something.
+- **`harness.sh` owns the counting and the primitives**: `scratch_repo`, `fixture`, `declare_unit`, `quadlet_pair`, `stub`, `minimal_path`, `skip`, `not_applicable`. No suite changes directory, and only a case about `run` lets a stub read its stdin. The tally `report` prints is four counts and is an interface; it is green only where the suite passed something or declared itself `not_applicable`, so passing nothing beside a skip is `unavailable` and counting nothing at all is a suite that never reached its cases.
 - **`libs/precommit.sh` owns which git hooks are owed, and parses `default_install_hook_types` rather than grepping: three valid YAML forms.** `adr-index` and `structure` are hooks, not capabilities, and run `always_run` with no `files:` filter, since staged paths exclude deletions.
+- **`github-parity` compares two trees, not one file's placement**, which is why it is not folded into `structure`. Which paths exist and what each holds are both read from the Git index, since it runs at pre-commit and the index is the tree being committed; `dependabot.yml` is the one named content exception, a payload-only file is excused only where `generation.features` records the omission, and a repository with no payload is `not-applicable`.
 - **`structure` holds the layout rules as code**; the only file it opens is a `.unit.json`. Depth stops at the first `src/`; a domain is its `src/`, not its name. It enumerates with `git ls-files`, needs `jq`, and reports the three content rules `not-applicable`.
 - **`run` and `package` take their context as globals** from `libs/unit.sh`. `package` clears `dist/` before dispatch, only where `packaging_writes_dist` and never on a dry run, so a stale binary cannot satisfy `release`'s output guard.
 - **`release` is the only script here that writes to GitHub.** Changelog section or generated notes, never both; it packages first, checks an `executable` unit produced a file, and runs `ci`.
 - **`changelog-check` validates only the paths it is given, at `pre-push`** — form, not whether an entry was owed; CI re-runs it over the PR range.
 - **`protect-branch` reads the push destination, not the current branch**, and is silent when unset.
+- **`attribute-commit` rewrites and never inserts**, so the rule requiring the trailer has something left to fail on. Only trailers addressed to `noreply@anthropic.com` are touched, which is what leaves a human co-author's attribution alone.
 - **`worktree-cleanup` prunes metadata, never a directory**, and reads only `--report`.
 - **`check` globs tests with `nullglob` and sweeps untracked files in a second pass by path**, which `--all-files` cannot see.
 - **Local commands stay off hosted GitHub state** — the boundary is hosted state, not connectivity, and only `repo-settings check` crosses it.
@@ -61,7 +65,7 @@ Each suite is `scripts/tests/<name>-test`, reports through the harness, and asse
 
 - `capabilities-test` — the ten-by-six probe table, dispatch under `CI_DRY_RUN=1`, and real runs of `ci`, `security`, `run`, and `package` against stubbed toolchains
 - `result-gate-test` — the four states are enforced and findings deduped, and every command ending in `tally` fails on an `unavailable` line or a recorded orphan
-- `harness-test` — the harness itself, run as a process: the tally line and exit status for all-pass, one-fail, all-skip, and skip-beside-pass, plus each fixture primitive
+- `harness-test` — the harness itself, run as a process: the tally line and exit status for all-pass, one-fail, all-skip, skip-beside-pass, a declared not-applicable, and a suite that counted nothing, plus each fixture primitive
 - `clean-test` — `clean` prunes the directories `libs/detect.sh` names
 - `unit-commands-test` — unit resolution, `run: none` and `ships: none`, quadlet validation with no container runtime, arguments after `--`, and `dist/` cleared only where a language packages there. Skips without `jq`
 - `health-checks-test` — the offline boundary, with `gh` stubbed
@@ -69,11 +73,13 @@ Each suite is `scripts/tests/<name>-test`, reports through the harness, and asse
 - `release-test` — what `release` hands to `gh release create`, and each way the walk aborts before the tag is cut
 - `adr-index-test` — the index converges and pre-commit invokes the hook
 - `commitlint-test` — the `commit-msg` hook installs and commitlint judges a message. The only suite needing the network
+- `attribute-commit-test` — the agent trailer is rewritten, a human co-author is not, no trailer is inserted where none was, and a missing message file is not an error
 - `worktree-cleanup-test` — pruning is correct and idempotent and tolerates each hook stage's arguments
-- `session-start-test` — the operator's global `session-start.sh`, `not-applicable` where it is absent
+- `session-start-test` — the operator's global `session-start.sh`, declared `not_applicable` where it is absent
 - `changelog-check-test` — each structural rule, the shipped addon changelog, a missing file, a missing awk, an unrelated path
 - `precommit-hooks-test` — `libs/precommit.sh` against each YAML form. Needs no network, which is the point: this wiring fails silently
+- `github-parity-test` — each way the two trees can disagree, both documented exceptions, the index read rather than the working tree in both directions, no payload at all, and the record unreadable without `jq`
 - `structure-test` — each layout rule in both directions, `.structure-allow` at a path and at a prefix, every declaration value, and `jq` absent. Each fixture is a real repository with the script copied in, since it resolves its own root from `BASH_SOURCE`
 - `protect-branch-test` — bare, qualified, near-miss, and unset destinations
 
-`scripts/check` runs all sixteen before the checks they guard, then `structure` before `ci`. `ci.yml` runs them before toolchain setup and installs `pre-commit` first, so the two hook-wiring suites do not skip every case. shellcheck runs via pre-commit with `-x`.
+`scripts/check` runs all eighteen before the checks they guard, then `structure` and `github-parity` before `ci`. `ci.yml` runs them before toolchain setup and installs `pre-commit` first, so the two hook-wiring suites do not skip every case. shellcheck runs via pre-commit with `-x`.
