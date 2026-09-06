@@ -276,3 +276,27 @@ func TestACollectionNeedsAName(t *testing.T) {
 		t.Error("a Tag with no name was created")
 	}
 }
+
+func TestTasksSortByEstimate(t *testing.T) {
+	s := openTemp(t)
+	hours := func(n int) *time.Duration {
+		d := time.Duration(n) * time.Hour
+		return &d
+	}
+	long := leased(t, s, "alice", Attributes{Title: Set("Long"), Estimate: hours(10)})
+	short := leased(t, s, "alice", Attributes{Title: Set("Short"), Estimate: hours(9)})
+	none := leased(t, s, "alice", Attributes{Title: Set("Unknown")})
+
+	tasks, err := s.Tasks(Query{Sort: SortEstimate})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	var got []string
+	for _, task := range tasks {
+		got = append(got, task.ID)
+	}
+	want := []string{short, long, none}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("sorted by estimate the order is %v, want the shortest first and no estimate last %v", got, want)
+	}
+}

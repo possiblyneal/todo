@@ -1,0 +1,413 @@
+// Package tui is the main view: the same store the verbs write through, read
+// and drawn. Nothing in this package writes until #19, and the tests assert
+// the Change History is the same length after every interaction.
+package tui
+
+import (
+	"fmt"
+	"math/rand/v2"
+	"strings"
+
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	zone "github.com/lrstanley/bubblezone/v2"
+
+	"github.com/possiblyneal/todo/apps/todo/src/store"
+)
+
+const (
+	sidebarWidth = 22
+	everyList    = ""
+)
+
+// sorts is the order the sort key cycles in, which is the order
+// docs/features.md names them: alphabetical, due date, creation date, time
+// estimate.
+var sorts = []store.Sort{store.SortTitle, store.SortDeadline, store.SortCreated, store.SortEstimate}
+
+var (
+	headerStyle  = lipgloss.NewStyle().Bold(true)
+	chosenStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
+	boxStyle     = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
+	sidebarStyle = lipgloss.NewStyle().Width(sidebarWidth).PaddingRight(1)
+)
+
+// Model is the read-only main view. It holds the store rather than a copy of
+// its contents: every refresh is a read, and a read writes nothing.
+//
+// The zone manager is per-Model rather than the package-global one, because
+// `todo serve` runs many sessions in one process and a global manager would
+// hand one session's hit boxes to another.
+type Model struct {
+	store *store.Store
+	zones *zone.Manager
+	rand  *rand.Rand
+
+	lists  []store.List
+	tags   []store.Tag // ranked by frequency, with variation
+	names  map[string]string
+	chosen map[string]bool // tag ids narrowing the view
+
+	list     string // the chosen List, or everyList
+	sort     store.Sort
+	dropdown bool
+	expanded bool
+
+	tasks         list.Model
+	width, height int
+	err           error
+}
+
+// New reads the store once and builds the view. It returns the read's error
+// rather than swallowing it, so an unopenable store fails before Bubble Tea
+// takes the terminal.
+func New(s *store.Store, r *rand.Rand) (Model, error) {
+	m := Model{
+		store:  s,
+		zones:  zone.New(),
+		rand:   r,
+		chosen: map[string]bool{},
+		names:  map[string]string{},
+		list:   everyList,
+		sort:   store.SortCreated,
+		width:  80,
+		height: 24,
+	}
+	m.tasks = list.New(nil, rowDelegate{zones: m.zones, width: m.width - sidebarWidth}, m.width-sidebarWidth, m.height-4)
+	m.tasks.SetShowTitle(false)
+	m.tasks.SetShowStatusBar(false)
+	m.tasks.SetShowHelp(false)
+	m.tasks.SetFilteringEnabled(true)
+	m.tasks.SetShowFilter(true)
+	if err := m.refresh(); err != nil {
+		return Model{}, err
+	}
+	return m, nil
+}
+
+// refresh re-reads everything the view shows. Tags are re-ranked on each read,
+// so the sidebar varies as the operator asked; the chosen ones are kept by id
+// across the re-rank.
+func (m *Model) refresh() error {
+	lists, err := m.store.Lists()
+	if err != nil {
+		return err
+	}
+	tags, err := m.store.Tags()
+	if err != nil {
+		return err
+	}
+	tasks, err := m.store.Tasks(store.Query{List: m.list, Sort: m.sort})
+	if err != nil {
+		return err
+	}
+
+	m.lists = lists
+	m.tags = rankTags(tags, m.rand)
+	m.names = map[string]string{}
+	for _, l := range lists {
+		m.names[l.ID] = l.Name
+	}
+	for _, t := range tags {
+		m.names[t.ID] = t.Name
+	}
+
+	items := make([]list.Item, 0, len(tasks))
+	for _, t := range tasks {
+		if !m.carriesChosen(t) {
+			continue
+		}
+		items = append(items, row{task: t, lists: m.nameEach(t.Lists)})
+	}
+	m.tasks.SetItems(items)
+	return nil
+}
+
+// carriesChosen narrows to Tasks carrying every chosen Tag. Narrowing is done
+// here rather than in the query because the store returns a tree depth first
+// and dropping a parent by a Tag it does not carry would orphan its children
+// in the reading; the filter is over what came back, tree and all.
+func (m Model) carriesChosen(t store.Task) bool {
+	for id := range m.chosen {
+		if !contains(t.Tags, id) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m Model) nameEach(ids []string) []string {
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if name, ok := m.names[id]; ok {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func contains(all []string, want string) bool {
+	for _, v := range all {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}
+
+func (m Model) Init() tea.Cmd { return nil }
+
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+		m.tasks.SetSize(m.width-sidebarWidth, m.height-4)
+		m.tasks.SetDelegate(rowDelegate{zones: m.zones, width: m.width - sidebarWidth})
+		return m, nil
+
+	case tea.MouseClickMsg:
+		return m.click(msg)
+
+	case tea.KeyPressMsg:
+		// While the searchbox has the keyboard every key belongs to it,
+		// including the ones bound below.
+		if m.tasks.FilterState() == list.Filtering {
+			break
+		}
+		if handled, next, cmd := m.press(msg); handled {
+			return next, cmd
+		}
+	}
+
+	var cmd tea.Cmd
+	m.tasks, cmd = m.tasks.Update(msg)
+	return m, cmd
+}
+
+// press handles the view's own keys. It reports whether it took the key, so
+// everything else falls through to the task list.
+func (m Model) press(msg tea.KeyPressMsg) (bool, tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return true, m, tea.Quit
+
+	case "s":
+		m.sort = nextSort(m.sort)
+		m.err = m.refresh()
+		return true, m, nil
+
+	case "L":
+		m.dropdown = !m.dropdown
+		return true, m, nil
+
+	case "enter":
+		if m.dropdown {
+			return true, m, nil
+		}
+		if m.tasks.SelectedItem() != nil {
+			m.expanded = !m.expanded
+		}
+		return true, m, nil
+
+	case "esc":
+		switch {
+		case m.dropdown:
+			m.dropdown = false
+		case m.expanded:
+			m.expanded = false
+		default:
+			return false, m, nil
+		}
+		return true, m, nil
+	}
+	return false, m, nil
+}
+
+// click routes a mouse press to whatever was drawn under it. Every hit box is
+// a zone marked during the last render, so the layout stays the one authority
+// on where things are.
+func (m Model) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	if in(m.zones, "listbox", msg) {
+		m.dropdown = !m.dropdown
+		return m, nil
+	}
+	if m.dropdown {
+		if in(m.zones, "list:every", msg) {
+			m.list, m.dropdown = everyList, false
+			m.err = m.refresh()
+			return m, nil
+		}
+		for _, l := range m.lists {
+			if in(m.zones, "list:"+l.ID, msg) {
+				m.list, m.dropdown = l.ID, false
+				m.err = m.refresh()
+				return m, nil
+			}
+		}
+		return m, nil
+	}
+	for _, t := range m.tags {
+		if in(m.zones, "tag:"+t.ID, msg) {
+			if m.chosen[t.ID] {
+				delete(m.chosen, t.ID)
+			} else {
+				m.chosen[t.ID] = true
+			}
+			m.err = m.refresh()
+			return m, nil
+		}
+	}
+	for i, item := range m.tasks.Items() {
+		r, ok := item.(row)
+		if ok && in(m.zones, "task:"+r.task.ID, msg) {
+			m.tasks.Select(i)
+			m.expanded = true
+			return m, nil
+		}
+	}
+	return m, nil
+}
+
+func in(zones *zone.Manager, id string, msg tea.MouseMsg) bool {
+	z := zones.Get(id)
+	return z != nil && z.InBounds(msg)
+}
+
+func nextSort(current store.Sort) store.Sort {
+	for i, s := range sorts {
+		if s == current {
+			return sorts[(i+1)%len(sorts)]
+		}
+	}
+	return sorts[0]
+}
+
+func (m Model) View() tea.View {
+	body := m.tasks.View()
+	if m.expanded {
+		if r, ok := m.tasks.SelectedItem().(row); ok {
+			body = m.detail(r)
+		}
+	}
+	main := lipgloss.JoinHorizontal(lipgloss.Top, sidebarStyle.Render(m.sidebar()), body)
+
+	screen := strings.Join([]string{m.header(), main, m.footer()}, "\n")
+
+	// v2 carries the screen and mouse modes on the View rather than on the
+	// program, so the model says what it needs and nothing is toggled behind
+	// its back.
+	view := tea.NewView(m.zones.Scan(screen))
+	view.AltScreen = true
+	view.MouseMode = tea.MouseModeCellMotion
+	return view
+}
+
+// header is the List dropdown and the sort, with the dropdown drawn open
+// underneath when it is.
+func (m Model) header() string {
+	line := m.zones.Mark("listbox", headerStyle.Render("▾ "+m.listName())) +
+		dimStyle.Render("   sort "+string(m.sort)+"   / search   s sort   L lists   q quit")
+	if !m.dropdown {
+		return line
+	}
+	options := []string{m.option("every", "every List", m.list == everyList)}
+	for _, l := range m.lists {
+		options = append(options, m.option(l.ID, fmt.Sprintf("%s (%d)", l.Name, l.Count), m.list == l.ID))
+	}
+	return line + "\n" + boxStyle.Render(strings.Join(options, "\n"))
+}
+
+func (m Model) option(id, label string, chosen bool) string {
+	if chosen {
+		label = chosenStyle.Render("• " + label)
+	} else {
+		label = "  " + label
+	}
+	return m.zones.Mark("list:"+id, label)
+}
+
+func (m Model) listName() string {
+	if m.list == everyList {
+		return "every List"
+	}
+	if name, ok := m.names[m.list]; ok {
+		return name
+	}
+	return m.list
+}
+
+// sidebar is every Tag, ranked by how often it is carried with the variation
+// rankTags draws in, each one clickable to narrow the view.
+func (m Model) sidebar() string {
+	lines := []string{headerStyle.Render("Tags")}
+	for _, t := range m.tags {
+		label := fmt.Sprintf("%s %d", t.Name, t.Count)
+		if m.chosen[t.ID] {
+			label = chosenStyle.Render("✓ " + label)
+		} else {
+			label = "  " + label
+		}
+		lines = append(lines, m.zones.Mark("tag:"+t.ID, label))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) footer() string {
+	if m.err != nil {
+		return overdueStyle.Render(m.err.Error())
+	}
+	return dimStyle.Render(fmt.Sprintf("%d shown", len(m.tasks.Items())))
+}
+
+// detail is the whole of a Task: every attribute it carries, its Lists and
+// Tags by name, and its Attachments once #22 puts them there.
+func (m Model) detail(r row) string {
+	t := r.task
+	lines := []string{
+		titleStyle.Render(t.Title) + marks(t),
+		"",
+		t.Description,
+		"",
+	}
+	add := func(label, value string) {
+		if value != "" {
+			lines = append(lines, dimStyle.Render(label+": ")+value)
+		}
+	}
+	add("why", t.Why)
+	add("created", day(t.CreatedAt))
+	add("deadline", day(t.Deadline))
+	if t.Estimate > 0 {
+		add("estimate", t.Estimate.String())
+	}
+	add("priority", string(t.Priority))
+	add("impact", string(t.Impact))
+	if !t.SnoozedUntil.IsZero() {
+		add("snoozed until", day(t.SnoozedUntil))
+	}
+	add("colour", t.Colour)
+	add("lists", strings.Join(r.lists, ", "))
+	add("tags", strings.Join(m.nameEach(t.Tags), ", "))
+	for _, key := range sortedKeys(t.Fields) {
+		add(key, t.Fields[key])
+	}
+	if r.attachments > 0 {
+		add("attachments", fmt.Sprintf("%s %d", paperclip, r.attachments))
+	}
+	lines = append(lines, "", dimStyle.Render("enter or esc to go back"))
+	return strings.Join(lines, "\n")
+}
+
+func sortedKeys(fields map[string]string) []string {
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	for i := 1; i < len(keys); i++ {
+		for j := i; j > 0 && keys[j] < keys[j-1]; j-- {
+			keys[j], keys[j-1] = keys[j-1], keys[j]
+		}
+	}
+	return keys
+}

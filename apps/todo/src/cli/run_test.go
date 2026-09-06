@@ -91,13 +91,17 @@ func TestUnknownVerbIsRefused(t *testing.T) {
 	}
 }
 
-func TestBareInvocationOpensTheTUI(t *testing.T) {
+// TestTheTUINeedsATerminal is the bare invocation with its output piped, which
+// is how a test and an Agent reach it. The TUI takes a terminal, so without one
+// it says so and exits 2 rather than failing inside the renderer.
+func TestTheTUINeedsATerminal(t *testing.T) {
+	storeInTemp(t)
 	code, out, errs := run(t)
-	if code != 0 {
-		t.Fatalf("bare todo exited %d: %s", code, errs)
+	if code != 2 {
+		t.Fatalf("bare todo without a terminal exited %d, want 2: %s%s", code, out, errs)
 	}
-	if !strings.Contains(out, "tui") {
-		t.Errorf("bare todo printed %q, want the TUI mode", out)
+	if !strings.Contains(errs, "terminal") {
+		t.Errorf("stderr = %q, want it to say the tui needs a terminal", errs)
 	}
 }
 

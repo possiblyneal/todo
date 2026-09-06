@@ -760,6 +760,7 @@ const (
 	SortCreated  Sort = "created"
 	SortDeadline Sort = "deadline"
 	SortTitle    Sort = "title"
+	SortEstimate Sort = "estimate"
 )
 
 // sortKeys holds the expression each Sort orders on. A Task with no deadline
@@ -769,6 +770,10 @@ var sortKeys = map[Sort]string{
 	SortCreated:  "created_at",
 	SortDeadline: "COALESCE(deadline, '~')",
 	SortTitle:    "lower(title)",
+	// Estimates are an integer column and the path is text, so they are
+	// padded: '9' would otherwise sort after '10'. A Task with no estimate
+	// sorts last, as one with no deadline does.
+	SortEstimate: "printf('%020d', COALESCE(estimate_seconds, 9223372036854775807))",
 }
 
 // Query narrows what Tasks returns. The zero Query is the everyday view: open

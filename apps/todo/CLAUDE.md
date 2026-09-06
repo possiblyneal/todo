@@ -9,6 +9,7 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - `src/cmd/todo/` — `package main`, nothing but the call into `cli`. It sits under `cmd/` because `scripts/package` names the artifact after the main package's import path, and a main at `src/` would build `src-linux-amd64`.
 - `src/cli/` — mode dispatch and the verbs. `ModeOf` decides which mode an invocation asked for; `Run` takes its streams as arguments so every mode is testable without a process.
 - `src/store/` — SQLite and the whole write path. Nothing else opens a database.
+- `src/tui/` — the main view, built on `charm.land/bubbletea/v2`. It reads the store and, until #19, writes nothing.
 
 ## Local Contracts
 
@@ -31,6 +32,12 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - **A writing verb takes the Lease covering its target's tree, writes, and gives it back.** A verb acts and exits, so it holds a 30-second TTL and never strands a tree behind a dead process.
 - **An edit says what it touches and nothing else.** An attribute flag nobody typed leaves its attribute alone; one given empty clears it. The fold reads `json_type(payload, '$.x') IS NULL` for untouched and a JSON null for cleared, which is the distinction `COALESCE` cannot express, and `fs.Visit` is what makes the CLI say it.
 - **Exit status is 0 for done, 1 for a failure, 2 for usage, 3 for a refusal.** A refusal is the store turning a write away — no Lease, or one another Actor holds — and a surface distinguishes it from a crash. A bad attribute value is refused where it was typed, so `store.ParseLevel` is the CLI's, not only the write path's.
+- **The charm modules are the `charm.land/...` v2 paths**, not `github.com/charmbracelet/...`. `bubblezone/v2` requires `charm.land/bubbletea/v2`, so mixing the two roots would put two incompatible `tea.Model` types in one program.
+- **The TUI's mouse zones come from a per-Model `zone.New()`**, never `zone.NewGlobal()`. `todo serve` runs many sessions in one process, and a global manager would hand one session's hit boxes to another.
+- **The v2 View carries the screen and mouse modes.** `Model.View` sets `AltScreen` and `MouseMode`; nothing is toggled through a program option behind the model's back.
+- **The TUI reads and writes nothing, asserted.** `TestTheMainViewWritesNothing` clicks, filters, sorts and expands, then compares `HistoryLength` with what it was.
+- **Bare `todo` without a terminal is a usage error**, exit 2, rather than a crash inside the renderer. An Agent that runs `todo` by accident gets a sentence, not a hung process.
+- **The Tag sidebar is ranked by frequency with variation drawn in.** Weighted sampling without replacement, so the most-carried Tag usually leads and the list does not read the same every time.
 - **`TODO_DB` overrides the store path**, which is how a test and an Agent run against a store of their own. The default sits under the user config directory.
 
 ## Work Guidance

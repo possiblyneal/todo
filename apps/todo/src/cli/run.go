@@ -4,28 +4,74 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/term"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
+	"github.com/possiblyneal/todo/apps/todo/src/tui"
 )
 
 // Run is the whole program behind main, taking its streams as arguments so the
 // three modes are testable without a process. It returns the exit status.
 //
-// The TUI lands at #18 and `serve` at #23; both are stubs until then.
+// `serve` lands at #23 and is a stub until then.
 func Run(args []string, stdout, stderr io.Writer) int {
 	switch ModeOf(args) {
 	case ModeTUI:
-		fmt.Fprintln(stdout, "todo: tui")
+		return runTUI(stdout, stderr)
 	case ModeServe:
 		fmt.Fprintln(stdout, "todo: serve")
 	case ModeVerb:
 		return runVerb(args, stdout, stderr)
 	}
 	return 0
+}
+
+// runTUI is the bare-invocation mode: the main view, reading the same store
+// the verbs write through.
+//
+// The TUI needs a terminal to take, so an invocation without one is a usage
+// error rather than a crash inside the renderer. That is what makes `todo`
+// safe for an Agent to run by accident.
+func runTUI(stdout, stderr io.Writer) int {
+	if !terminal(stdout) {
+		fmt.Fprintln(stderr, "todo: the tui needs a terminal; run a verb instead")
+		return 2
+	}
+
+	s, err := open()
+	if err != nil {
+		fmt.Fprintf(stderr, "todo: %v\n", err)
+		return 1
+	}
+	defer func() { _ = s.Close() }()
+
+	// The Tag ranking varies from one run to the next, so it is seeded from
+	// the clock rather than fixed. A test seeds it itself.
+	seed := uint64(time.Now().UnixNano())
+	m, err := tui.New(s, rand.New(rand.NewPCG(seed, seed>>32)))
+	if err != nil {
+		fmt.Fprintf(stderr, "todo: %v\n", err)
+		return 1
+	}
+	if _, err := tea.NewProgram(m, tea.WithOutput(stdout)).Run(); err != nil {
+		fmt.Fprintf(stderr, "todo: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// terminal says whether a stream is a terminal the TUI can take.
+func terminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	return ok && term.IsTerminal(f.Fd())
 }
 
 // runVerb is the acts-and-exits mode. It is the identical in-process call the
