@@ -387,3 +387,17 @@ func TestATreeComesBackIndented(t *testing.T) {
 	}
 	t.Fatal("the Subtask never came back")
 }
+
+// The cycle is store.Sorts in the order docs/features.md names them. Adding a
+// Sort to the store and not to the cycle would leave one a person can ask for
+// by flag and never reach on the screen.
+func TestTheSortCycleReachesEverySort(t *testing.T) {
+	if len(sorts) != len(store.Sorts) {
+		t.Fatalf("the cycle has %d sorts and the store has %d", len(sorts), len(store.Sorts))
+	}
+	for _, s := range store.Sorts {
+		if !slices.Contains(sorts, s) {
+			t.Errorf("%q is a Sort the cycle never reaches", s)
+		}
+	}
+}

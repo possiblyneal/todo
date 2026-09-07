@@ -125,12 +125,14 @@ func (m Model) updateRepeat(msg tea.Msg) (Model, tea.Cmd) {
 		m.rep.cursor = max(m.rep.cursor-1, 0)
 		return m, nil
 	case "down", "j":
-		m.rep.cursor = min(m.rep.cursor+1, m.drawn()-1)
+		// A rule that has run out draws no dates, and the last row of
+		// none of them is not row -1.
+		m.rep.cursor = max(min(m.rep.cursor+1, m.drawn()-1), 0)
 		return m, nil
 	case "r":
 		return m.editRule()
 	case "x":
-		return m.write(func(id string) error { return m.store.Unrepeat(m.actor, id) })
+		return m.repeatWrite(func(id string) error { return m.store.Unrepeat(m.actor, id) })
 	case "t", "s", "d":
 		return m.mark(key.String())
 	}
@@ -145,17 +147,17 @@ func (m Model) drawn() int { return min(len(m.rep.dates), shown) }
 // closes the screen: the date is an ordinary Task now and the Series no longer
 // produces it, so there is nothing left here that is about it.
 func (m Model) mark(what string) (Model, tea.Cmd) {
-	if m.rep.cursor >= m.drawn() {
+	if m.rep.cursor < 0 || m.rep.cursor >= m.drawn() {
 		return m, nil
 	}
 	on := m.rep.dates[m.rep.cursor].Date
 	switch what {
 	case "t":
-		return m.write(func(id string) error { return m.store.TickOccurrence(m.actor, id, on) })
+		return m.repeatWrite(func(id string) error { return m.store.TickOccurrence(m.actor, id, on) })
 	case "s":
-		return m.write(func(id string) error { return m.store.SkipOccurrence(m.actor, id, on) })
+		return m.repeatWrite(func(id string) error { return m.store.SkipOccurrence(m.actor, id, on) })
 	}
-	next, cmd := m.write(func(id string) error {
+	next, cmd := m.repeatWrite(func(id string) error {
 		_, err := m.store.DetachOccurrence(m.actor, id, on)
 		return err
 	})
@@ -165,10 +167,10 @@ func (m Model) mark(what string) (Model, tea.Cmd) {
 	return next, cmd
 }
 
-// write runs one Scheduling write under the Lease covering the Task's tree,
+// repeatWrite runs one Scheduling write under the Lease covering the Task's tree,
 // then re-reads both the dates and the main view: a detached date is a new
 // Task, and a ticked one may have moved the Task's own deadline.
-func (m Model) write(do func(id string) error) (Model, tea.Cmd) {
+func (m Model) repeatWrite(do func(id string) error) (Model, tea.Cmd) {
 	id := m.rep.task.ID
 	if err := m.store.WithLease(m.actor, id, writeTTL, func() error { return do(id) }); err != nil {
 		m.err = err
@@ -199,7 +201,7 @@ func (m Model) updateRule(msg tea.Msg) (Model, tea.Cmd) {
 	case huh.StateCompleted:
 		rule := m.rep.text
 		m.rep.form = nil
-		return m.write(func(id string) error {
+		return m.repeatWrite(func(id string) error {
 			_, err := m.store.Repeat(m.actor, id, rule)
 			return err
 		})

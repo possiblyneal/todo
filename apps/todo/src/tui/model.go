@@ -30,7 +30,8 @@ const (
 
 // sorts is the order the sort key cycles in, which is the order
 // docs/features.md names them: alphabetical, due date, creation date, time
-// estimate.
+// estimate. It is store.Sorts reordered, not a second vocabulary, and
+// TestTheSortCycleReachesEverySort is what keeps it that.
 var sorts = []store.Sort{store.SortTitle, store.SortDeadline, store.SortCreated, store.SortEstimate}
 
 var (

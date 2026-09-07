@@ -547,3 +547,40 @@ func indexOf(t *testing.T, m Model, id string) int {
 	t.Fatalf("%s is not on the screen", id)
 	return 0
 }
+
+// A Series whose rule has run out draws no dates, and there is nothing on that
+// screen to move the cursor onto or to mark.
+func TestAScheduleWithNoDatesLeftTakesNoMark(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	apples, _ := taskNamed(m, "Buy apples")
+	carry(t, s, apples.ID, func() error {
+		_, err := s.Repeat("alice", apples.ID, "every week from 2020-01-01 until 2020-06-01")
+		return err
+	})
+	m.tasks.Select(indexOf(t, m, apples.ID))
+	m, _ = m.run("/repeat")
+	if m.rep == nil || len(m.rep.dates) != 0 {
+		t.Fatalf("the screen opened on %d dates, want a rule that has run out", len(m.rep.dates))
+	}
+
+	// The order matters: moving down and then marking is what reaches a
+	// date, and a cursor allowed below zero reaches one that is not there.
+	before := historyLength(t, s)
+	for _, key := range []string{"j", "t", "j", "s", "j", "d", "k", "t"} {
+		m = press(m, key)
+		if m.err != nil {
+			t.Fatalf("%q on an empty schedule: %v", key, m.err)
+		}
+		if m.rep != nil && m.rep.cursor < 0 {
+			t.Fatalf("%q put the cursor at %d", key, m.rep.cursor)
+		}
+	}
+	if m.rep == nil {
+		t.Error("the screen closed on a date it never had")
+	}
+	if grew := historyLength(t, s) - before; grew != 0 {
+		t.Errorf("marking nothing appended %d entries", grew)
+	}
+}
