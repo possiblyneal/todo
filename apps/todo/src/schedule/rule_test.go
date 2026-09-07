@@ -132,3 +132,24 @@ func TestNothingHereRunsOnASchedule(t *testing.T) {
 		}
 	}
 }
+
+// TestNextSeesPastALongStep guards the window Next searches. A fixed year
+// could not see a rule whose step is longer than one, so "every 60 weeks"
+// read as a rule that had run out.
+func TestNextSeesPastALongStep(t *testing.T) {
+	from := time.Date(2026, 1, 5, 0, 0, 0, 0, time.Local)
+	for _, r := range []Rule{
+		{Every: 60, Unit: Weekly, Anchor: from, Weekdays: []time.Weekday{time.Monday}},
+		{Every: 500, Unit: Daily, Anchor: from},
+		{Every: 30, Unit: Monthly, Anchor: from},
+	} {
+		next := r.Next(from)
+		if next.IsZero() {
+			t.Errorf("%d %s read as a rule that had run out", r.Every, r.Unit)
+			continue
+		}
+		if next.Before(from) {
+			t.Errorf("%d %s came back with %v, which is before %v", r.Every, r.Unit, next, from)
+		}
+	}
+}

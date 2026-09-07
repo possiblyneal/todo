@@ -236,3 +236,43 @@ func titlesIn(tasks []store.Task) []string {
 	}
 	return out
 }
+
+// sameTitleTwice is what a box that repeats itself sends back. Nothing stops
+// it, and the two are different proposals with different attributes.
+const sameTitleTwice = `{"proposals":[
+	{"title":"Order felt","estimate":"30m"},
+	{"title":"Order felt","estimate":"4h"}]}`
+
+// TestDecliningOneOfTwoWithTheSameTitleWritesOnlyTheOther is the gate holding
+// where a title cannot tell two proposals apart. Approval is by position:
+// matching on the title wrote both when one was declined, which is the one
+// thing the approval step exists to prevent.
+func TestDecliningOneOfTwoWithTheSameTitleWritesOnlyTheOther(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+	m.ai = standIn(t, sameTitleTwice)
+	m = onTask(t, m, "Buy apples")
+	apples, _ := m.selected()
+
+	m, cmd := m.run("/breakdown")
+	m = send(m, cmd())
+	if len(m.bd.proposals) != 2 {
+		t.Fatalf("the proposals never arrived: %v", m.err)
+	}
+
+	// The cursor starts on the first; space unticks it.
+	m = press(m, " ")
+	m = press(m, "enter")
+	if m.err != nil {
+		t.Fatalf("approving: %v", m.err)
+	}
+
+	got := subtasksOf(t, s, apples.ID)
+	if len(got) != 1 {
+		t.Fatalf("approval wrote %d Subtasks, want the one that stayed ticked", len(got))
+	}
+	if got[0].Estimate.String() != "4h0m0s" {
+		t.Errorf("the Subtask came back with a %v estimate, want the second proposal's 4h",
+			got[0].Estimate)
+	}
+}

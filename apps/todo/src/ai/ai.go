@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -29,8 +30,19 @@ const Broker = "http://10.10.10.13:4010/v1"
 // can chat with", asked once and kept for the run.
 type Client struct {
 	BaseURL string
-	Model   string
-	HTTP    *http.Client
+
+	// Model is the one to talk to, when the caller has picked one. Empty
+	// asks the box what it is serving and settles on the first that can
+	// chat.
+	Model string
+	HTTP  *http.Client
+
+	// settled is that answer, kept so the question is asked once. It is
+	// separate from Model, and behind a mutex, because a breakdown and an
+	// `/ask` both run off the event loop and can be in flight together:
+	// writing the caller's own field from two goroutines is a data race.
+	mu      sync.Mutex
+	settled string
 }
 
 // New reads the environment. Nothing here is configured in a file: the box is
@@ -154,11 +166,20 @@ func (c *Client) Models(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
-// model settles which one to talk to, once.
+// model settles which one to talk to, once. Two callers arriving together ask
+// the box twice at worst and agree on the answer, which is the cheaper trade
+// than holding the lock across the call.
 func (c *Client) model(ctx context.Context) (string, error) {
 	if c.Model != "" {
 		return c.Model, nil
 	}
+	c.mu.Lock()
+	settled := c.settled
+	c.mu.Unlock()
+	if settled != "" {
+		return settled, nil
+	}
+
 	ids, err := c.Models(ctx)
 	if err != nil {
 		return "", err
@@ -166,8 +187,12 @@ func (c *Client) model(ctx context.Context) (string, error) {
 	if len(ids) == 0 {
 		return "", fmt.Errorf("the box is serving no model that can chat")
 	}
-	c.Model = ids[0]
-	return c.Model, nil
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.settled == "" {
+		c.settled = ids[0]
+	}
+	return c.settled, nil
 }
 
 // complete is the one call. json asks the box for an object, which every

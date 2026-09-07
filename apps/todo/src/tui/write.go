@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -96,7 +97,7 @@ func (m *Model) memberships(taskID string, was store.Task, d *draft) error {
 func added(was, now []string) []string {
 	var out []string
 	for _, id := range now {
-		if !contains(was, id) {
+		if !slices.Contains(was, id) {
 			out = append(out, id)
 		}
 	}

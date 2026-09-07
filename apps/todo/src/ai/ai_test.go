@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -158,5 +159,35 @@ func TestAQuestionAboutTheListIsAnsweredInProse(t *testing.T) {
 	}
 	if !strings.Contains(sent, "Fix the roof") || !strings.Contains(sent, "Paint the shed") {
 		t.Errorf("the question carried %s, want the list it is about", sent)
+	}
+}
+
+// TestTwoCallsAtOnceSettleOnOneModel is the client as the screen holds it:
+// one, shared, with a breakdown and an `/ask` able to be in flight together.
+// Run under -race.
+func TestTwoCallsAtOnceSettleOnOneModel(t *testing.T) {
+	var mu sync.Mutex
+	asked := map[string]int{}
+	c := broker(t, func(w http.ResponseWriter, body map[string]any) {
+		mu.Lock()
+		asked[body["model"].(string)]++
+		mu.Unlock()
+		completion(w, `{"questions":[],"proposals":[]}`)
+	})
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := c.Breakdown(context.Background(), Brief{Title: "Paint the shed"}, nil); err != nil {
+				t.Errorf("Breakdown: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if len(asked) != 1 {
+		t.Errorf("the calls named %v, want every one of them on the same model", asked)
 	}
 }

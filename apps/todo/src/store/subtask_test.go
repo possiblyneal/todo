@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 // chain builds a root and nests subtasks under it, returning every id from the
@@ -133,5 +134,111 @@ func TestATreeComesBackDepthFirst(t *testing.T) {
 	want := append(append([]string{}, ids...), second)
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("the read came back in the order %v, want the tree depth first then the next root %v", got, want)
+	}
+}
+
+// completedOf reads back whether each id is complete, by id.
+func completedOf(t *testing.T, s *Store, ids []string) map[string]bool {
+	t.Helper()
+	tasks, err := s.Tasks(Query{IncludeCompleted: true, IncludeDeleted: true, IncludeSnoozed: true})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	done := make(map[string]bool, len(ids))
+	for _, task := range tasks {
+		done[task.ID] = !task.CompletedAt.IsZero()
+	}
+	return done
+}
+
+// TestReopeningASubtaskReopensWhatIsAboveIt is the other direction of "a
+// parent cannot complete with open children". Completing refuses; reopening
+// cannot refuse without stranding the person, so the parent gives way, one
+// level at a time all the way to the root.
+func TestReopeningASubtaskReopensWhatIsAboveIt(t *testing.T) {
+	s := openTemp(t)
+	ids := chain(t, s, "alice", 3)
+
+	for i := len(ids) - 1; i >= 0; i-- {
+		if err := s.CompleteTask("alice", ids[i]); err != nil {
+			t.Fatalf("CompleteTask at level %d: %v", i+1, err)
+		}
+	}
+	if err := s.ReopenTask("alice", ids[2]); err != nil {
+		t.Fatalf("ReopenTask: %v", err)
+	}
+
+	done := completedOf(t, s, ids)
+	for i, id := range ids {
+		if done[id] {
+			t.Errorf("level %d stayed complete over an open child", i+1)
+		}
+	}
+}
+
+// TestAnOpenSubtaskUnderACompletedParentReopensIt closes the other way in.
+// The completion rule was a BEFORE UPDATE trigger only, so an INSERT walked
+// straight past it and left a completed parent holding an open child.
+func TestAnOpenSubtaskUnderACompletedParentReopensIt(t *testing.T) {
+	s := openTemp(t)
+	root := leased(t, s, "alice", Attributes{Title: Set("Fix the roof")})
+	if err := s.CompleteTask("alice", root); err != nil {
+		t.Fatalf("CompleteTask: %v", err)
+	}
+
+	kid, err := s.AddSubtask("alice", root, Attributes{Title: Set("Buy tiles")})
+	if err != nil {
+		t.Fatalf("AddSubtask: %v", err)
+	}
+	done := completedOf(t, s, []string{root, kid})
+	if done[root] {
+		t.Error("the parent stayed complete while carrying an open child")
+	}
+}
+
+// TestADeletedTaskTakesItsSubtreeOutOfSight is the aggregate seen from the
+// read side. A subtree is reached through its root or not at all: a child left
+// behind by a deleted parent draws as a row indented under nothing.
+func TestADeletedTaskTakesItsSubtreeOutOfSight(t *testing.T) {
+	s := openTemp(t)
+	ids := chain(t, s, "alice", 3)
+
+	if err := s.DeleteTask("alice", ids[0]); err != nil {
+		t.Fatalf("DeleteTask: %v", err)
+	}
+	tasks, err := s.Tasks(Query{})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Errorf("deleting the root left %d rows behind it, want none", len(tasks))
+	}
+
+	// Asking for deleted Tasks brings the whole tree back, root first.
+	all, err := s.Tasks(Query{IncludeDeleted: true})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(all) != len(ids) {
+		t.Errorf("the tree came back as %d rows, want %d", len(all), len(ids))
+	}
+}
+
+// TestASnoozedTaskTakesItsSubtreeWithIt is the same rule for the other way a
+// row leaves the everyday view.
+func TestASnoozedTaskTakesItsSubtreeWithIt(t *testing.T) {
+	s := openTemp(t)
+	ids := chain(t, s, "alice", 2)
+
+	if err := s.EditTask("alice", ids[0],
+		Attributes{SnoozedUntil: Set(time.Now().UTC().Add(24 * time.Hour))}); err != nil {
+		t.Fatalf("EditTask: %v", err)
+	}
+	tasks, err := s.Tasks(Query{})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Errorf("snoozing the root left %d rows behind it, want none", len(tasks))
 	}
 }

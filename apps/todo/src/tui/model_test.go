@@ -3,6 +3,7 @@ package tui
 import (
 	"math/rand/v2"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -246,11 +247,11 @@ func TestChoosingATagNarrowsTheView(t *testing.T) {
 		t.Errorf("choosing a Tag showed %d of %d Tasks; it narrowed nothing", len(narrowed), all)
 	}
 	for _, want := range []string{"Fix the roof", "Send the invoice"} {
-		if !contains(narrowed, want) {
+		if !slices.Contains(narrowed, want) {
 			t.Errorf("narrowed to %v, want it to hold %q", narrowed, want)
 		}
 	}
-	if contains(narrowed, "Buy apples") {
+	if slices.Contains(narrowed, "Buy apples") {
 		t.Errorf("narrowed to %v, want the untagged Task gone", narrowed)
 	}
 

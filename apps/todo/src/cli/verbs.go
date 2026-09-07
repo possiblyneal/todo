@@ -206,7 +206,8 @@ func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	fs := flags("list", stderr)
 	all := fs.Bool("all", false, "include completed, snoozed and deleted tasks")
 	in := fs.String("list", "", "only the tasks in this list, by id")
-	sort := fs.String("sort", string(store.SortCreated), "order siblings by created, deadline or title")
+	sort := fs.String("sort", string(store.SortCreated),
+		"order siblings by "+strings.Join(store.SortNames(), ", "))
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}

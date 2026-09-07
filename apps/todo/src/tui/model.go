@@ -1,11 +1,15 @@
-// Package tui is the main view: the same store the verbs write through, read
-// and drawn. Nothing in this package writes until #19, and the tests assert
-// the Change History is the same length after every interaction.
+// Package tui is the screen: the same store the verbs write through, read and
+// drawn, and written to by the same calls. The main view itself writes
+// nothing -- moving the cursor, sorting, expanding a row and opening the
+// palette all leave the Change History the length they found it -- and every
+// write goes through a screen a person opened on purpose.
 package tui
 
 import (
 	"fmt"
+	"maps"
 	"math/rand/v2"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -83,6 +87,11 @@ type Model struct {
 	// proposal is approved.
 	bd  *breakdown
 	ask *inquiry
+
+	// rep is the Scheduling screen: one Task's rule and its dates. It is
+	// the only screen that reads a Series, because a Series is the one
+	// thing on a Task that is not one of its attributes.
+	rep *series
 
 	// files is the file selector, open over the add or edit screen while a
 	// person is choosing something to point at.
@@ -171,7 +180,7 @@ func (m *Model) refresh() error {
 // in the reading; the filter is over what came back, tree and all.
 func (m Model) carriesChosen(t store.Task) bool {
 	for id := range m.chosen {
-		if !contains(t.Tags, id) {
+		if !slices.Contains(t.Tags, id) {
 			return false
 		}
 	}
@@ -188,20 +197,23 @@ func (m Model) nameEach(ids []string) []string {
 	return names
 }
 
-func contains(all []string, want string) bool {
-	for _, v := range all {
-		if v == want {
-			return true
-		}
-	}
-	return false
-}
-
 // Init starts the watch on the write-ahead log, which is how this process
 // learns of a write made by a verb in another terminal.
 func (m Model) Init() tea.Cmd { return watch() }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// These two belong to the process rather than to whichever screen is
+	// open, so they are read before the screens get a look. The tick
+	// especially: tea.Tick fires once and the chain only continues because
+	// poll returns the next watch, so a tick swallowed by an open form is
+	// the last one this process ever sees.
+	switch msg := msg.(type) {
+	case pollMsg:
+		return m.poll()
+	case tea.WindowSizeMsg:
+		m = m.resize(msg)
+	}
+
 	// A screen that is open owns the keyboard, outermost first, so a key
 	// typed into the new-List popup never reaches the task list behind it.
 	switch {
@@ -213,6 +225,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return next, cmd
 	case m.ask != nil:
 		next, cmd := m.updateInquiry(msg)
+		return next, cmd
+	case m.rep != nil:
+		next, cmd := m.updateRepeat(msg)
 		return next, cmd
 	case m.popup != nil:
 		next, cmd := m.updatePopup(msg)
@@ -226,17 +241,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case pollMsg:
-		next, cmd := m.poll()
-		return next, cmd
-
-	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
-		m.tasks.SetSize(m.width-sidebarWidth, m.height-4)
-		m.tasks.SetDelegate(rowDelegate{zones: m.zones, width: m.width - sidebarWidth})
-		m.palette.SetSize(m.width/2, m.height-4)
-		return m, nil
-
 	case tea.MouseClickMsg:
 		next, cmd := m.click(msg)
 		return next, cmd
@@ -255,6 +259,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.tasks, cmd = m.tasks.Update(msg)
 	return m, cmd
+}
+
+// resize fits the main view to the terminal. A screen open over the top keeps
+// the width it was built with until it is closed, but the view behind it and
+// the next screen built are both right.
+func (m Model) resize(msg tea.WindowSizeMsg) Model {
+	m.width, m.height = msg.Width, msg.Height
+	m.tasks.SetSize(m.width-sidebarWidth, m.height-4)
+	m.tasks.SetDelegate(rowDelegate{zones: m.zones, width: m.width - sidebarWidth})
+	m.palette.SetSize(m.width/2, m.height-4)
+	return m
 }
 
 // press handles the view's own keys. It reports whether it took the key, so
@@ -493,14 +508,5 @@ func (m Model) detail(r row) string {
 }
 
 func sortedKeys(fields map[string]string) []string {
-	keys := make([]string, 0, len(fields))
-	for k := range fields {
-		keys = append(keys, k)
-	}
-	for i := 1; i < len(keys); i++ {
-		for j := i; j > 0 && keys[j] < keys[j-1]; j-- {
-			keys[j], keys[j-1] = keys[j-1], keys[j]
-		}
-	}
-	return keys
+	return slices.Sorted(maps.Keys(fields))
 }

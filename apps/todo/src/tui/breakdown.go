@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -33,7 +34,11 @@ type breakdown struct {
 	asking    []string
 	replies   []string
 	proposals []ai.Proposal
-	approved  []string
+
+	// approved holds positions in proposals, not titles. Two proposals may
+	// come back with the same title, and a title cannot tell them apart:
+	// declining one of a pair used to write both.
+	approved []int
 
 	form    *huh.Form
 	waiting bool
@@ -42,6 +47,10 @@ type breakdown struct {
 // stepMsg is a turn coming back from the box, off the event loop. The call
 // takes as long as it takes and the view stays drawn while it does.
 type stepMsg struct {
+	// bd is the breakdown that asked. Escaping does not cancel the call
+	// already in flight, so without this a turn from an abandoned
+	// interaction lands in whichever one is open when it comes back.
+	bd   *breakdown
 	step ai.Step
 	err  error
 }
@@ -56,6 +65,8 @@ type inquiry struct {
 }
 
 type answerMsg struct {
+	// ask is the inquiry that asked, for the reason stepMsg carries bd.
+	ask    *inquiry
 	answer string
 	err    error
 }
@@ -88,7 +99,7 @@ func (m Model) turn(bd *breakdown) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		step, err := client.Breakdown(ctx, task, answers)
-		return stepMsg{step: step, err: err}
+		return stepMsg{bd: bd, step: step, err: err}
 	}
 }
 
@@ -102,6 +113,9 @@ func (m Model) updateBreakdown(msg tea.Msg) (Model, tea.Cmd) {
 		}
 
 	case stepMsg:
+		if msg.bd != m.bd {
+			return m, nil
+		}
 		m.bd.waiting = false
 		if msg.err != nil {
 			m.err = msg.err
@@ -110,7 +124,7 @@ func (m Model) updateBreakdown(msg tea.Msg) (Model, tea.Cmd) {
 		switch {
 		case len(msg.step.Proposals) > 0:
 			m.bd.proposals = msg.step.Proposals
-			m.bd.approved = titlesOf(msg.step.Proposals)
+			m.bd.approved = everyProposal(msg.step.Proposals)
 			m.bd.form = m.approvalForm(m.bd)
 		case len(msg.step.Questions) > 0:
 			m.bd.asking = msg.step.Questions
@@ -151,8 +165,8 @@ func (m Model) updateBreakdown(msg tea.Msg) (Model, tea.Cmd) {
 // only surface that writes without taking one of its own.
 func (m Model) approve() (Model, tea.Cmd) {
 	bd := m.bd
-	for _, p := range bd.proposals {
-		if !contains(bd.approved, p.Title) {
+	for i, p := range bd.proposals {
+		if !slices.Contains(bd.approved, i) {
 			continue
 		}
 		if _, err := m.store.AddSubtask(m.actor, bd.task.ID, proposed(p)); err != nil {
@@ -190,12 +204,12 @@ func (m Model) questionForm(bd *breakdown) *huh.Form {
 // approvalForm is the gate. Every proposal starts ticked and unticking one is
 // how it is declined; submitting writes the ticked ones and no others.
 func (m Model) approvalForm(bd *breakdown) *huh.Form {
-	options := make([]huh.Option[string], 0, len(bd.proposals))
-	for _, p := range bd.proposals {
-		options = append(options, huh.NewOption(describeProposal(p), p.Title).Selected(true))
+	options := make([]huh.Option[int], 0, len(bd.proposals))
+	for i, p := range bd.proposals {
+		options = append(options, huh.NewOption(describeProposal(p), i).Selected(true))
 	}
 	return huh.NewForm(huh.NewGroup(
-		huh.NewMultiSelect[string]().
+		huh.NewMultiSelect[int]().
 			Title("Subtasks of " + bd.task.Title).
 			Description("Untick anything you do not want. Nothing is written until you submit.").
 			Value(&bd.approved).Height(rows(len(options)) + 2).Options(options...),
@@ -219,6 +233,9 @@ func (m Model) updateInquiry(msg tea.Msg) (Model, tea.Cmd) {
 		return m, nil
 	}
 	if answer, ok := msg.(answerMsg); ok {
+		if answer.ask != m.ask {
+			return m, nil
+		}
 		m.ask.waiting = false
 		if answer.err != nil {
 			m.err = answer.err
@@ -244,7 +261,7 @@ func (m Model) updateInquiry(msg tea.Msg) (Model, tea.Cmd) {
 	switch m.ask.form.State {
 	case huh.StateCompleted:
 		m.ask.waiting = true
-		return m, m.enquire(m.ask.Question)
+		return m, m.enquire(m.ask, m.ask.Question)
 	case huh.StateAborted:
 		m.ask = nil
 	}
@@ -253,7 +270,7 @@ func (m Model) updateInquiry(msg tea.Msg) (Model, tea.Cmd) {
 
 // enquire sends the question and the Tasks in view. The box holds nothing
 // between calls, so the list goes with every question.
-func (m Model) enquire(question string) tea.Cmd {
+func (m Model) enquire(ask *inquiry, question string) tea.Cmd {
 	client := m.ai
 	list := make([]ai.Brief, 0, len(m.tasks.Items()))
 	for _, item := range m.tasks.Items() {
@@ -263,7 +280,7 @@ func (m Model) enquire(question string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		answer, err := client.Ask(ctx, question, list)
-		return answerMsg{answer: answer, err: err}
+		return answerMsg{ask: ask, answer: answer, err: err}
 	}
 }
 
@@ -307,12 +324,14 @@ func proposed(p ai.Proposal) store.Attributes {
 	return a
 }
 
-func titlesOf(proposals []ai.Proposal) []string {
-	titles := make([]string, 0, len(proposals))
-	for _, p := range proposals {
-		titles = append(titles, p.Title)
+// everyProposal is every position in proposals, which is the form's starting
+// state: everything ticked, and unticking is how one is declined.
+func everyProposal(proposals []ai.Proposal) []int {
+	all := make([]int, len(proposals))
+	for i := range proposals {
+		all[i] = i
 	}
-	return titles
+	return all
 }
 
 // describeProposal is the one line a proposal is approved or declined on.

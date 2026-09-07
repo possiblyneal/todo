@@ -157,6 +157,14 @@ func (m Model) screen() (string, bool) {
 		return boxStyle.Render(m.breakdownView()), true
 	case m.ask != nil:
 		return boxStyle.Render(m.inquiryView()), true
+	case m.rep != nil:
+		if m.rep.form != nil {
+			return strings.Join([]string{
+				boxStyle.Render(m.rep.form.View()),
+				dimStyle.Render(m.repeatView()),
+			}, "\n"), true
+		}
+		return boxStyle.Render(m.repeatView()), true
 	case m.files != nil:
 		under := ""
 		if m.editor != nil {

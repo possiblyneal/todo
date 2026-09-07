@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -77,7 +78,7 @@ func TestAddingATaskFromTheTUIWritesItOnce(t *testing.T) {
 		if r.task.Estimate != 45*time.Minute {
 			t.Errorf("the estimate came back %v, want 45m", r.task.Estimate)
 		}
-		if !contains(r.task.Lists, home) || !contains(r.task.Tags, urgent) {
+		if !slices.Contains(r.task.Lists, home) || !slices.Contains(r.task.Tags, urgent) {
 			t.Errorf("the new Task carries lists %v and tags %v", r.task.Lists, r.task.Tags)
 		}
 		return
@@ -280,7 +281,7 @@ func TestCreatingAListFromTheFormKeepsTheDraft(t *testing.T) {
 	}
 
 	errands := idOf(t, "Errands", m.lists, m.tags)
-	if !contains(m.draft.Lists, errands) {
+	if !slices.Contains(m.draft.Lists, errands) {
 		t.Errorf("the draft carries %v, want the List it just made", m.draft.Lists)
 	}
 }
@@ -345,3 +346,204 @@ func TestEmojiAndNerdGlyphsKeepTheirWidth(t *testing.T) {
 }
 
 var _ tea.Model = Model{}
+
+// TestTheWatchSurvivesAnOpenScreen is the whole watch, not the main view's.
+// tea.Tick fires once and the chain only continues because poll returns the
+// next watch: a tick swallowed by an open form was the last one the process
+// ever saw, and it then never heard about another terminal's write again.
+func TestTheWatchSurvivesAnOpenScreen(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	m, _ = m.run("/add")
+	if m.editor == nil {
+		t.Fatal("/add did not open the form")
+	}
+
+	next, cmd := m.Update(pollMsg{})
+	m = next.(Model)
+	if m.editor == nil {
+		t.Error("the poll closed the form it arrived over")
+	}
+	if cmd == nil {
+		t.Fatal("a poll that arrived over an open screen scheduled no next watch")
+	}
+	if _, ok := cmd().(pollMsg); !ok {
+		t.Error("what the poll scheduled was not the next watch")
+	}
+}
+
+// A Task's Fields are the one attribute with no widget of its own: they are
+// typed as lines and read back as pairs. The round trip matters more than the
+// parse, because a key left out of an edit is left alone by the store and
+// would otherwise be impossible to take off from the screen.
+func TestFieldsTypedIntoTheFormReachTheStoreAndCanBeTakenOff(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	d := &draft{Title: "File the tax return", Fields: "repo: todo\npr: 42"}
+	if err := m.save(d); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if err := m.refresh(); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+
+	task, ok := taskNamed(m, "File the tax return")
+	if !ok {
+		t.Fatal("the Task was not on the screen after it was added")
+	}
+	if task.Fields["repo"] != "todo" || task.Fields["pr"] != "42" {
+		t.Fatalf("the fields came back %v, want both pairs", task.Fields)
+	}
+
+	// Reopening the Task shows them back as lines, and deleting one line is
+	// how that key comes off.
+	edit := draftOf(task)
+	if edit.Fields != "pr: 42\nrepo: todo" {
+		t.Errorf("the edit screen showed %q, want a line each in key order", edit.Fields)
+	}
+	edit.Fields = "repo: todo"
+	if err := m.save(edit); err != nil {
+		t.Fatalf("save the edit: %v", err)
+	}
+	if err := m.refresh(); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+
+	task, _ = taskNamed(m, "File the tax return")
+	if len(task.Fields) != 1 || task.Fields["repo"] != "todo" {
+		t.Errorf("the fields came back %v, want only the one that was left", task.Fields)
+	}
+}
+
+// taskNamed finds a Task on the screen by title.
+func taskNamed(m Model, title string) (store.Task, bool) {
+	for _, item := range m.tasks.Items() {
+		if r, ok := item.(row); ok && r.task.Title == title {
+			return r.task, true
+		}
+	}
+	return store.Task{}, false
+}
+
+func TestABadFieldLineIsRefusedBeforeItIsWritten(t *testing.T) {
+	for _, bad := range []string{"repo", ": todo", "repo: a\nrepo: b"} {
+		if err := validFields(bad); err == nil {
+			t.Errorf("%q was accepted as fields", bad)
+		}
+	}
+	if fields, err := parseFields("  \nrepo:  todo  \n"); err != nil ||
+		len(fields) != 1 || fields["repo"] != "todo" {
+		t.Errorf("parseFields = %v, %v; want the one trimmed pair", fields, err)
+	}
+}
+
+// Scheduling had no way in from the screen: the store computed Occurrences and
+// only a verb could mark one. This is the screen reaching them.
+func TestTheScheduleScreenMarksADate(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	apples, ok := taskNamed(m, "Buy apples")
+	if !ok {
+		t.Fatal("the fixture Task was not on the screen")
+	}
+	carry(t, s, apples.ID, func() error {
+		_, err := s.Repeat("alice", apples.ID, "every week")
+		return err
+	})
+
+	m.tasks.Select(indexOf(t, m, apples.ID))
+	m, _ = m.run("/repeat")
+	if m.rep == nil {
+		t.Fatal("/repeat opened nothing")
+	}
+	if m.rep.form != nil {
+		t.Fatal("a Task that already repeats opened on the rule form")
+	}
+	if len(m.rep.dates) == 0 {
+		t.Fatal("the screen showed no dates for a weekly rule")
+	}
+	first := m.rep.dates[0].Date
+
+	before := historyLength(t, s)
+	m = press(m, "t")
+	// Lease Taken, the tick, Lease Released.
+	if grew := historyLength(t, s) - before; grew != 3 {
+		t.Errorf("ticking a date appended %d entries, want 3", grew)
+	}
+	if m.err != nil {
+		t.Fatalf("ticking: %v", m.err)
+	}
+	if m.rep.dates[0].State != store.Ticked || !m.rep.dates[0].Date.Equal(first) {
+		t.Errorf("the first date came back %+v, want it ticked", m.rep.dates[0])
+	}
+
+	// Skipping the one below it leaves the ticked one alone.
+	m = press(m, "j")
+	m = press(m, "s")
+	if m.err != nil {
+		t.Fatalf("skipping: %v", m.err)
+	}
+	if m.rep.dates[1].State != store.Skipped || m.rep.dates[0].State != store.Ticked {
+		t.Errorf("the dates came back %+v, want the first ticked and the second skipped",
+			m.rep.dates[:2])
+	}
+}
+
+// Detaching lifts a date out into an ordinary Task, so the Series no longer
+// produces it and there is nothing left on this screen that is about it.
+func TestDetachingADateFromTheScreenClosesIt(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	apples, _ := taskNamed(m, "Buy apples")
+	carry(t, s, apples.ID, func() error {
+		_, err := s.Repeat("alice", apples.ID, "every week")
+		return err
+	})
+	m.tasks.Select(indexOf(t, m, apples.ID))
+	m, _ = m.run("/repeat")
+
+	m = press(m, "d")
+	if m.err != nil {
+		t.Fatalf("detaching: %v", m.err)
+	}
+	if m.rep != nil {
+		t.Error("the screen stayed open on a date it no longer holds")
+	}
+	// The detached date is an ordinary Task now, carrying the copy of the
+	// attributes it was lifted with, so there are two of that title.
+	var copies int
+	for _, item := range m.tasks.Items() {
+		if item.(row).task.Title == "Buy apples" {
+			copies++
+		}
+	}
+	if copies != 2 {
+		t.Errorf("%d Tasks named Buy apples, want the recurring one and the detached date", copies)
+	}
+}
+
+func TestARuleIsCheckedBeforeItIsWritten(t *testing.T) {
+	for _, bad := range []string{"", "  ", "every purple"} {
+		if err := validRule(bad); err == nil {
+			t.Errorf("%q was accepted as a rule", bad)
+		}
+	}
+	if err := validRule("every 2 weeks on mon,thu"); err != nil {
+		t.Errorf("a good rule was refused: %v", err)
+	}
+}
+
+func indexOf(t *testing.T, m Model, id string) int {
+	t.Helper()
+	for i, item := range m.tasks.Items() {
+		if r, ok := item.(row); ok && r.task.ID == id {
+			return i
+		}
+	}
+	t.Fatalf("%s is not on the screen", id)
+	return 0
+}

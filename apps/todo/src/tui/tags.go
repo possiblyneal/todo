@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"cmp"
 	"math"
 	"math/rand/v2"
+	"slices"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
@@ -27,13 +29,14 @@ func rankTags(tags []store.Tag, r *rand.Rand) []store.Tag {
 		keyed[i].tag = tag
 		keyed[i].key = math.Pow(r.Float64(), 1/weight)
 	}
-	// Insertion sort by key, descending: the sidebar holds tens of Tags, not
-	// thousands, and this keeps the draw's order stable for equal keys.
-	for i := 1; i < len(keyed); i++ {
-		for j := i; j > 0 && keyed[j].key > keyed[j-1].key; j-- {
-			keyed[j], keyed[j-1] = keyed[j-1], keyed[j]
-		}
-	}
+	// Descending by key, stably, so two Tags drawing the same key keep the
+	// order they were counted in rather than swapping about between draws.
+	slices.SortStableFunc(keyed, func(a, b struct {
+		tag store.Tag
+		key float64
+	}) int {
+		return cmp.Compare(b.key, a.key)
+	})
 	ranked := make([]store.Tag, len(keyed))
 	for i, k := range keyed {
 		ranked[i] = k.tag

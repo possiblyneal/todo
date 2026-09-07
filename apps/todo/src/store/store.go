@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -283,6 +284,11 @@ END;
 -- The invariant the coarse aggregate boundary was bought for. Only direct
 -- children are consulted: an open grandchild keeps its own parent open, so the
 -- rule reaches the whole tree one level at a time.
+--
+-- Completing is the direction a person drives, so it is the direction that
+-- refuses. The other two directions into an open child -- reopening one, and
+-- adding one -- cannot refuse without stranding the person, so they reopen
+-- every completed Task above instead. Both walks are below.
 CREATE TRIGGER IF NOT EXISTS a_parent_completes_after_its_children
 BEFORE UPDATE OF completed_at ON task
 WHEN NEW.completed_at IS NOT NULL
@@ -294,6 +300,25 @@ WHEN NEW.completed_at IS NOT NULL
  )
 BEGIN
 	SELECT RAISE(ABORT, 'a parent cannot complete while a child is open');
+END;
+
+-- A Subtask added open under a completed parent leaves the parent complete
+-- with an open child, which is the state the rule above exists to forbid. The
+-- add is what the person asked for, so the parent gives way rather than the
+-- add.
+DROP TRIGGER IF EXISTS an_open_child_reopens_its_parent;
+CREATE TRIGGER an_open_child_reopens_its_parent
+AFTER INSERT ON task
+WHEN NEW.completed_at IS NULL AND NEW.parent_id IS NOT NULL
+BEGIN
+	UPDATE task SET completed_at = NULL WHERE id IN (
+		WITH RECURSIVE ancestry(id, parent_id) AS (
+			SELECT id, parent_id FROM task WHERE id = NEW.parent_id
+			UNION ALL
+			SELECT t.id, t.parent_id FROM task t JOIN ancestry a ON t.id = a.parent_id
+		)
+		SELECT id FROM ancestry
+	);
 END;
 
 -- The folds. Each fires inside the appending writer's transaction, so current
@@ -368,10 +393,23 @@ BEGIN
 	UPDATE task SET completed_at = NEW.at WHERE id = NEW.subject;
 END;
 
-CREATE TRIGGER IF NOT EXISTS fold_task_reopened
+-- Reopening a Subtask reopens everything above it, in one statement. A trigger
+-- that cleared the parent and left the parent's own trigger to clear the
+-- grandparent reaches exactly one level: SQLite runs no trigger from inside a
+-- trigger unless recursive_triggers is on, which is a global switch and a loop
+-- waiting to be written. The walk is spelled out instead.
+DROP TRIGGER IF EXISTS fold_task_reopened;
+CREATE TRIGGER fold_task_reopened
 AFTER INSERT ON change_history WHEN NEW.kind = 'task_reopened'
 BEGIN
-	UPDATE task SET completed_at = NULL WHERE id = NEW.subject;
+	UPDATE task SET completed_at = NULL WHERE id IN (
+		WITH RECURSIVE ancestry(id, parent_id) AS (
+			SELECT id, parent_id FROM task WHERE id = NEW.subject
+			UNION ALL
+			SELECT t.id, t.parent_id FROM task t JOIN ancestry a ON t.id = a.parent_id
+		)
+		SELECT id FROM ancestry
+	);
 END;
 
 -- A deletion is an appended entry, so the fold marks the Task gone and the
@@ -902,6 +940,20 @@ const (
 	SortEstimate Sort = "estimate"
 )
 
+// Sorts is every Sort there is, in the order anything offering them lists
+// them. The error a bad sort gets and the flag help a person reads both come
+// from here, so neither can name a set the store does not have.
+var Sorts = []Sort{SortCreated, SortDeadline, SortTitle, SortEstimate}
+
+// SortNames is Sorts as text, for a help string or an error.
+func SortNames() []string {
+	names := make([]string, len(Sorts))
+	for i, sort := range Sorts {
+		names[i] = string(sort)
+	}
+	return names
+}
+
 // sortKeys holds the expression each Sort orders on. A Task with no deadline
 // sorts after every Task that has one, since '~' follows the digits a stamp
 // starts with.
@@ -942,14 +994,21 @@ func (s *Store) Tasks(q Query) ([]Task, error) {
 	}
 	key, ok := sortKeys[q.Sort]
 	if !ok {
-		return nil, fmt.Errorf("%q is not a sort: want created, deadline or title", q.Sort)
+		return nil, fmt.Errorf("%q is not a sort: want %s", q.Sort, strings.Join(SortNames(), ", "))
 	}
 	rows, err := s.db.Query(fmt.Sprintf(`
 WITH RECURSIVE depth_first(id, path) AS (
-	SELECT id, %[1]s || '/' || id FROM task WHERE parent_id IS NULL
+	SELECT id, %[1]s || '/' || id FROM task
+	WHERE parent_id IS NULL
+	  AND (? OR deleted_at IS NULL)
+	  AND (? OR completed_at IS NULL)
+	  AND (? OR snoozed_until IS NULL OR snoozed_until <= ?)
 	UNION ALL
 	SELECT t.id, d.path || '/' || %[1]s || '/' || t.id
 	FROM task t JOIN depth_first d ON t.parent_id = d.id
+	WHERE (? OR t.deleted_at IS NULL)
+	  AND (? OR t.completed_at IS NULL)
+	  AND (? OR t.snoozed_until IS NULL OR t.snoozed_until <= ?)
 )
 SELECT
 	t.id, COALESCE(t.parent_id, ''), t.depth, t.title, t.description, t.why, t.created_at,
@@ -963,12 +1022,11 @@ SELECT
 		SELECT target FROM attachment a WHERE a.task_id = t.id ORDER BY a.added_at, a.target
 	)), '[]')
 FROM task t JOIN depth_first d ON d.id = t.id
-WHERE (? OR t.deleted_at IS NULL)
-  AND (? OR t.completed_at IS NULL)
-  AND (? OR t.snoozed_until IS NULL OR t.snoozed_until <= ?)
-  AND (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = t.id AND m.list_id = ?))
+WHERE (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = t.id AND m.list_id = ?))
 ORDER BY d.path`, key),
-		at, q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at, q.List, q.List)
+		q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at,
+		q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at,
+		at, q.List, q.List)
 	if err != nil {
 		return nil, fmt.Errorf("read tasks: %w", err)
 	}

@@ -13,6 +13,7 @@ package schedule
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -296,10 +297,20 @@ func monthly(anchor time.Time, months int) time.Time {
 
 // Next is the first date the rule produces on or after from, or the zero time
 // if the rule has run out.
+//
+// The window is two of the rule's own steps rather than a fixed year, because
+// a fixed year cannot see past a rule whose step is longer than one: "every 60
+// weeks" produces nothing inside 366 days and would read as run out.
 func (r Rule) Next(from time.Time) time.Time {
-	to := day(from).AddDate(0, 0, 366)
-	if r.Unit == Monthly {
-		to = day(from).AddDate(0, r.Every*13, 0)
+	every := max(r.Every, 1)
+	var to time.Time
+	switch r.Unit {
+	case Monthly:
+		to = day(from).AddDate(0, 2*every+1, 0)
+	case Weekly:
+		to = day(from).AddDate(0, 0, 14*every+7)
+	default:
+		to = day(from).AddDate(0, 0, 2*every+1)
 	}
 	dates := r.Between(from, to)
 	if len(dates) == 0 {
@@ -322,9 +333,5 @@ func day(t time.Time) time.Time {
 func today() time.Time { return day(time.Now()) }
 
 func sortDates(dates []time.Time) {
-	for i := 1; i < len(dates); i++ {
-		for j := i; j > 0 && dates[j].Before(dates[j-1]); j-- {
-			dates[j], dates[j-1] = dates[j-1], dates[j]
-		}
-	}
+	slices.SortFunc(dates, func(a, b time.Time) int { return a.Compare(b) })
 }

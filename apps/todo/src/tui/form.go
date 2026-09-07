@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -39,6 +41,16 @@ type draft struct {
 	// address gets in: the file selector only walks the filesystem.
 	Attachments []string
 	Attach      string
+
+	// Fields are the key/value pairs as a person edits them: one "key:
+	// value" per line. Nothing offers a widget for a map, and a line is
+	// what the pairs already look like everywhere else they are shown.
+	Fields string
+
+	// hadFields are the keys the Task carried when the screen opened. The
+	// store leaves a key alone unless it is named, so a key deleted from
+	// the text has to be named as removed rather than simply left out.
+	hadFields []string
 }
 
 // popupDraft is what the popup over the main screen is filling in: a new List
@@ -78,6 +90,8 @@ func (m Model) form(d *draft) *huh.Form {
 		huh.NewInput().Title("Colour").Value(&d.Colour),
 		huh.NewInput().Title("Attach").Value(&d.Attach).
 			Placeholder("a web address, or ctrl+a to pick a file"),
+		huh.NewText().Title("Fields").Value(&d.Fields).Lines(3).
+			Placeholder("one per line: repo: todo").Validate(validFields),
 		huh.NewMultiSelect[string]().Title("Lists").Value(&d.Lists).
 			Height(rows(len(m.lists))).Options(listOptions(m.lists)...),
 		huh.NewMultiSelect[string]().Title("Tags").Value(&d.Tags).
@@ -167,6 +181,46 @@ func validDuration(v string) error {
 	return err
 }
 
+func validFields(v string) error {
+	_, err := parseFields(v)
+	return err
+}
+
+// fieldLines is the pairs as the screen shows them, in key order so the same
+// Task opens the same way twice.
+func fieldLines(fields map[string]string) string {
+	lines := make([]string, 0, len(fields))
+	for _, key := range slices.Sorted(maps.Keys(fields)) {
+		lines = append(lines, key+": "+fields[key])
+	}
+	return strings.Join(lines, "\n")
+}
+
+// parseFields reads what was typed back into pairs. A line with no colon is a
+// person part-way through typing one and is refused with what is missing,
+// rather than being taken as a key with no value.
+func parseFields(text string) (map[string]string, error) {
+	fields := map[string]string{}
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		key, value, found := strings.Cut(line, ":")
+		key = strings.TrimSpace(key)
+		if !found {
+			return nil, fmt.Errorf("%q is missing its colon; try key: value", strings.TrimSpace(line))
+		}
+		if key == "" {
+			return nil, fmt.Errorf("%q has no key", strings.TrimSpace(line))
+		}
+		if _, twice := fields[key]; twice {
+			return nil, fmt.Errorf("%q is on two lines; a key holds one value", key)
+		}
+		fields[key] = strings.TrimSpace(value)
+	}
+	return fields, nil
+}
+
 func parseDate(v string) (time.Time, error) {
 	v = strings.TrimSpace(v)
 	if v == "" {
@@ -210,6 +264,18 @@ func (d draft) attributes() (store.Attributes, error) {
 	if strings.TrimSpace(d.Title) == "" {
 		return store.Attributes{}, fmt.Errorf("a task needs a title")
 	}
+	fields, err := parseFields(d.Fields)
+	if err != nil {
+		return store.Attributes{}, err
+	}
+	// A key the person deleted is a key they took off, and the empty string
+	// is how the store is told that. Absent keys are left alone, so a
+	// removal has to be spelled out.
+	for _, key := range d.hadFields {
+		if _, kept := fields[key]; !kept {
+			fields[key] = ""
+		}
+	}
 	return store.Attributes{
 		Title:       store.Set(strings.TrimSpace(d.Title)),
 		Description: store.Set(d.Description),
@@ -219,6 +285,7 @@ func (d draft) attributes() (store.Attributes, error) {
 		Priority:    store.Set(d.Priority),
 		Impact:      store.Set(d.Impact),
 		Colour:      store.Set(d.Colour),
+		Fields:      fields,
 	}, nil
 }
 
@@ -236,6 +303,8 @@ func draftOf(t store.Task) *draft {
 		Lists:       append([]string(nil), t.Lists...),
 		Tags:        append([]string(nil), t.Tags...),
 		Attachments: append([]string(nil), t.Attachments...),
+		Fields:      fieldLines(t.Fields),
+		hadFields:   slices.Sorted(maps.Keys(t.Fields)),
 	}
 	if !t.Deadline.IsZero() {
 		d.Deadline = t.Deadline.Local().Format(dateLayouts[0])

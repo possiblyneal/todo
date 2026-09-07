@@ -6,15 +6,15 @@ import (
 )
 
 // BenchmarkGuardedWriteOnALargeTree measures one guarded write at depth 5
-// against 10,000 Tasks: ~235µs, against the ~150-230µs the seam-contract
-// harness recorded for the guard alone. This one also appends the entry and
-// runs the fold, which is the difference.
+// against 10,000 Tasks. No number is claimed as passing: the point is that a
+// guarded write on a large tree stays cheap, and what "cheap" measures at
+// depends on the machine running it.
 //
-// The predicate must find the tree's root and then look the Lease up by its
-// primary key. Joining `lease` against the walk instead re-runs the recursion
-// per Lease row, which measured 755µs against 69µs on this fixture -- a result
-// in the hundreds of microseconds for the predicate alone means that
-// regressed.
+// What it is watching for is a shape, not a figure. The predicate must find
+// the tree's root and then look the Lease up by its primary key. Joining
+// `lease` against the walk instead re-runs the recursion per Lease row, and
+// that reads as an order of magnitude on the same fixture rather than as a
+// few percent.
 //
 // It is a benchmark rather than a test because `go test ./...` runs on shared
 // CI runners where a timing assertion measures the runner, not the predicate.
