@@ -153,3 +153,19 @@ func TestNextSeesPastALongStep(t *testing.T) {
 		}
 	}
 }
+
+// A day named twice is one day. walk emitting it twice would make Produces —
+// which counts what walk emits — false for a date the rule plainly lands on,
+// and the store refuses a tick, a skip or a detach on a date it does not
+// produce.
+func TestADayNamedTwiceIsOneDay(t *testing.T) {
+	r := rule(t, "every week on mon,mon from 2026-01-05")
+	same(t, r.Between(date(t, "2026-01-05"), date(t, "2026-01-19")),
+		"2026-01-05", "2026-01-12", "2026-01-19")
+	if !r.Produces(date(t, "2026-01-05")) {
+		t.Error("the rule does not produce a Monday it lands on")
+	}
+	if got := r.String(); got != "every week on mon from 2026-01-05" {
+		t.Errorf("writes back %q", got)
+	}
+}

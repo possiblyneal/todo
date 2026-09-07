@@ -85,6 +85,13 @@ var ErrHeld = errors.New("refused: an unexpired Lease is held on this Task")
 // lexicographic order being chronological order.
 const stamp = "2006-01-02T15:04:05.000000000Z07:00"
 
+// WriteTTL is how long a surface holds the Lease covering the write it is
+// making. Every surface writes the same way — take the Lease, write, give it
+// back — so they hold it for the same span: long enough to cover the write,
+// short enough that a process dying mid-write strands the tree for seconds
+// rather than for as long as somebody is away from the keyboard.
+const WriteTTL = 30 * time.Second
+
 // Store is an open handle on the tracker's SQLite file.
 type Store struct {
 	db   *sql.DB
@@ -151,6 +158,27 @@ type Task struct {
 	// produced this Task. It is never stored, and nothing records the moment
 	// it became true.
 	Overdue bool
+}
+
+// Marks is what a read worked out about a Task rather than what is stored on
+// it, in the words every surface says it in. A surface decides how to draw
+// them; which of them are true is decided once, here, so a Task cannot read as
+// snoozed from a keyboard and plain on a screen.
+func (t Task) Marks() []string {
+	var marks []string
+	if t.Overdue {
+		marks = append(marks, "overdue")
+	}
+	if !t.CompletedAt.IsZero() {
+		marks = append(marks, "done")
+	}
+	if !t.DeletedAt.IsZero() {
+		marks = append(marks, "deleted")
+	}
+	if !t.SnoozedUntil.IsZero() && t.SnoozedUntil.After(time.Now().UTC()) {
+		marks = append(marks, "snoozed")
+	}
+	return marks
 }
 
 // Lease is an exclusive claim on one top-level Task and everything nested
@@ -625,7 +653,22 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	if _, err := db.Exec(schema); err != nil {
+	// The schema goes on under the write lock, in one transaction. Two of the
+	// triggers are a DROP followed by a CREATE, so that a store written by an
+	// older build gets the current definition; applied without the lock, two
+	// processes opening the same new store at once interleave those pairs and
+	// one of them fails on a trigger the other has just created.
+	tx, err := db.Begin()
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("apply schema to %s: %w", path, err)
+	}
+	if _, err := tx.Exec(schema); err != nil {
+		_ = tx.Rollback()
+		_ = db.Close()
+		return nil, fmt.Errorf("apply schema to %s: %w", path, err)
+	}
+	if err := tx.Commit(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply schema to %s: %w", path, err)
 	}
@@ -941,9 +984,10 @@ const (
 )
 
 // Sorts is every Sort there is, in the order anything offering them lists
-// them. The error a bad sort gets and the flag help a person reads both come
-// from here, so neither can name a set the store does not have.
-var Sorts = []Sort{SortCreated, SortDeadline, SortTitle, SortEstimate}
+// them: the order docs/features.md names them in. The error a bad sort gets,
+// the flag help a person reads and the order the TUI's sort key cycles in all
+// come from here, so none of them can name a set the store does not have.
+var Sorts = []Sort{SortTitle, SortDeadline, SortCreated, SortEstimate}
 
 // SortNames is Sorts as text, for a help string or an error.
 func SortNames() []string {
@@ -987,6 +1031,12 @@ type Query struct {
 // The result is depth first: a Task is followed by everything nested under it
 // before the next sibling, so a surface indents by Depth rather than
 // rebuilding the tree.
+//
+// Every narrowing is applied inside both arms of the walk rather than to what
+// the walk returns, so a subtree is reachable only through a root that is
+// itself in view. A List filtered per row instead would return a Subtask whose
+// parent is not in the List: a row with a Depth to indent by and a Parent that
+// is not in the answer.
 func (s *Store) Tasks(q Query) ([]Task, error) {
 	at := now()
 	if q.Sort == "" {
@@ -1000,13 +1050,15 @@ func (s *Store) Tasks(q Query) ([]Task, error) {
 WITH RECURSIVE depth_first(id, path) AS (
 	SELECT id, %[1]s || '/' || id FROM task
 	WHERE parent_id IS NULL
+	  AND (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = task.id AND m.list_id = ?))
 	  AND (? OR deleted_at IS NULL)
 	  AND (? OR completed_at IS NULL)
 	  AND (? OR snoozed_until IS NULL OR snoozed_until <= ?)
 	UNION ALL
 	SELECT t.id, d.path || '/' || %[1]s || '/' || t.id
 	FROM task t JOIN depth_first d ON t.parent_id = d.id
-	WHERE (? OR t.deleted_at IS NULL)
+	WHERE (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = t.id AND m.list_id = ?))
+	  AND (? OR t.deleted_at IS NULL)
 	  AND (? OR t.completed_at IS NULL)
 	  AND (? OR t.snoozed_until IS NULL OR t.snoozed_until <= ?)
 )
@@ -1022,11 +1074,10 @@ SELECT
 		SELECT target FROM attachment a WHERE a.task_id = t.id ORDER BY a.added_at, a.target
 	)), '[]')
 FROM task t JOIN depth_first d ON d.id = t.id
-WHERE (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = t.id AND m.list_id = ?))
 ORDER BY d.path`, key),
-		q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at,
-		q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at,
-		at, q.List, q.List)
+		q.List, q.List, q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at,
+		q.List, q.List, q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at,
+		at)
 	if err != nil {
 		return nil, fmt.Errorf("read tasks: %w", err)
 	}

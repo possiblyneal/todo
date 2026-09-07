@@ -584,3 +584,91 @@ func TestAScheduleWithNoDatesLeftTakesNoMark(t *testing.T) {
 		t.Errorf("marking nothing appended %d entries", grew)
 	}
 }
+
+// The screen's window is local, not UTC. schedule reads a date's year, month
+// and day in the local zone, so opening the window on a UTC instant whose
+// calendar date is not the local one drops today's Occurrence off the screen
+// or leaves yesterday's on it.
+//
+// The rule is anchored years back, so the first date it produces from here is
+// today whatever the zone. The two zones make that hold at any hour: at every
+// instant one of them has a calendar date that is not the UTC one.
+func TestTheScheduleScreenOpensOnTodayInTheLocalZone(t *testing.T) {
+	for _, zone := range []*time.Location{
+		time.FixedZone("west", -11*60*60),
+		time.FixedZone("east", +14*60*60),
+	} {
+		t.Run(zone.String(), func(t *testing.T) {
+			was := time.Local
+			time.Local = zone
+			t.Cleanup(func() { time.Local = was })
+
+			s := fixture(t)
+			m := newModel(t, s)
+			apples, ok := taskNamed(m, "Buy apples")
+			if !ok {
+				t.Fatal("the fixture Task was not on the screen")
+			}
+			carry(t, s, apples.ID, func() error {
+				_, err := s.Repeat("alice", apples.ID, "daily from 2020-01-01")
+				return err
+			})
+
+			m.tasks.Select(indexOf(t, m, apples.ID))
+			m, _ = m.run("/repeat")
+			if m.rep == nil || len(m.rep.dates) == 0 {
+				t.Fatal("/repeat showed no dates for a daily rule")
+			}
+			got := m.rep.dates[0].Date.Format("2006-01-02")
+			if want := time.Now().In(zone).Format("2006-01-02"); got != want {
+				t.Errorf("the screen opens on %s, want today in this zone, %s", got, want)
+			}
+		})
+	}
+}
+
+// Snooze is one of the attributes docs/features.md asks for, so the screen
+// that shows every attribute shows it: set it there and the Task hides, clear
+// it there and the Task comes back, with no trip through the palette.
+func TestTheEditScreenSetsAndClearsASnooze(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	task, _ := m.selected()
+	d := draftOf(task)
+	d.Snooze = time.Now().Local().Add(48 * time.Hour).Format(dateLayouts[0])
+	if err := m.save(d); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	after, ok := taskIn(t, s, task.ID)
+	if !ok || after.SnoozedUntil.IsZero() {
+		t.Fatalf("the edit screen set no snooze on %s", task.ID)
+	}
+
+	// The screen opens on what is there, and clearing the line takes it off.
+	back := draftOf(after)
+	if back.Snooze == "" {
+		t.Error("the edit screen opened with the snooze line empty")
+	}
+	back.Snooze = ""
+	if err := m.save(back); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if after, ok := taskIn(t, s, task.ID); !ok || !after.SnoozedUntil.IsZero() {
+		t.Errorf("clearing the snooze line left %v", after.SnoozedUntil)
+	}
+}
+
+func taskIn(t *testing.T, s *store.Store, id string) (store.Task, bool) {
+	t.Helper()
+	tasks, err := s.Tasks(store.Query{IncludeSnoozed: true})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	for _, task := range tasks {
+		if task.ID == id {
+			return task, true
+		}
+	}
+	return store.Task{}, false
+}

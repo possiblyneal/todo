@@ -60,3 +60,48 @@ func TestATagNobodyCarriesCanStillSurface(t *testing.T) {
 	}
 	t.Error("a Tag nothing carries never surfaced in 200 draws")
 }
+
+// Narrowing by a Tag drops a Task's subtree with it. A Subtask carrying the
+// Tag under a parent that does not would otherwise draw at a Depth under
+// nothing, which is the orphan the store already refuses to return for a List.
+func TestNarrowingByATagLeavesNoOrphan(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	apples, ok := taskNamed(m, "Buy apples")
+	if !ok {
+		t.Fatal("the fixture Task was not on the screen")
+	}
+	tags, err := s.Tags()
+	if err != nil {
+		t.Fatalf("Tags: %v", err)
+	}
+	var urgent string
+	for _, tag := range tags {
+		if tag.Name == "urgent" {
+			urgent = tag.ID
+		}
+	}
+	if urgent == "" {
+		t.Fatal("the fixture has no urgent Tag")
+	}
+
+	// A Subtask carrying the Tag under a parent that does not.
+	carry(t, s, apples.ID, func() error {
+		peeler, err := s.AddSubtask("alice", apples.ID, store.Attributes{Title: store.Set("Find the peeler")})
+		if err != nil {
+			return err
+		}
+		return s.AttachTag("alice", peeler, urgent)
+	})
+
+	m.chosen[urgent] = true
+	if err := m.refresh(); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	for _, item := range m.tasks.Items() {
+		if r, ok := item.(row); ok && r.task.Title == "Find the peeler" {
+			t.Error("a Subtask was drawn without the parent it hangs under")
+		}
+	}
+}

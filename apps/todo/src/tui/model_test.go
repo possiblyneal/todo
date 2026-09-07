@@ -290,12 +290,12 @@ func TestSortCyclesTheFourOrders(t *testing.T) {
 	m := newModel(t, s)
 
 	seen := map[store.Sort]bool{m.sort: true}
-	for range len(sorts) {
+	for range len(store.Sorts) {
 		m = press(m, "s")
 		seen[m.sort] = true
 	}
-	if len(seen) != len(sorts) {
-		t.Errorf("cycling reached %v, want all four of %v", seen, sorts)
+	if len(seen) != len(store.Sorts) {
+		t.Errorf("cycling reached %v, want all four of %v", seen, store.Sorts)
 	}
 
 	for m.sort != store.SortTitle {
@@ -386,18 +386,4 @@ func TestATreeComesBackIndented(t *testing.T) {
 		return
 	}
 	t.Fatal("the Subtask never came back")
-}
-
-// The cycle is store.Sorts in the order docs/features.md names them. Adding a
-// Sort to the store and not to the cycle would leave one a person can ask for
-// by flag and never reach on the screen.
-func TestTheSortCycleReachesEverySort(t *testing.T) {
-	if len(sorts) != len(store.Sorts) {
-		t.Fatalf("the cycle has %d sorts and the store has %d", len(sorts), len(store.Sorts))
-	}
-	for _, s := range store.Sorts {
-		if !slices.Contains(sorts, s) {
-			t.Errorf("%q is a Sort the cycle never reaches", s)
-		}
-	}
 }

@@ -28,12 +28,6 @@ const (
 	everyList    = ""
 )
 
-// sorts is the order the sort key cycles in, which is the order
-// docs/features.md names them: alphabetical, due date, creation date, time
-// estimate. It is store.Sorts reordered, not a second vocabulary, and
-// TestTheSortCycleReachesEverySort is what keeps it that.
-var sorts = []store.Sort{store.SortTitle, store.SortDeadline, store.SortCreated, store.SortEstimate}
-
 var (
 	headerStyle  = lipgloss.NewStyle().Bold(true)
 	chosenStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
@@ -165,8 +159,17 @@ func (m *Model) refresh() error {
 	}
 
 	items := make([]list.Item, 0, len(tasks))
+	// A Task the chosen Tags pass over takes its subtree with it. The store
+	// returns the tree depth first, so everything under a dropped Task is the
+	// run of rows deeper than it, and cut is where that run began.
+	cut := 0
 	for _, t := range tasks {
+		if cut > 0 && t.Depth > cut {
+			continue
+		}
+		cut = 0
 		if !m.carriesChosen(t) {
+			cut = t.Depth
 			continue
 		}
 		items = append(items, row{task: t, lists: m.nameEach(t.Lists)})
@@ -175,10 +178,11 @@ func (m *Model) refresh() error {
 	return nil
 }
 
-// carriesChosen narrows to Tasks carrying every chosen Tag. Narrowing is done
-// here rather than in the query because the store returns a tree depth first
-// and dropping a parent by a Tag it does not carry would orphan its children
-// in the reading; the filter is over what came back, tree and all.
+// carriesChosen says whether a Task carries every chosen Tag. Narrowing is
+// done here rather than in the query because a Tag is not a Query field, and
+// the caller drops a Task's subtree along with it: a Subtask left behind by a
+// parent the Tags passed over would draw at a Depth under nothing, which is
+// the rule the store already keeps for a List and for a Task out of sight.
 func (m Model) carriesChosen(t store.Task) bool {
 	for id := range m.chosen {
 		if !slices.Contains(t.Tags, id) {
@@ -372,12 +376,12 @@ func in(zones *zone.Manager, id string, msg tea.MouseMsg) bool {
 }
 
 func nextSort(current store.Sort) store.Sort {
-	for i, s := range sorts {
+	for i, s := range store.Sorts {
 		if s == current {
-			return sorts[(i+1)%len(sorts)]
+			return store.Sorts[(i+1)%len(store.Sorts)]
 		}
 	}
-	return sorts[0]
+	return store.Sorts[0]
 }
 
 func (m Model) View() tea.View {

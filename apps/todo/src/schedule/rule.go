@@ -57,7 +57,7 @@ var weekdayNames = map[string]time.Weekday{
 
 var weekdayText = [...]string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
 
-const dateLayout = "2006-01-02"
+const dateLayout = time.DateOnly
 
 // Parse reads a rule as a person writes it: "every week on mon,thu from
 // 2026-01-05", "daily", "every 3 months on 15 until 2026-12-01".
@@ -171,6 +171,12 @@ func parseOn(r *Rule, text string) error {
 		day, ok := weekdayNames[strings.TrimSpace(name)]
 		if !ok {
 			return fmt.Errorf("%q is not a day of the week", name)
+		}
+		// A day named twice is one day. Keeping the repeat would make walk
+		// emit the date twice, and Produces counts what walk emits: a rule
+		// written "on mon,mon" would then land on no Monday at all.
+		if slices.Contains(r.Weekdays, day) {
+			continue
 		}
 		r.Weekdays = append(r.Weekdays, day)
 	}

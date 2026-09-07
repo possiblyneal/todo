@@ -300,3 +300,41 @@ func TestTasksSortByEstimate(t *testing.T) {
 		t.Errorf("sorted by estimate the order is %v, want the shortest first and no estimate last %v", got, want)
 	}
 }
+
+// A List narrows the walk, not what the walk returned. A Subtask in the List
+// under a parent that is not in it comes back with a Depth to indent by and a
+// Parent that is not in the answer, which is the same orphan a hidden parent
+// would leave: a subtree is reachable only through a root that is in view.
+func TestNarrowingToAListLeavesNoOrphan(t *testing.T) {
+	s := openTemp(t)
+	home, err := s.AddList("alice", "Home", "")
+	if err != nil {
+		t.Fatalf("AddList: %v", err)
+	}
+	root := leased(t, s, "alice", Attributes{Title: Set("Fix the sink")})
+	child, err := s.AddSubtask("alice", root, Attributes{Title: Set("Buy a washer")})
+	if err != nil {
+		t.Fatalf("AddSubtask: %v", err)
+	}
+	if err := s.AddToList("alice", child, home); err != nil {
+		t.Fatalf("AddToList: %v", err)
+	}
+
+	if got, err := s.Tasks(Query{List: home}); err != nil {
+		t.Fatalf("Tasks: %v", err)
+	} else if len(got) != 0 {
+		t.Errorf("narrowing to a List returned %d tasks under no visible root: %+v", len(got), got)
+	}
+
+	// The root in the List brings the whole subtree with it, in view or not.
+	if err := s.AddToList("alice", root, home); err != nil {
+		t.Fatalf("AddToList: %v", err)
+	}
+	got, err := s.Tasks(Query{List: home})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(got) != 2 || got[0].ID != root || got[1].ID != child {
+		t.Errorf("the List came back %+v, want the root then its Subtask", got)
+	}
+}

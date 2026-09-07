@@ -9,12 +9,6 @@ import (
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
 
-// writeTTL is how long the TUI holds a Lease. A write is opened, committed and
-// given back inside one keystroke's worth of work, so the TTL only has to
-// outlive the write itself; it is the CLI's for the same reason, which is that
-// neither surface should strand a tree behind a dead process.
-const writeTTL = 30 * time.Second
-
 // save writes a draft: a new Task, or an edit to the one it was opened on.
 //
 // Nothing here runs while a person is typing. The form gathers, save writes,
@@ -32,7 +26,7 @@ func (m *Model) save(d *draft) error {
 		if err != nil {
 			return err
 		}
-		return m.store.WithLease(m.actor, id, writeTTL, func() error {
+		return m.store.WithLease(m.actor, id, store.WriteTTL, func() error {
 			return m.memberships(id, store.Task{}, d)
 		})
 	}
@@ -41,7 +35,7 @@ func (m *Model) save(d *draft) error {
 	if !ok {
 		return fmt.Errorf("that task is no longer in view")
 	}
-	return m.store.WithLease(m.actor, d.taskID, writeTTL, func() error {
+	return m.store.WithLease(m.actor, d.taskID, store.WriteTTL, func() error {
 		if err := m.store.EditTask(m.actor, d.taskID, a); err != nil {
 			return err
 		}
@@ -107,7 +101,7 @@ func added(was, now []string) []string {
 // lifecycle completes, reopens or deletes the Task under the cursor, each one
 // taking the Lease covering its tree and giving it back.
 func (m *Model) lifecycle(taskID, what string) error {
-	return m.store.WithLease(m.actor, taskID, writeTTL, func() error {
+	return m.store.WithLease(m.actor, taskID, store.WriteTTL, func() error {
 		switch what {
 		case "complete":
 			return m.store.CompleteTask(m.actor, taskID)
@@ -128,7 +122,7 @@ func (m *Model) snooze(taskID string, s store.Snooze) error {
 // snoozeUntil hides a Task until a moment the calendar picked. The zero time
 // takes the snooze off.
 func (m *Model) snoozeUntil(taskID string, until time.Time) error {
-	return m.store.WithLease(m.actor, taskID, writeTTL, func() error {
+	return m.store.WithLease(m.actor, taskID, store.WriteTTL, func() error {
 		return m.store.EditTask(m.actor, taskID, store.Attributes{
 			SnoozedUntil: store.Set(until),
 		})

@@ -98,3 +98,56 @@ func TestRepeatRefusesNonsense(t *testing.T) {
 		t.Errorf("after a refused rule, todo repeat printed %q", out)
 	}
 }
+
+// A date is local. schedule reads a date's year, month and day in the local
+// zone, so handing it a UTC instant hands it the UTC calendar date: west of
+// Greenwich after evening that is tomorrow, and today's Occurrence falls off
+// the list of what comes next.
+//
+// The rule is anchored years back, so the first date it produces from here is
+// today whatever the zone, and a window opened on the UTC date shows yesterday
+// or tomorrow instead. The two zones are what make that hold at any hour: at
+// every instant one of them has a calendar date that is not the UTC one.
+func TestRepeatShowsTodayInTheLocalZone(t *testing.T) {
+	for _, zone := range []*time.Location{
+		time.FixedZone("west", -11*60*60),
+		time.FixedZone("east", +14*60*60),
+	} {
+		t.Run(zone.String(), func(t *testing.T) {
+			local(t, zone)
+			storeInTemp(t)
+			t.Setenv("TODO_ACTOR", "alice")
+
+			_, out, errs := run(t, "add", "Water the plants")
+			id := strings.TrimSpace(out)
+			if id == "" {
+				t.Fatalf("todo add printed no id: %s", errs)
+			}
+			if code, _, errs := run(t, "repeat", id, "daily", "from", "2020-01-01"); code != 0 {
+				t.Fatalf("todo repeat exited %d: %s", code, errs)
+			}
+
+			code, out, errs := run(t, "repeat", "-n", "1", id)
+			if code != 0 {
+				t.Fatalf("todo repeat exited %d: %s", code, errs)
+			}
+			dates := strings.Split(strings.TrimSpace(out), "\n")[1:]
+			if len(dates) != 1 {
+				t.Fatalf("todo repeat -n 1 printed %d dates: %q", len(dates), out)
+			}
+			if want := time.Now().In(zone).Format("2006-01-02"); dates[0] != want {
+				t.Errorf("the next date is %s, want today in this zone, %s", dates[0], want)
+			}
+		})
+	}
+}
+
+// local holds the zone for one test. time.Local is what schedule reads a date
+// in, and a test that needs a particular zone cannot get one from TZ: the
+// package caches it long before the test runs.
+func local(t *testing.T, zone *time.Location) {
+	t.Helper()
+	was := time.Local
+	time.Local = zone
+	t.Cleanup(func() { time.Local = was })
+}

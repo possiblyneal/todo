@@ -45,7 +45,7 @@ type Occurrence struct {
 
 // dateOnly is how a date is written in an Occurrence's key. A date has no time
 // of day: a Series produces the 5th, not 09:00 on the 5th.
-const dateOnly = "2006-01-02"
+const dateOnly = time.DateOnly
 
 // ErrNotRecurring is a Scheduling call against a Task that carries no Series.
 var ErrNotRecurring = errors.New("this task does not repeat")
@@ -189,7 +189,7 @@ func (s *Store) DetachOccurrence(actor, taskID string, on time.Time) (string, er
 	if err != nil {
 		return "", err
 	}
-	expires := time.Now().UTC().Add(30 * time.Second).Format(stamp)
+	expires := time.Now().UTC().Add(WriteTTL).Format(stamp)
 
 	err = s.mark(actor, taskID, on, KindOccurrenceDetached, func(tx *sql.Tx) error {
 		if _, err := appendTx(tx, actor, KindTaskAdded, id, attributes); err != nil {

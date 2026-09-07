@@ -119,28 +119,28 @@ func describe(text string, width int) [2]string {
 	return lines
 }
 
+// marks draws what a read worked out about a Task. The words are
+// store.Task.Marks; only the colour on "overdue" is the screen's.
 func marks(t store.Task) string {
-	var m []string
-	if t.Overdue {
-		m = append(m, overdueStyle.Render("overdue"))
-	}
-	if !t.CompletedAt.IsZero() {
-		m = append(m, "done")
-	}
-	if !t.DeletedAt.IsZero() {
-		m = append(m, "deleted")
-	}
+	m := t.Marks()
 	if len(m) == 0 {
 		return ""
 	}
-	return "  " + strings.Join(m, " ")
+	drawn := make([]string, len(m))
+	for i, mark := range m {
+		drawn[i] = mark
+		if mark == "overdue" {
+			drawn[i] = overdueStyle.Render(mark)
+		}
+	}
+	return "  " + strings.Join(drawn, " ")
 }
 
 func day(t time.Time) string {
 	if t.IsZero() {
 		return "-"
 	}
-	return t.Local().Format("2006-01-02")
+	return t.Local().Format(time.DateOnly)
 }
 
 func due(t time.Time) string {

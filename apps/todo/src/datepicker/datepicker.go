@@ -232,7 +232,7 @@ func (m Model) Text() string {
 	case m.value.Hour() != 0 || m.value.Minute() != 0:
 		return m.value.Format("2006-01-02 15:04")
 	default:
-		return m.value.Format("2006-01-02")
+		return m.value.Format(time.DateOnly)
 	}
 }
 

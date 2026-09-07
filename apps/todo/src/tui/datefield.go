@@ -23,17 +23,14 @@ import (
 // src/datepicker is the component, and this is the ten-line-per-method shim
 // that satisfies huh.Field.
 type dateField struct {
-	picker   datepicker.Model
-	value    *string
-	title    string
-	key      string
-	focused  bool
-	width    int
-	height   int
-	theme    huh.Theme
-	darkBG   bool
-	keymap   *huh.KeyMap
-	position huh.FieldPosition
+	picker  datepicker.Model
+	value   *string
+	title   string
+	key     string
+	focused bool
+	theme   huh.Theme
+	darkBG  bool
+	keymap  *huh.KeyMap
 }
 
 // newDateField binds a picker to the text a draft carries. The draft stays
@@ -163,10 +160,13 @@ func (f *dateField) KeyBinds() []key.Binding {
 
 func (f *dateField) WithTheme(t huh.Theme) huh.Field    { f.theme = t; return f }
 func (f *dateField) WithKeyMap(k *huh.KeyMap) huh.Field { f.keymap = k; return f }
-func (f *dateField) WithWidth(w int) huh.Field          { f.width = w; return f }
-func (f *dateField) WithHeight(h int) huh.Field         { f.height = h; return f }
 
-func (f *dateField) WithPosition(p huh.FieldPosition) huh.Field { f.position = p; return f }
+// The picker draws at its own size and in its own place: a calendar is a fixed
+// grid, and huh's group lays it out around whatever it measures. These three
+// are the interface's, and there is nothing here for them to set.
+func (f *dateField) WithWidth(int) huh.Field                  { return f }
+func (f *dateField) WithHeight(int) huh.Field                 { return f }
+func (f *dateField) WithPosition(huh.FieldPosition) huh.Field { return f }
 
 func (f *dateField) GetKey() string { return f.key }
 func (f *dateField) GetValue() any  { return *f.value }

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -130,6 +131,54 @@ func TestConcurrentProcessesAppendGaplesslyAndFoldExactly(t *testing.T) {
 	for _, task := range tasks {
 		if !subjects[task.ID] {
 			t.Errorf("task %s is in the fold with no entry appending it", task.ID)
+		}
+	}
+}
+
+// Every Open applies the schema, and two of the triggers are a DROP followed
+// by a CREATE so that a store written by an older build gets the current
+// definition. Applied outside the write lock, one process creates a trigger
+// between another's DROP and its CREATE, and that Open fails on a trigger that
+// already exists.
+//
+// Real processes again, and for the same reason: one process applies the
+// schema once per store, so a second *sql.DB in this one would not reach the
+// file lock the race hides behind. The store is seeded first, which is what
+// every Open after the first sees.
+func TestProcessesReopeningOneStoreAtOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "todo.db")
+	seed, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+
+	const openers = 8
+	said := make([]bytes.Buffer, openers)
+	children := make([]*exec.Cmd, openers)
+	for i := range children {
+		child := exec.Command(self)
+		child.Env = append(os.Environ(),
+			envChildDB+"="+path,
+			envChildActor+"=opener-"+strconv.Itoa(i),
+			envChildCount+"=0",
+		)
+		child.Stderr = &said[i]
+		children[i] = child
+		if err := child.Start(); err != nil {
+			t.Fatalf("opener %d: %v", i, err)
+		}
+	}
+	for i, child := range children {
+		if err := child.Wait(); err != nil {
+			t.Errorf("opener %d: %v: %s", i, err, said[i].String())
 		}
 	}
 }

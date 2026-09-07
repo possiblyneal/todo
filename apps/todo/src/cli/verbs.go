@@ -10,11 +10,6 @@ import (
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
 
-// leaseTTL is how long a verb holds the Lease it takes. A verb acts and exits,
-// so it wants just enough to cover its own write and nothing that would strand
-// the tree if the process dies.
-const leaseTTL = 30 * time.Second
-
 // fields collects repeated -field k=v flags.
 type fields map[string]string
 
@@ -122,7 +117,7 @@ func parseWhen(v string) (time.Time, error) {
 	if strings.TrimSpace(v) == "" {
 		return time.Time{}, nil
 	}
-	for _, layout := range []string{"2006-01-02", "2006-01-02 15:04", time.RFC3339} {
+	for _, layout := range []string{time.DateOnly, "2006-01-02 15:04", time.RFC3339} {
 		if t, err := time.ParseInLocation(layout, v, time.Local); err == nil {
 			return t.UTC(), nil
 		}
@@ -181,7 +176,7 @@ func addTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	// write to that tree needs.
 	if *parent != "" {
 		var id string
-		err := s.WithLease(actor(), *parent, leaseTTL, func() error {
+		err := s.WithLease(actor(), *parent, store.WriteTTL, func() error {
 			var err error
 			id, err = s.AddSubtask(actor(), *parent, a)
 			return err
@@ -233,22 +228,10 @@ func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// marks says what a read worked out about a Task, rather than what is stored
-// on it: overdue is deadline < now, and it was computed by the read above.
+// marks writes what a read worked out about a Task in the shape a terminal
+// line takes. The words are store.Task.Marks; only the brackets are the CLI's.
 func marks(t store.Task) string {
-	var m []string
-	if t.Overdue {
-		m = append(m, "overdue")
-	}
-	if !t.CompletedAt.IsZero() {
-		m = append(m, "done")
-	}
-	if !t.DeletedAt.IsZero() {
-		m = append(m, "deleted")
-	}
-	if !t.SnoozedUntil.IsZero() && t.SnoozedUntil.After(time.Now().UTC()) {
-		m = append(m, "snoozed")
-	}
+	m := t.Marks()
 	if len(m) == 0 {
 		return ""
 	}
@@ -279,7 +262,7 @@ func editTask(s *store.Store, args []string, stderr io.Writer) int {
 
 	// One Lease covers the whole edit: the attributes and every List and Tag
 	// it joins or leaves are one visit to the tree.
-	return refuse(stderr, "edit", s.WithLease(who, id, leaseTTL, func() error {
+	return refuse(stderr, "edit", s.WithLease(who, id, store.WriteTTL, func() error {
 		if attributes {
 			if err := s.EditTask(who, id, a); err != nil {
 				return err
@@ -320,7 +303,7 @@ func lifecycle(s *store.Store, verb string, args []string, stderr io.Writer) int
 		"delete":   s.DeleteTask,
 	}[verb]
 
-	return refuse(stderr, verb, s.WithLease(actor(), id, leaseTTL, func() error {
+	return refuse(stderr, verb, s.WithLease(actor(), id, store.WriteTTL, func() error {
 		return act(actor(), id)
 	}))
 }
@@ -367,7 +350,7 @@ func attachTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	}
 
 	target := strings.Join(fs.Args()[1:], " ")
-	return refuse(stderr, "attach", s.WithLease(actor(), id, leaseTTL, func() error {
+	return refuse(stderr, "attach", s.WithLease(actor(), id, store.WriteTTL, func() error {
 		if *off {
 			return s.Detach(actor(), id, target)
 		}
@@ -418,23 +401,23 @@ func repeatTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 		if act.date == "" {
 			continue
 		}
-		on, err := time.ParseInLocation("2006-01-02", act.date, time.UTC)
+		on, err := time.ParseInLocation(time.DateOnly, act.date, time.UTC)
 		if err != nil {
 			fmt.Fprintf(stderr, "todo repeat: cannot read %q as a date: want 2006-01-02\n", act.date)
 			return 2
 		}
-		return refuse(stderr, "repeat", s.WithLease(who, id, leaseTTL, func() error {
+		return refuse(stderr, "repeat", s.WithLease(who, id, store.WriteTTL, func() error {
 			return act.do(on)
 		}))
 	}
 
 	switch {
 	case *off:
-		return refuse(stderr, "repeat", s.WithLease(who, id, leaseTTL, func() error {
+		return refuse(stderr, "repeat", s.WithLease(who, id, store.WriteTTL, func() error {
 			return s.Unrepeat(who, id)
 		}))
 	case rule != "":
-		return refuse(stderr, "repeat", s.WithLease(who, id, leaseTTL, func() error {
+		return refuse(stderr, "repeat", s.WithLease(who, id, store.WriteTTL, func() error {
 			_, err := s.Repeat(who, id, rule)
 			return err
 		}))
@@ -457,7 +440,10 @@ func showRepeat(s *store.Store, id string, count int, stdout, stderr io.Writer) 
 	}
 	fmt.Fprintln(stdout, rule.String())
 
-	from := time.Now().UTC()
+	// Local, not UTC: schedule reads a date in the local zone, so a UTC
+	// instant whose calendar date is not the local one shifts the window a
+	// day and shows the wrong date first.
+	from := time.Now()
 	occurrences, err := s.Occurrences(id, from, from.AddDate(2, 0, 0))
 	if err != nil {
 		fmt.Fprintf(stderr, "todo repeat: %v\n", err)
@@ -471,7 +457,7 @@ func showRepeat(s *store.Store, id string, count int, stdout, stderr io.Writer) 
 		if o.State != store.Pending {
 			state = "  (" + string(o.State) + ")"
 		}
-		fmt.Fprintf(stdout, "%s%s\n", o.Date.Format("2006-01-02"), state)
+		fmt.Fprintf(stdout, "%s%s\n", o.Date.Format(time.DateOnly), state)
 	}
 	return 0
 }

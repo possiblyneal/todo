@@ -15,7 +15,7 @@ import (
 // dateLayouts are how a date is written down between the picker and the
 // draft. Nobody types one any more: the calendar in src/datepicker is what
 // fills a deadline in, and these are only the way it is carried as text.
-var dateLayouts = []string{"2006-01-02 15:04", "2006-01-02"}
+var dateLayouts = []string{"2006-01-02 15:04", time.DateOnly}
 
 // draft is what the add and edit screens fill in. It is text, because that is
 // what a person types; turning it into Attributes is attributes(), and that is
@@ -29,6 +29,7 @@ type draft struct {
 	Description string
 	Why         string
 	Deadline    string
+	Snooze      string
 	Estimate    string
 	Priority    store.Level
 	Impact      store.Level
@@ -81,6 +82,7 @@ func (m Model) form(d *draft) *huh.Form {
 		huh.NewInput().Title("Why").Value(&d.Why).
 			Placeholder("what happens if this never gets done"),
 		newDateField("Deadline", &d.Deadline, snoozeShortcuts()),
+		newDateField("Snooze until", &d.Snooze, snoozeShortcuts()),
 		huh.NewInput().Title("Estimate").Value(&d.Estimate).
 			Placeholder("90m, 3h, 2h30m").Validate(validDuration),
 		huh.NewSelect[store.Level]().Title("Priority").Value(&d.Priority).
@@ -257,6 +259,10 @@ func (d draft) attributes() (store.Attributes, error) {
 	if err != nil {
 		return store.Attributes{}, err
 	}
+	snooze, err := parseDate(d.Snooze)
+	if err != nil {
+		return store.Attributes{}, err
+	}
 	estimate, err := parseDuration(d.Estimate)
 	if err != nil {
 		return store.Attributes{}, err
@@ -281,11 +287,14 @@ func (d draft) attributes() (store.Attributes, error) {
 		Description: store.Set(d.Description),
 		Why:         store.Set(d.Why),
 		Deadline:    store.Set(deadline),
-		Estimate:    store.Set(estimate),
-		Priority:    store.Set(d.Priority),
-		Impact:      store.Set(d.Impact),
-		Colour:      store.Set(d.Colour),
-		Fields:      fields,
+		// The store reads a snooze against the clock in UTC, and the
+		// picker fills the draft in local time.
+		SnoozedUntil: store.Set(snooze.UTC()),
+		Estimate:     store.Set(estimate),
+		Priority:     store.Set(d.Priority),
+		Impact:       store.Set(d.Impact),
+		Colour:       store.Set(d.Colour),
+		Fields:       fields,
 	}, nil
 }
 
@@ -308,6 +317,9 @@ func draftOf(t store.Task) *draft {
 	}
 	if !t.Deadline.IsZero() {
 		d.Deadline = t.Deadline.Local().Format(dateLayouts[0])
+	}
+	if !t.SnoozedUntil.IsZero() {
+		d.Snooze = t.SnoozedUntil.Local().Format(dateLayouts[0])
 	}
 	if t.Estimate > 0 {
 		d.Estimate = t.Estimate.String()

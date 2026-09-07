@@ -75,7 +75,10 @@ func (m Model) load(sr *series) error {
 	if !repeats {
 		return nil
 	}
-	from := time.Now().UTC()
+	// Local, not UTC: schedule reads a date's year, month and day in the
+	// local zone, so a UTC instant west of Greenwich after evening reads as
+	// tomorrow and drops today's Occurrence off the screen.
+	from := time.Now()
 	dates, err := m.store.Occurrences(sr.task.ID, from, from.AddDate(horizon, 0, 0))
 	if err != nil {
 		return err
@@ -172,7 +175,7 @@ func (m Model) mark(what string) (Model, tea.Cmd) {
 // Task, and a ticked one may have moved the Task's own deadline.
 func (m Model) repeatWrite(do func(id string) error) (Model, tea.Cmd) {
 	id := m.rep.task.ID
-	if err := m.store.WithLease(m.actor, id, writeTTL, func() error { return do(id) }); err != nil {
+	if err := m.store.WithLease(m.actor, id, store.WriteTTL, func() error { return do(id) }); err != nil {
 		m.err = err
 		return m, nil
 	}
@@ -232,7 +235,7 @@ func (m Model) repeatView() string {
 		lines = append(lines, dimStyle.Render("no dates in the next two years"))
 	}
 	for i, o := range sr.dates[:m.drawn()] {
-		line := "  " + o.Date.Format("2006-01-02")
+		line := "  " + o.Date.Format(time.DateOnly)
 		if o.State != store.Pending {
 			line += "  (" + string(o.State) + ")"
 		}
