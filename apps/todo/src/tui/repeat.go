@@ -132,6 +132,8 @@ func (m Model) updateRepeat(msg tea.Msg) (Model, tea.Cmd) {
 		// none of them is not row -1.
 		m.rep.cursor = max(min(m.rep.cursor+1, m.drawn()-1), 0)
 		return m, nil
+	case "e":
+		return m.editOccurrence()
 	case "r":
 		return m.editRule()
 	case "x":
@@ -140,6 +142,29 @@ func (m Model) updateRepeat(msg tea.Msg) (Model, tea.Cmd) {
 		return m.mark(key.String())
 	}
 	return m, nil
+}
+
+// editOccurrence opens the add/edit screen on what the date under the cursor
+// would become. Nothing is written here: the detach happens on save, so
+// escaping the form leaves the date an Occurrence of the Series.
+//
+// The Scheduling screen closes on the way, the same as an explicit detach
+// does: whichever way the date leaves the Series, this screen no longer has
+// anything to say about it.
+func (m Model) editOccurrence() (Model, tea.Cmd) {
+	if m.rep.cursor < 0 || m.rep.cursor >= m.drawn() {
+		return m, nil
+	}
+	d := draftOf(m.rep.task)
+	d.occurrence = m.rep.dates[m.rep.cursor].Date
+	// What the store lifts out is the recurring Task's attributes with the
+	// date as its deadline, carrying no Attachments and no snooze, so that
+	// is the Task the form opens on rather than the recurring one.
+	d.Deadline = d.occurrence.Format(dateLayouts[1])
+	d.Snooze, d.Attachments = "", nil
+	m.rep = nil
+	m.draft, m.editor = d, m.form(d)
+	return m, m.editor.Init()
 }
 
 // drawn is how many dates are on the screen, which is what the cursor moves
@@ -245,6 +270,6 @@ func (m Model) repeatView() string {
 		lines = append(lines, line)
 	}
 	lines = append(lines, "",
-		dimStyle.Render("t tick   s skip   d detach   r change the rule   x stop repeating   esc back"))
+		dimStyle.Render("t tick   s skip   e edit   d detach   r change the rule   x stop repeating   esc back"))
 	return strings.Join(lines, "\n")
 }

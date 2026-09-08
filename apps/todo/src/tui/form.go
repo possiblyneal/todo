@@ -48,6 +48,13 @@ type draft struct {
 	// what the pairs already look like everywhere else they are shown.
 	Fields string
 
+	// occurrence is the date of a Series this draft was opened on, when the
+	// screen was opened on one date rather than on the Task itself. Saving
+	// detaches that date and the edit lands on the Task it becomes;
+	// escaping writes nothing, so the date is still an Occurrence. taskID
+	// is the recurring Task it would be lifted out of.
+	occurrence time.Time
+
 	// hadFields are the keys the Task carried when the screen opened. The
 	// store leaves a key alone unless it is named, so a key deleted from
 	// the text has to be named as removed rather than simply left out.

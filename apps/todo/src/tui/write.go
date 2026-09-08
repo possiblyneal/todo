@@ -21,6 +21,33 @@ func (m *Model) save(d *draft) error {
 		return err
 	}
 
+	// A draft opened on one date of a Series detaches that date and puts the
+	// edit on the Task it becomes: "this week's is at 3pm instead" is that
+	// and nothing else. The copy is its own tree with its own Lease, so the
+	// second one is taken inside the first and given back with it.
+	if !d.occurrence.IsZero() {
+		was, ok := m.taskByID(d.taskID)
+		if !ok {
+			return fmt.Errorf("that task is no longer in view")
+		}
+		// The copy comes out carrying the recurring Task's Lists and Tags
+		// and none of its Attachments, so that is what the form's
+		// memberships are the difference from.
+		was.Attachments = nil
+		return m.store.WithLease(m.actor, d.taskID, store.WriteTTL, func() error {
+			id, err := m.store.DetachOccurrence(m.actor, d.taskID, d.occurrence)
+			if err != nil {
+				return err
+			}
+			return m.store.WithLease(m.actor, id, store.WriteTTL, func() error {
+				if err := m.store.EditTask(m.actor, id, a); err != nil {
+					return err
+				}
+				return m.memberships(id, was, d)
+			})
+		})
+	}
+
 	if d.taskID == "" {
 		id, err := m.store.AddTask(m.actor, a)
 		if err != nil {

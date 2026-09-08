@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"modernc.org/sqlite"
 )
 
 // The kinds of entry the Change History carries. Each is something that
@@ -653,26 +653,58 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	// The schema goes on under the write lock, in one transaction. Two of the
-	// triggers are a DROP followed by a CREATE, so that a store written by an
-	// older build gets the current definition; applied without the lock, two
-	// processes opening the same new store at once interleave those pairs and
-	// one of them fails on a trigger the other has just created.
+	for attempt := range openAttempts {
+		err = applySchema(db)
+		if err == nil {
+			return &Store{db: db, path: path}, nil
+		}
+		if !busy(err) {
+			break
+		}
+		time.Sleep(time.Duration(attempt+1) * openBackoff)
+	}
+	_ = db.Close()
+	return nil, fmt.Errorf("apply schema to %s: %w", path, err)
+}
+
+// openAttempts and openBackoff are the retry a cold start needs. Turning the
+// write-ahead log on is a journal_mode change that takes the exclusive lock,
+// and SQLite does not run the busy handler for one, so busy_timeout cannot
+// cover it however long it is set: several processes opening a store that
+// does not exist yet leave all but one with SQLITE_BUSY. The loser is only
+// waiting for the winner's switch to land, which is milliseconds, so a few
+// tries backing off linearly is the whole of it. Every open after the first
+// finds the log already on and the switch a no-op.
+const (
+	openAttempts = 5
+	openBackoff  = 20 * time.Millisecond
+)
+
+// busy says whether an error is SQLite refusing because somebody else holds
+// the lock. The driver carries the code on its own error type rather than a
+// sentinel, and 5 is SQLITE_BUSY, whose value is fixed by SQLite's result
+// codes and lives otherwise only in a generated package this has no reason
+// to import.
+func busy(err error) bool {
+	var e *sqlite.Error
+	return errors.As(err, &e) && e.Code() == 5
+}
+
+// applySchema puts the schema on under the write lock, in one transaction.
+// Two of the triggers are a DROP followed by a CREATE, so that a store
+// written by an older build gets the current definition; applied without the
+// lock, two processes opening the same store at once interleave those pairs
+// and one of them fails on a trigger the other has just created.
+func applySchema(db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("apply schema to %s: %w", path, err)
+		return err
 	}
 	if _, err := tx.Exec(schema); err != nil {
 		_ = tx.Rollback()
-		_ = db.Close()
-		return nil, fmt.Errorf("apply schema to %s: %w", path, err)
+		return err
 	}
-	if err := tx.Commit(); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("apply schema to %s: %w", path, err)
-	}
-	return &Store{db: db, path: path}, nil
+	return tx.Commit()
 }
 
 // WALToken is a cheap stand-in for "has anyone written since I last looked".

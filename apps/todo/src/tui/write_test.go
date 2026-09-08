@@ -672,3 +672,105 @@ func taskIn(t *testing.T, s *store.Store, id string) (store.Task, bool) {
 	}
 	return store.Task{}, false
 }
+
+// A snoozed Task is out of the way, not gone. "z" is how it comes back into
+// view, which is the only way the edit screen can be opened on one to take
+// the snooze off again.
+func TestZBringsSnoozedTasksBackIntoView(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	task, _ := m.selected()
+	if err := m.snoozeUntil(task.ID, time.Now().UTC().Add(24*time.Hour)); err != nil {
+		t.Fatalf("snooze: %v", err)
+	}
+	if err := m.refresh(); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if _, drawn := m.taskByID(task.ID); drawn {
+		t.Fatal("a snoozed Task is still in the main view")
+	}
+
+	m = press(m, "z")
+	back, drawn := m.taskByID(task.ID)
+	if !drawn {
+		t.Fatal("z did not bring the snoozed Task back")
+	}
+	if !slices.Contains(back.Marks(), "snoozed") {
+		t.Errorf("the Task came back marked %v, want it to say snoozed", back.Marks())
+	}
+
+	// And off again, because the point of the key is that the view goes
+	// back to what is in front of you.
+	m = press(m, "z")
+	if _, drawn := m.taskByID(task.ID); drawn {
+		t.Error("z a second time left the snoozed Task in view")
+	}
+}
+
+// #20 says editing one date Detaches it, so the edit is how a person says
+// "this week's is different" without having to learn that detaching is the way
+// to say it. Escaping the form says nothing, so the date stays an Occurrence.
+func TestEditingOneDateDetachesIt(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	apples, _ := taskNamed(m, "Buy apples")
+	carry(t, s, apples.ID, func() error {
+		_, err := s.Repeat("alice", apples.ID, "every week")
+		return err
+	})
+	m.tasks.Select(indexOf(t, m, apples.ID))
+	m, _ = m.run("/repeat")
+	on := m.rep.dates[0].Date
+
+	// Escaping writes nothing: the Series still produces the date.
+	m = press(m, "e")
+	if m.draft == nil || m.editor == nil {
+		t.Fatal("e opened no form on the date under the cursor")
+	}
+	m = press(m, "esc")
+	dates, err := s.Occurrences(apples.ID, on, on)
+	if err != nil {
+		t.Fatalf("Occurrences: %v", err)
+	}
+	if len(dates) != 1 || dates[0].State != store.Pending {
+		t.Fatalf("escaping the form left %+v, want the date still pending", dates)
+	}
+
+	m, _ = m.run("/repeat")
+	m = press(m, "e")
+	d := m.draft
+	if d.Deadline != on.Format(dateLayouts[1]) {
+		t.Errorf("the form opened on deadline %q, want the date %s", d.Deadline, on.Format(dateLayouts[1]))
+	}
+	d.Title = "Buy pears instead"
+	if err := m.save(d); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if err := m.refresh(); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+
+	// The date left the Series, and what it became carries the edit and the
+	// Lists the recurring Task was on.
+	if dates, err := s.Occurrences(apples.ID, on, on); err != nil || len(dates) != 0 {
+		t.Errorf("the Series still produces %+v (%v), want the date detached", dates, err)
+	}
+	edited, ok := taskNamed(m, "Buy pears instead")
+	if !ok {
+		t.Fatal("the edited date is not a Task of its own")
+	}
+	if edited.ID == apples.ID {
+		t.Fatal("the edit landed on the recurring Task rather than on the date")
+	}
+	if got := edited.Deadline.Local().Format(dateLayouts[1]); got != on.Format(dateLayouts[1]) {
+		t.Errorf("the detached Task is due %s, want %s", got, on.Format(dateLayouts[1]))
+	}
+	if !slices.Equal(edited.Lists, apples.Lists) {
+		t.Errorf("the detached Task is on %v, want the recurring Task's %v", edited.Lists, apples.Lists)
+	}
+	if again, ok := taskNamed(m, "Buy apples"); !ok || again.ID != apples.ID {
+		t.Error("the recurring Task did not survive the edit under its own title")
+	}
+}

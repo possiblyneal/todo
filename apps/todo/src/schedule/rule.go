@@ -301,28 +301,37 @@ func monthly(anchor time.Time, months int) time.Time {
 	return time.Date(first.Year(), first.Month(), min(anchor.Day(), last), 0, 0, 0, 0, anchor.Location())
 }
 
-// Next is the first date the rule produces on or after from, or the zero time
-// if the rule has run out.
+// Next is the first date the rule produces on or after from, and whether there
+// is one at all. The second return is what tells a rule that has not started
+// yet from one that has run out: both come back with the zero date, and only
+// the first of them will produce anything ever again.
 //
-// The window is two of the rule's own steps rather than a fixed year, because
-// a fixed year cannot see past a rule whose step is longer than one: "every 60
-// weeks" produces nothing inside 366 days and would read as run out.
-func (r Rule) Next(from time.Time) time.Time {
+// The search starts at the anchor when the anchor is still ahead, because a
+// window measured from from would end before a rule that starts next year says
+// anything. The window itself is two of the rule's own steps rather than a
+// fixed year, because a fixed year cannot see past a rule whose step is longer
+// than one: "every 60 weeks" produces nothing inside 366 days and would read as
+// run out.
+func (r Rule) Next(from time.Time) (time.Time, bool) {
+	start := day(from)
+	if anchor := day(r.Anchor); anchor.After(start) {
+		start = anchor
+	}
 	every := max(r.Every, 1)
 	var to time.Time
 	switch r.Unit {
 	case Monthly:
-		to = day(from).AddDate(0, 2*every+1, 0)
+		to = start.AddDate(0, 2*every+1, 0)
 	case Weekly:
-		to = day(from).AddDate(0, 0, 14*every+7)
+		to = start.AddDate(0, 0, 14*every+7)
 	default:
-		to = day(from).AddDate(0, 0, 2*every+1)
+		to = start.AddDate(0, 0, 2*every+1)
 	}
-	dates := r.Between(from, to)
+	dates := r.Between(start, to)
 	if len(dates) == 0 {
-		return time.Time{}
+		return time.Time{}, false
 	}
-	return dates[0]
+	return dates[0], true
 }
 
 // Produces says whether the rule lands on a date, which is what tells a marker
