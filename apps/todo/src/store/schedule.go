@@ -180,8 +180,27 @@ func (s *Store) DetachOccurrence(actor, taskID string, on time.Time) (string, er
 	if err != nil {
 		return "", err
 	}
-	date := day(on)
-	attributes, err := detachedFrom(source, date).payload(true)
+	copied := Detached(source, on)
+	return s.detach(actor, taskID, on, detachedFrom(copied), copied.Lists, copied.Tags)
+}
+
+// DetachEdited lifts the date out and writes an edit on the Task it becomes,
+// in the transaction the detach already opens. Editing one date is how a
+// person says "this week's is different", and the two halves of that sentence
+// cannot come apart: without this the edit is a second write, and one that
+// fails leaves a detached Task saying what the recurring one said.
+//
+// The attributes are the whole of the copy rather than a change to it, because
+// the surface that asks for this has shown the person every attribute the Task
+// would have.
+func (s *Store) DetachEdited(actor, taskID string, on time.Time, a Attributes, lists, tags []string) (string, error) {
+	return s.detach(actor, taskID, on, a, lists, tags)
+}
+
+// detach is the write both of them make: the mark in Scheduling and the
+// ordinary Task in Tracking, together or not at all.
+func (s *Store) detach(actor, taskID string, on time.Time, a Attributes, lists, tags []string) (string, error) {
+	attributes, err := a.payload(true)
 	if err != nil {
 		return "", err
 	}
@@ -207,8 +226,8 @@ func (s *Store) DetachOccurrence(actor, taskID string, on time.Time) (string, er
 			key  string
 			ids  []string
 		}{
-			{KindTaskListed, "list", source.Lists},
-			{KindTagAttached, "tag", source.Tags},
+			{KindTaskListed, "list", lists},
+			{KindTagAttached, "tag", tags},
 		} {
 			for _, other := range m.ids {
 				if _, err := guardedAppend(tx, actor, m.kind, id, id,
@@ -226,14 +245,31 @@ func (s *Store) DetachOccurrence(actor, taskID string, on time.Time) (string, er
 	return id, nil
 }
 
-// detachedFrom copies a recurring Task's content onto the date it was pulled
-// off. The copy carries no Series: it is an ordinary Task from here on.
-func detachedFrom(t Task, date time.Time) Attributes {
+// Detached is the Task a date becomes when it is lifted out of its Series: the
+// recurring Task's content, deadlined on that date, carrying its Lists and its
+// Tags, and repeating on nothing. It carries no Attachments and no snooze,
+// because a pointer and a snooze belong to the Task that holds them rather
+// than to the content a date is copied from.
+//
+// It writes nothing. A surface opens an edit on what the date would become by
+// asking here first, so what it shows and what a detach writes are the one
+// statement of the shape.
+func Detached(t Task, on time.Time) Task {
+	t.ID, t.Parent, t.Depth, t.Series = "", "", 0, ""
+	t.Deadline = day(on)
+	t.CreatedAt, t.CompletedAt, t.DeletedAt = time.Time{}, time.Time{}, time.Time{}
+	t.SnoozedUntil = time.Time{}
+	t.Attachments = nil
+	return t
+}
+
+// detachedFrom is the copy as the append writes it down.
+func detachedFrom(t Task) Attributes {
 	a := Attributes{
 		Title:       Set(t.Title),
 		Description: Set(t.Description),
 		Why:         Set(t.Why),
-		Deadline:    Set(date),
+		Deadline:    Set(t.Deadline),
 		Estimate:    Set(t.Estimate),
 		Priority:    Set(t.Priority),
 		Impact:      Set(t.Impact),
@@ -359,7 +395,12 @@ func (s *Store) taskByID(id string) (Task, error) {
 }
 
 // day drops the time of day. A Series produces dates, not appointments.
+//
+// The date is built in the local zone, which is the zone schedule computes an
+// Occurrence in and the zone every surface writes a deadline in. Building it
+// in UTC gave a detached Task a deadline an hour or five off every other one,
+// for the same day.
 func day(t time.Time) time.Time {
 	year, month, date := t.Date()
-	return time.Date(year, month, date, 0, 0, 0, 0, time.UTC)
+	return time.Date(year, month, date, 0, 0, 0, 0, time.Local)
 }

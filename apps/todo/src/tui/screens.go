@@ -55,10 +55,18 @@ func (m Model) updateEditor(msg tea.Msg) (Model, tea.Cmd) {
 	m.editor, _ = form.(*huh.Form)
 	switch m.editor.State {
 	case huh.StateCompleted:
+		occurrence := m.draft.occurrence
 		if err := m.save(m.draft); err != nil {
 			m.err = err
 		} else {
 			m.err = m.refresh()
+			// A saved edit on one date detached it, so the Scheduling
+			// screen it was opened from has nothing left to say about
+			// it. Escaping does not come through here, which is how it
+			// comes back to that screen with the date still there.
+			if !occurrence.IsZero() {
+				m.rep = nil
+			}
 		}
 		m.editor, m.draft = nil, nil
 	case huh.StateAborted:
@@ -157,14 +165,6 @@ func (m Model) screen() (string, bool) {
 		return boxStyle.Render(m.breakdownView()), true
 	case m.ask != nil:
 		return boxStyle.Render(m.inquiryView()), true
-	case m.rep != nil:
-		if m.rep.form != nil {
-			return strings.Join([]string{
-				boxStyle.Render(m.rep.form.View()),
-				dimStyle.Render(m.repeatView()),
-			}, "\n"), true
-		}
-		return boxStyle.Render(m.repeatView()), true
 	case m.files != nil:
 		under := ""
 		if m.editor != nil {
@@ -179,6 +179,14 @@ func (m Model) screen() (string, bool) {
 		return strings.Join([]string{boxStyle.Render(m.popup.View()), under}, "\n"), true
 	case m.editor != nil:
 		return m.editor.View(), true
+	case m.rep != nil:
+		if m.rep.form != nil {
+			return strings.Join([]string{
+				boxStyle.Render(m.rep.form.View()),
+				dimStyle.Render(m.repeatView()),
+			}, "\n"), true
+		}
+		return boxStyle.Render(m.repeatView()), true
 	case m.paletteOpen:
 		return boxStyle.Render(m.palette.View()), true
 	}

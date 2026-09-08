@@ -145,26 +145,29 @@ func (m Model) updateRepeat(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 // editOccurrence opens the add/edit screen on what the date under the cursor
-// would become. Nothing is written here: the detach happens on save, so
-// escaping the form leaves the date an Occurrence of the Series.
-//
-// The Scheduling screen closes on the way, the same as an explicit detach
-// does: whichever way the date leaves the Series, this screen no longer has
-// anything to say about it.
+// would become, which the store says rather than this screen guessing. Nothing
+// is written here: the detach happens on save, so escaping the form comes back
+// to this screen with the date still an Occurrence.
 func (m Model) editOccurrence() (Model, tea.Cmd) {
-	if m.rep.cursor < 0 || m.rep.cursor >= m.drawn() {
+	on, ok := m.dateUnderCursor()
+	if !ok {
 		return m, nil
 	}
-	d := draftOf(m.rep.task)
-	d.occurrence = m.rep.dates[m.rep.cursor].Date
-	// What the store lifts out is the recurring Task's attributes with the
-	// date as its deadline, carrying no Attachments and no snooze, so that
-	// is the Task the form opens on rather than the recurring one.
-	d.Deadline = d.occurrence.Format(dateLayouts[1])
-	d.Snooze, d.Attachments = "", nil
-	m.rep = nil
+	d := draftOf(store.Detached(m.rep.task, on))
+	// The copy has no id until it is written, so the draft names the
+	// recurring Task it would be lifted out of and the date to lift.
+	d.taskID, d.occurrence = m.rep.task.ID, on
 	m.draft, m.editor = d, m.form(d)
 	return m, m.editor.Init()
+}
+
+// dateUnderCursor is the date the marks and the edit act on, and whether the
+// cursor is on one at all: a rule that has run out draws no dates.
+func (m Model) dateUnderCursor() (time.Time, bool) {
+	if m.rep.cursor < 0 || m.rep.cursor >= m.drawn() {
+		return time.Time{}, false
+	}
+	return m.rep.dates[m.rep.cursor].Date, true
 }
 
 // drawn is how many dates are on the screen, which is what the cursor moves
@@ -175,10 +178,10 @@ func (m Model) drawn() int { return min(len(m.rep.dates), shown) }
 // closes the screen: the date is an ordinary Task now and the Series no longer
 // produces it, so there is nothing left here that is about it.
 func (m Model) mark(what string) (Model, tea.Cmd) {
-	if m.rep.cursor < 0 || m.rep.cursor >= m.drawn() {
+	on, ok := m.dateUnderCursor()
+	if !ok {
 		return m, nil
 	}
-	on := m.rep.dates[m.rep.cursor].Date
 	switch what {
 	case "t":
 		return m.repeatWrite(func(id string) error { return m.store.TickOccurrence(m.actor, id, on) })

@@ -236,14 +236,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case m.ask != nil:
 		next, cmd := m.updateInquiry(msg)
 		return next, cmd
-	case m.rep != nil:
-		next, cmd := m.updateRepeat(msg)
-		return next, cmd
 	case m.popup != nil:
 		next, cmd := m.updatePopup(msg)
 		return next, cmd
 	case m.editor != nil:
 		next, cmd := m.updateEditor(msg)
+		return next, cmd
+	case m.rep != nil:
+		next, cmd := m.updateRepeat(msg)
 		return next, cmd
 	case m.paletteOpen:
 		next, cmd := m.updatePalette(msg)

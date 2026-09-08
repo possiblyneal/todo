@@ -658,7 +658,7 @@ func Open(path string) (*Store, error) {
 		if err == nil {
 			return &Store{db: db, path: path}, nil
 		}
-		if !busy(err) {
+		if !busy(err) || attempt == openAttempts-1 {
 			break
 		}
 		time.Sleep(time.Duration(attempt+1) * openBackoff)
@@ -684,10 +684,11 @@ const (
 // the lock. The driver carries the code on its own error type rather than a
 // sentinel, and 5 is SQLITE_BUSY, whose value is fixed by SQLite's result
 // codes and lives otherwise only in a generated package this has no reason
-// to import.
+// to import. The low byte is what is compared, because an extended code like
+// SQLITE_BUSY_SNAPSHOT is the same refusal with more said about it.
 func busy(err error) bool {
 	var e *sqlite.Error
-	return errors.As(err, &e) && e.Code() == 5
+	return errors.As(err, &e) && e.Code()&0xff == 5
 }
 
 // applySchema puts the schema on under the write lock, in one transaction.

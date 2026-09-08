@@ -303,8 +303,9 @@ func monthly(anchor time.Time, months int) time.Time {
 
 // Next is the first date the rule produces on or after from, and whether there
 // is one at all. The second return is what tells a rule that has not started
-// yet from one that has run out: both come back with the zero date, and only
-// the first of them will produce anything ever again.
+// yet from one that has run out: a rule anchored in the future comes back with
+// its own first date and true, and only a rule with nothing left comes back
+// with the zero date and false.
 //
 // The search starts at the anchor when the anchor is still ahead, because a
 // window measured from from would end before a rule that starts next year says
