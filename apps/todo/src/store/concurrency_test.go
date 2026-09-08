@@ -182,3 +182,42 @@ func TestProcessesReopeningOneStoreAtOnce(t *testing.T) {
 		}
 	}
 }
+
+// SQLite will not run a busy handler for the journal_mode change that turns
+// the write-ahead log on, so the process that loses that race gets
+// SQLITE_BUSY however long busy_timeout is. Open retries instead. The store
+// is created by the children rather than seeded, because the switch is a
+// no-op on every open after the first and there is no race left to lose.
+func TestProcessesOpeningABrandNewStoreAtOnce(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+
+	// Rounds, because the loser is decided by the scheduler: one round
+	// passing says nothing, and the defect showed in three rounds of five.
+	for round := range 5 {
+		path := filepath.Join(t.TempDir(), "todo.db")
+		const openers = 8
+		said := make([]bytes.Buffer, openers)
+		children := make([]*exec.Cmd, openers)
+		for i := range children {
+			child := exec.Command(self)
+			child.Env = append(os.Environ(),
+				envChildDB+"="+path,
+				envChildActor+"=opener-"+strconv.Itoa(i),
+				envChildCount+"=0",
+			)
+			child.Stderr = &said[i]
+			children[i] = child
+			if err := child.Start(); err != nil {
+				t.Fatalf("round %d opener %d: %v", round, i, err)
+			}
+		}
+		for i, child := range children {
+			if err := child.Wait(); err != nil {
+				t.Errorf("round %d opener %d: %v: %s", round, i, err, said[i].String())
+			}
+		}
+	}
+}

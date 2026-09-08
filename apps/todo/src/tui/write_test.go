@@ -672,3 +672,138 @@ func taskIn(t *testing.T, s *store.Store, id string) (store.Task, bool) {
 	}
 	return store.Task{}, false
 }
+
+// A snoozed Task is out of the way, not gone. "z" is how it comes back into
+// view, which is the only way the edit screen can be opened on one to take
+// the snooze off again.
+func TestZBringsSnoozedTasksBackIntoView(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	task, _ := m.selected()
+	if err := m.snoozeUntil(task.ID, time.Now().UTC().Add(24*time.Hour)); err != nil {
+		t.Fatalf("snooze: %v", err)
+	}
+	if err := m.refresh(); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if _, drawn := m.taskByID(task.ID); drawn {
+		t.Fatal("a snoozed Task is still in the main view")
+	}
+
+	m = press(m, "z")
+	back, drawn := m.taskByID(task.ID)
+	if !drawn {
+		t.Fatal("z did not bring the snoozed Task back")
+	}
+	if !slices.Contains(back.Marks(), "snoozed") {
+		t.Errorf("the Task came back marked %v, want it to say snoozed", back.Marks())
+	}
+
+	// And off again, because the point of the key is that the view goes
+	// back to what is in front of you.
+	m = press(m, "z")
+	if _, drawn := m.taskByID(task.ID); drawn {
+		t.Error("z a second time left the snoozed Task in view")
+	}
+
+	// And back on, because the snooze is taken off from the screen it is
+	// visible on. #30 was that this path was unreachable, so the edit goes
+	// through a Task the view actually holds.
+	m = press(m, "z")
+	off := draftOf(back)
+	off.Snooze = ""
+	if err := m.save(off); err != nil {
+		t.Fatalf("clearing the snooze: %v", err)
+	}
+	if err := m.refresh(); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	cleared, drawn := m.taskByID(task.ID)
+	if !drawn {
+		t.Fatal("the Task went out of view when its snooze came off")
+	}
+	if slices.Contains(cleared.Marks(), "snoozed") {
+		t.Errorf("the Task is still marked %v after its snooze was cleared", cleared.Marks())
+	}
+}
+
+// #20 says editing one date Detaches it, so the edit is how a person says
+// "this week's is different" without having to learn that detaching is the way
+// to say it. Escaping the form says nothing, so the date stays an Occurrence.
+func TestEditingOneDateDetachesIt(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	apples, _ := taskNamed(m, "Buy apples")
+	carry(t, s, apples.ID, func() error {
+		_, err := s.Repeat("alice", apples.ID, "every week")
+		return err
+	})
+	m.tasks.Select(indexOf(t, m, apples.ID))
+	m, _ = m.run("/repeat")
+	on := m.rep.dates[0].Date
+
+	// Escaping writes nothing: the Series still produces the date, and the
+	// screen it was opened from is still the one in front of you.
+	m = press(m, "e")
+	if m.draft == nil || m.editor == nil {
+		t.Fatal("e opened no form on the date under the cursor")
+	}
+	m = press(m, "esc")
+	if m.rep == nil {
+		t.Error("escaping the form left the Scheduling screen behind")
+	}
+	dates, err := s.Occurrences(apples.ID, on, on)
+	if err != nil {
+		t.Fatalf("Occurrences: %v", err)
+	}
+	if len(dates) != 1 || dates[0].State != store.Pending {
+		t.Fatalf("escaping the form left %+v, want the date still pending", dates)
+	}
+
+	m = press(m, "e")
+	d := m.draft
+	if want := on.Format(dateLayouts[0]); d.Deadline != want {
+		t.Errorf("the form opened on deadline %q, want the date %s", d.Deadline, want)
+	}
+	if len(d.Attachments) != 0 || d.Snooze != "" {
+		t.Errorf("the form opened carrying %v and snooze %q, want neither", d.Attachments, d.Snooze)
+	}
+	d.Title = "Buy pears instead"
+	// A pointer typed on the way through is written under the copy's own
+	// Lease, not the recurring tree's, and the copy is a top-level Task of
+	// its own: guarding it with the wrong Lease refuses every time.
+	d.Attach = "https://example.invalid/pears"
+	if err := m.save(d); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if err := m.refresh(); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+
+	// The date left the Series, and what it became carries the edit and the
+	// Lists the recurring Task was on.
+	if dates, err := s.Occurrences(apples.ID, on, on); err != nil || len(dates) != 0 {
+		t.Errorf("the Series still produces %+v (%v), want the date detached", dates, err)
+	}
+	edited, ok := taskNamed(m, "Buy pears instead")
+	if !ok {
+		t.Fatal("the edited date is not a Task of its own")
+	}
+	if edited.ID == apples.ID {
+		t.Fatal("the edit landed on the recurring Task rather than on the date")
+	}
+	if got := edited.Deadline.Local().Format(dateLayouts[1]); got != on.Format(dateLayouts[1]) {
+		t.Errorf("the detached Task is due %s, want %s", got, on.Format(dateLayouts[1]))
+	}
+	if !slices.Equal(edited.Lists, apples.Lists) {
+		t.Errorf("the detached Task is on %v, want the recurring Task's %v", edited.Lists, apples.Lists)
+	}
+	if !slices.Contains(edited.Attachments, "https://example.invalid/pears") {
+		t.Errorf("the detached Task holds %v, want the pointer typed into the form", edited.Attachments)
+	}
+	if again, ok := taskNamed(m, "Buy apples"); !ok || again.ID != apples.ID {
+		t.Error("the recurring Task did not survive the edit under its own title")
+	}
+}

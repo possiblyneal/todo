@@ -21,6 +21,35 @@ func (m *Model) save(d *draft) error {
 		return err
 	}
 
+	// A draft opened on one date of a Series detaches that date and the edit
+	// lands on the Task it becomes: "this week's is at 3pm instead" is that
+	// and nothing else. The detach and the edit are one store call, so they
+	// cannot come apart; the Lease is the recurring tree's, which is what the
+	// mark is guarded by.
+	if !d.occurrence.IsZero() {
+		var id string
+		if err := m.store.WithLease(m.actor, d.taskID, store.WriteTTL, func() error {
+			var err error
+			id, err = m.store.DetachEdited(m.actor, d.taskID, d.occurrence, a, d.Lists, d.Tags)
+			return err
+		}); err != nil {
+			return err
+		}
+		// A pointer typed into the form is the one thing the copy does
+		// not come out with, so it is written after, and under the
+		// copy's own Lease: the copy is a top-level Task of its own,
+		// and the Lease the detach took on it was given back inside
+		// the transaction that made it. The pointer is the one part
+		// of this that is not atomic; a failure here leaves the
+		// detached Task edited and the pointer one more line to type.
+		if strings.TrimSpace(d.Attach) == "" {
+			return nil
+		}
+		return m.store.WithLease(m.actor, id, store.WriteTTL, func() error {
+			return m.store.Attach(m.actor, id, d.Attach)
+		})
+	}
+
 	if d.taskID == "" {
 		id, err := m.store.AddTask(m.actor, a)
 		if err != nil {

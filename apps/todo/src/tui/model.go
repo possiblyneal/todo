@@ -56,8 +56,13 @@ type Model struct {
 	names  map[string]string
 	chosen map[string]bool // tag ids narrowing the view
 
-	list     string // the chosen List, or everyList
-	sort     store.Sort
+	list string // the chosen List, or everyList
+	sort store.Sort
+
+	// snoozed is whether the view is showing Tasks that are put away. It
+	// is off by default, because the main view means what is in front of
+	// you; "z" is how a snooze is looked at, and taken off.
+	snoozed  bool
 	dropdown bool
 	expanded bool
 
@@ -143,7 +148,7 @@ func (m *Model) refresh() error {
 	if err != nil {
 		return err
 	}
-	tasks, err := m.store.Tasks(store.Query{List: m.list, Sort: m.sort})
+	tasks, err := m.store.Tasks(store.Query{List: m.list, Sort: m.sort, IncludeSnoozed: m.snoozed})
 	if err != nil {
 		return err
 	}
@@ -231,14 +236,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case m.ask != nil:
 		next, cmd := m.updateInquiry(msg)
 		return next, cmd
-	case m.rep != nil:
-		next, cmd := m.updateRepeat(msg)
-		return next, cmd
 	case m.popup != nil:
 		next, cmd := m.updatePopup(msg)
 		return next, cmd
 	case m.editor != nil:
 		next, cmd := m.updateEditor(msg)
+		return next, cmd
+	case m.rep != nil:
+		next, cmd := m.updateRepeat(msg)
 		return next, cmd
 	case m.paletteOpen:
 		next, cmd := m.updatePalette(msg)
@@ -295,6 +300,11 @@ func (m Model) press(msg tea.KeyPressMsg) (bool, Model, tea.Cmd) {
 
 	case "s":
 		m.sort = nextSort(m.sort)
+		m.err = m.refresh()
+		return true, m, nil
+
+	case "z":
+		m.snoozed = !m.snoozed
 		m.err = m.refresh()
 		return true, m, nil
 
@@ -415,7 +425,7 @@ func (m Model) View() tea.View {
 // underneath when it is.
 func (m Model) header() string {
 	line := m.zones.Mark("listbox", headerStyle.Render("▾ "+m.listName())) +
-		dimStyle.Render("   sort "+string(m.sort)+"   / commands   f search   s sort   L lists   q quit")
+		dimStyle.Render("   sort "+string(m.sort)+"   / commands   f search   s sort   z snoozed   L lists   q quit")
 	if !m.dropdown {
 		return line
 	}

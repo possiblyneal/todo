@@ -101,14 +101,15 @@ func TestARuleStopsWhenItSaysItDoes(t *testing.T) {
 	same(t, r.Between(date(t, "2026-01-01"), date(t, "2026-12-31")),
 		"2026-01-01", "2026-01-02", "2026-01-03")
 
-	if next := r.Next(date(t, "2026-01-04")); !next.IsZero() {
+	if next, more := r.Next(date(t, "2026-01-04")); more {
 		t.Errorf("a finished rule offered %v, want nothing", next)
 	}
 }
 
 func TestNextIsTheFirstDateFromHere(t *testing.T) {
 	r := rule(t, "every week on fri from 2026-01-01")
-	if got := r.Next(date(t, "2026-01-05")).Format(dateLayout); got != "2026-01-09" {
+	next, _ := r.Next(date(t, "2026-01-05"))
+	if got := next.Format(dateLayout); got != "2026-01-09" {
 		t.Errorf("next after 2026-01-05 was %s, want 2026-01-09", got)
 	}
 	if !r.Produces(date(t, "2026-01-09")) {
@@ -143,8 +144,8 @@ func TestNextSeesPastALongStep(t *testing.T) {
 		{Every: 500, Unit: Daily, Anchor: from},
 		{Every: 30, Unit: Monthly, Anchor: from},
 	} {
-		next := r.Next(from)
-		if next.IsZero() {
+		next, more := r.Next(from)
+		if !more {
 			t.Errorf("%d %s read as a rule that had run out", r.Every, r.Unit)
 			continue
 		}
@@ -167,5 +168,23 @@ func TestADayNamedTwiceIsOneDay(t *testing.T) {
 	}
 	if got := r.String(); got != "every week on mon from 2026-01-05" {
 		t.Errorf("writes back %q", got)
+	}
+}
+
+// A rule anchored past the window Next searches has not started, which is not
+// the same as having run out. The zero time said both, so Next says which.
+func TestNextTellsNotStartedFromRunOut(t *testing.T) {
+	yet := rule(t, "every week from 2030-01-01")
+	next, more := yet.Next(date(t, "2026-01-05"))
+	if !more {
+		t.Fatal("a rule that has not started yet read as one that had run out")
+	}
+	if got := next.Format(dateLayout); got != "2030-01-01" {
+		t.Errorf("the first date of a future rule was %s, want 2030-01-01", got)
+	}
+
+	done := rule(t, "daily from 2026-01-01 until 2026-01-03")
+	if next, more := done.Next(date(t, "2026-01-04")); more || !next.IsZero() {
+		t.Errorf("a finished rule offered %v (more=%v), want nothing", next, more)
 	}
 }
