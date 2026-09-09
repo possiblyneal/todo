@@ -75,7 +75,7 @@ func TestAParentCannotCompleteWhileAChildIsOpen(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%s completed with an open child", id)
 		}
-		if !strings.Contains(err.Error(), "a parent cannot complete while a child is open") {
+		if !strings.Contains(err.Error(), "a parent cannot complete or decline while a child is open") {
 			t.Errorf("the refusal reads %v, want the domain's own words", err)
 		}
 	}

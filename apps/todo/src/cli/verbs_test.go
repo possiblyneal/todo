@@ -174,6 +174,35 @@ func TestSnoozeHidesATaskFromTheList(t *testing.T) {
 	}
 }
 
+// Declining is the lifecycle's other ending: the task leaves the everyday
+// list marked as refused rather than done, and reopening brings it back.
+func TestDecliningATaskEndsItWithoutCompletingIt(t *testing.T) {
+	storeInTemp(t)
+	t.Setenv("TODO_ACTOR", "alice")
+	id := added(t, "Rewrite it in Rust")
+
+	if code, _, errs := run(t, "decline", id); code != 0 {
+		t.Fatalf("todo decline exited %d: %s", code, errs)
+	}
+	if out := listed(t); strings.Contains(out, id) {
+		t.Errorf("a declined task is still listed: %q", out)
+	}
+	out := listed(t, "-all")
+	if !strings.Contains(out, "declined") {
+		t.Errorf("todo list -all does not mark it declined: %q", out)
+	}
+	if strings.Contains(out, "done") {
+		t.Errorf("todo list -all reads a declined task as done: %q", out)
+	}
+
+	if code, _, errs := run(t, "reopen", id); code != 0 {
+		t.Fatalf("todo reopen exited %d: %s", code, errs)
+	}
+	if out := listed(t); !strings.Contains(out, id) {
+		t.Errorf("a reopened task is not listed: %q", out)
+	}
+}
+
 func TestBadAttributeValuesAreUsageErrors(t *testing.T) {
 	storeInTemp(t)
 	t.Setenv("TODO_ACTOR", "alice")
@@ -183,6 +212,7 @@ func TestBadAttributeValuesAreUsageErrors(t *testing.T) {
 		{"add", "-estimate", "ninety minutes", "Buy milk"},
 		{"add", "-field", "novalue", "Buy milk"},
 		{"complete"},
+		{"decline"},
 		{"edit", "-title", "x"},
 	} {
 		if code, _, _ := run(t, args...); code != 2 {

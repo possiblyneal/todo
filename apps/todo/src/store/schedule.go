@@ -382,7 +382,7 @@ func (s *Store) marks(seriesID string) (map[string]string, error) {
 // taskByID reads one Task through the same read every surface uses, so a copy
 // made here sees exactly what a person sees.
 func (s *Store) taskByID(id string) (Task, error) {
-	tasks, err := s.Tasks(Query{IncludeCompleted: true, IncludeSnoozed: true, IncludeDeleted: true})
+	tasks, err := s.Tasks(Query{IncludeCompleted: true, IncludeDeclined: true, IncludeSnoozed: true, IncludeDeleted: true})
 	if err != nil {
 		return Task{}, err
 	}
