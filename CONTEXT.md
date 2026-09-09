@@ -85,5 +85,9 @@ _Avoid_: Bot, worker, daemon, service
 ### Outside the contexts
 
 **Broker**:
-The thing that infers, reached over the network and owned by none of the three contexts. It is shown Tasks and answers with questions or proposals; it holds nothing between calls, is never an Actor, and never writes. A proposal becomes a Task only when a person approves it, and the write is attributed to that person.
+The thing that infers, reached over the network and owned by none of the three contexts. It is shown Tasks and answers with questions, proposals, or one Task read out of a dump; it holds nothing between calls, is never an Actor, and never writes. A proposal becomes a Task only when a person approves it, and the write is attributed to that person.
 _Avoid_: The box, the agent, the AI, the model, the assistant
+
+**Dump**:
+What somebody says a Task is, in their own words and in one box, before any field is filled in. The Broker reads one and answers with the Task it describes, so what comes back is that person's own words sorted into attributes rather than a suggestion of work nobody asked for. A dump amending a Task carries that Task as it stands and comes back whole.
+_Avoid_: Prompt, note, request

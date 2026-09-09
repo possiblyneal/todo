@@ -161,6 +161,8 @@ func (m Model) createCollection() (Model, tea.Cmd) {
 // person creating a List can still see the Task they were writing.
 func (m Model) screen() (string, bool) {
 	switch {
+	case m.capturing != nil:
+		return boxStyle.Render(m.captureView()), true
 	case m.bd != nil:
 		return boxStyle.Render(m.breakdownView()), true
 	case m.ask != nil:

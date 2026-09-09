@@ -82,6 +82,10 @@ type Model struct {
 	popup *huh.Form
 	pop   *popupDraft
 
+	// capturing is a brain dump on its way to the broker: the box that
+	// opens the add and edit screens, before the form they fill in.
+	capturing *capture
+
 	// bd is a breakdown in progress and ask is a question about the list.
 	// Both are the box in src/ai; neither leaves anything behind unless a
 	// proposal is approved.
@@ -229,6 +233,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch {
 	case m.files != nil:
 		next, cmd := m.updateFiles(msg)
+		return next, cmd
+	case m.capturing != nil:
+		next, cmd := m.updateCapture(msg)
 		return next, cmd
 	case m.bd != nil:
 		next, cmd := m.updateBreakdown(msg)

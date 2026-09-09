@@ -64,7 +64,7 @@ func TestTheSnoozesAreShortcutsOnTheCalendar(t *testing.T) {
 func TestTheAddScreenPicksTheDeadline(t *testing.T) {
 	s := fixture(t)
 	m := newModel(t, s)
-	m, _ = m.run("/add")
+	m = addScreen(m)
 	if m.editor == nil {
 		t.Fatal("/add opened no screen")
 	}

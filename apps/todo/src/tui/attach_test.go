@@ -24,7 +24,7 @@ func TestTheAddScreenPicksAFileToPointAt(t *testing.T) {
 		t.Fatalf("writing the file: %v", err)
 	}
 
-	m, _ = m.run("/add")
+	m = addScreen(m)
 	m.draft.Title = "Fix the gutter"
 	m = press(m, "ctrl+a")
 	if m.files == nil {
@@ -142,7 +142,7 @@ func TestEscapeClosesTheSelector(t *testing.T) {
 	s := fixture(t)
 	m := newModel(t, s)
 
-	m, _ = m.run("/add")
+	m = addScreen(m)
 	m = press(m, "ctrl+a")
 	if m.files == nil {
 		t.Fatal("ctrl+a opened no file selector")

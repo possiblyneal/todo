@@ -156,7 +156,7 @@ func TestTheTUIHoldsNoTransactionWhileTheFormIsOpen(t *testing.T) {
 	defer func() { _ = s.Close() }()
 
 	m := newModel(t, s)
-	m, _ = m.run("/add")
+	m = addScreen(m)
 	if m.editor == nil {
 		t.Fatal("/add did not open the form")
 	}
@@ -307,7 +307,7 @@ func TestCreatingAListFromTheFormKeepsTheDraft(t *testing.T) {
 	s := fixture(t)
 	m := newModel(t, s)
 
-	m, _ = m.run("/add")
+	m = addScreen(m)
 	m.draft.Title = "Half typed"
 
 	m.pop = &popupDraft{Noun: "List", Name: "Errands", Colour: "amber"}
@@ -398,7 +398,7 @@ func TestTheWatchSurvivesAnOpenScreen(t *testing.T) {
 	s := fixture(t)
 	m := newModel(t, s)
 
-	m, _ = m.run("/add")
+	m = addScreen(m)
 	if m.editor == nil {
 		t.Fatal("/add did not open the form")
 	}
