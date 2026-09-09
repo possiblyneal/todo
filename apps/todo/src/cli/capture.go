@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -59,14 +60,17 @@ func captureTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "todo capture: %v\n", err)
 		return 1
 	}
+	// What was read is printed before it is judged, because `-dry` is where
+	// an answer this program cannot use is looked at rather than guessed at.
+	if *dry {
+		writeCapture(stdout, read)
+	}
 	a, err := attributesRead(read)
 	if err != nil {
 		fmt.Fprintf(stderr, "todo capture: %v\n", err)
 		return 1
 	}
-
 	if *dry {
-		writeCapture(stdout, read)
 		return 0
 	}
 
@@ -76,8 +80,7 @@ func captureTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	// Membership is a write to the Task, so it goes under the Task's own
-	// Lease like any other. The Task is written either way: a refusal here
-	// leaves it filed under nothing, which is one `todo edit` away.
+	// Lease like any other.
 	err = s.WithLease(actor(), id, store.WriteTTL, func() error {
 		for _, listID := range namedIn(read.Lists, listNames(lists)) {
 			if err := s.AddToList(actor(), id, listID); err != nil {
@@ -91,11 +94,11 @@ func captureTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 		}
 		return nil
 	})
-	if code := refuse(stderr, "capture", err); code != 0 {
-		return code
-	}
+	// The id is said whether or not membership went through: the Task is
+	// written by then, so a refusal leaves it filed under nothing, which is
+	// one `todo edit` away for whoever is told which Task it is.
 	fmt.Fprintln(stdout, id)
-	return 0
+	return refuse(stderr, "capture", err)
 }
 
 // attributesRead turns what the broker read into the attributes a Task is
@@ -150,11 +153,13 @@ func writeCapture(stdout io.Writer, read ai.Capture) {
 
 // namedIn is the ids of the Lists or Tags the broker chose by name, ignoring
 // case. A name that is not one of the offered ones is dropped: filing under a
-// List means one that exists, and creating one is a write of its own.
+// List means one that exists, and creating one is a write of its own. The same
+// name said twice is one id, so a membership is appended once.
 func namedIn(chosen []string, have map[string]string) []string {
 	var out []string
 	for _, name := range chosen {
-		if id, ok := have[strings.ToLower(strings.TrimSpace(name))]; ok {
+		id, ok := have[strings.ToLower(strings.TrimSpace(name))]
+		if ok && !slices.Contains(out, id) {
 			out = append(out, id)
 		}
 	}

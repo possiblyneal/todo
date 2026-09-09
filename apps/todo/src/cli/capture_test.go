@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
 
 // standIn is the broker, played by an httptest server, and TODO_AI_URL is how
@@ -112,4 +114,71 @@ func TestCaptureRefusesWhatIsNotATask(t *testing.T) {
 	if shown := listed(t); strings.TrimSpace(shown) != "" {
 		t.Errorf("a task was written from an answer that was not one: %q", shown)
 	}
+}
+
+// `-dry` prints what the broker read even when it is not something a Task can
+// be written from. That answer is exactly the one worth looking at, and the
+// flag is where it is looked at.
+func TestCaptureDryPrintsAnAnswerItCannotWriteFrom(t *testing.T) {
+	storeInTemp(t)
+	standIn(t, `{"description":"about the crown"}`)
+
+	code, out, errs := run(t, "capture", "-dry", "dentist about the crown")
+	if code != 1 {
+		t.Errorf("todo capture -dry exited %d, want 1", code)
+	}
+	if !strings.Contains(out, "about the crown") {
+		t.Errorf("todo capture -dry printed %q, want what the broker read", out)
+	}
+	if !strings.Contains(errs, "no title") {
+		t.Errorf("todo capture -dry said %q, want what is missing from it", errs)
+	}
+}
+
+// The same List named twice is one membership, so the Change History carries
+// one entry for it rather than two saying the same thing.
+func TestAListNamedTwiceIsAppendedOnce(t *testing.T) {
+	storeInTemp(t)
+	t.Setenv("TODO_ACTOR", "alice")
+	standIn(t, `{"title":"Call the dentist","lists":["Errands","errands"]}`)
+
+	code, out, errs := run(t, "lists", "new", "Errands")
+	if code != 0 {
+		t.Fatalf("todo lists new exited %d: %s", code, errs)
+	}
+	list := strings.TrimSpace(out)
+
+	code, out, errs = run(t, "capture", "dentist")
+	if code != 0 {
+		t.Fatalf("todo capture exited %d: %s", code, errs)
+	}
+	id := strings.TrimSpace(out)
+
+	if in := listed(t, "-list", list); !strings.Contains(in, id) {
+		t.Fatalf("the task is not in the List it was filed under: %q", in)
+	}
+	if n := listings(t, id); n != 1 {
+		t.Errorf("the Change History carries %d listings for it, want one", n)
+	}
+}
+
+// listings counts the Task Listed entries appended against one Task.
+func listings(t *testing.T, taskID string) int {
+	t.Helper()
+	s, err := open()
+	if err != nil {
+		t.Fatalf("open the store: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+	entries, err := s.History()
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	n := 0
+	for _, e := range entries {
+		if e.Kind == store.KindTaskListed && e.Subject == taskID {
+			n++
+		}
+	}
+	return n
 }

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,6 +17,10 @@ import (
 // today is the date the broker works a "tomorrow" out against. The ai package
 // reads no clock, so every dump carries one.
 const today = "2006-01-02, Monday"
+
+// handed is the key that hands a dump over. Enter is a new line in that box,
+// so it cannot be the key that submits it.
+const handed = "ctrl+d"
 
 // capture is a brain dump on its way to the broker: one box somebody says the
 // work into however they think of it, and the wait while it is read. What
@@ -63,9 +68,14 @@ func (m Model) captureForm(c *capture) *huh.Form {
 	if c.onto != nil {
 		title = "Say what changes about " + c.onto.Title
 	}
+	// ctrl+d never reaches the form: huh's Text acts on Next and Submit and
+	// then hands the same key to the textarea underneath, which binds ctrl+d
+	// to delete-forward, so a submit through huh would eat the character
+	// under the cursor on its way out. updateCapture takes the key instead,
+	// and these bindings are what the help line says.
 	keys := huh.NewDefaultKeyMap()
 	keys.Text.NewLine = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "new line"))
-	done := key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "read it"))
+	done := key.NewBinding(key.WithKeys(handed), key.WithHelp(handed, "read it"))
 	keys.Text.Next, keys.Text.Submit = done, done
 
 	return huh.NewForm(huh.NewGroup(
@@ -83,6 +93,9 @@ func (m Model) updateCapture(msg tea.Msg) (Model, tea.Cmd) {
 		if msg.String() == "esc" || (m.capturing.waiting && msg.String() == "ctrl+c") {
 			m.capturing = nil
 			return m, nil
+		}
+		if msg.String() == handed && !m.capturing.waiting {
+			return m.hand()
 		}
 
 	case readMsg:
@@ -103,21 +116,26 @@ func (m Model) updateCapture(msg tea.Msg) (Model, tea.Cmd) {
 	}
 	form, cmd := m.capturing.form.Update(msg)
 	m.capturing.form, _ = form.(*huh.Form)
-	switch m.capturing.form.State {
-	case huh.StateCompleted:
-		// An empty box is the way past the broker: the form itself, on
-		// whatever the screen was opened on.
-		if strings.TrimSpace(m.capturing.Text) == "" {
-			onto := m.capturing.onto
-			m.capturing = nil
-			return m.edit(blank(onto))
-		}
-		m.capturing.waiting = true
-		return m, m.read(m.capturing)
-	case huh.StateAborted:
+	// There is no completed state to handle: the only keys that would
+	// complete a one-field form are Next and Submit, and both are the key
+	// intercepted above, so a completed form here would be a keymap that
+	// has changed underneath this screen.
+	if m.capturing.form.State == huh.StateAborted {
 		m.capturing = nil
 	}
 	return m, cmd
+}
+
+// hand is ctrl+d: the dump goes to the broker, or, when there is nothing in
+// the box, straight to the form the broker would have filled in.
+func (m Model) hand() (Model, tea.Cmd) {
+	if strings.TrimSpace(m.capturing.Text) == "" {
+		onto := m.capturing.onto
+		m.capturing = nil
+		return m.edit(blank(onto))
+	}
+	m.capturing.waiting = true
+	return m, m.read(m.capturing)
 }
 
 // edit opens the add or edit screen on a draft, which is the one gate every
@@ -224,14 +242,18 @@ func (m Model) drafted(read ai.Capture, onto *store.Task) *draft {
 
 // matched turns the names the broker chose into ids. A name that is not one of
 // the offered ones is dropped: filing under a List means one that exists, and
-// creating one is a write of its own that nobody asked for here.
+// creating one is a write of its own that nobody asked for here. The same name
+// said twice is one id: names are matched without case, so "work" and "Work"
+// are the same List, and carrying it twice would append the membership twice.
 func matched[T any](names []string, have []T, of func(T) (id, name string)) []string {
 	var out []string
 	for _, name := range names {
 		for _, one := range have {
 			id, known := of(one)
 			if strings.EqualFold(known, strings.TrimSpace(name)) {
-				out = append(out, id)
+				if !slices.Contains(out, id) {
+					out = append(out, id)
+				}
 				break
 			}
 		}

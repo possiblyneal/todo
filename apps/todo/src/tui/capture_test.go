@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -187,5 +191,59 @@ func TestABrokerThatFailsLeavesNothingOpen(t *testing.T) {
 	}
 	if m.err == nil || !strings.Contains(m.err.Error(), "not a task") {
 		t.Errorf("the footer says %v, want what the broker did wrong", m.err)
+	}
+}
+
+// ctrl+d is a submit here and a delete-forward in the textarea underneath, so
+// the key cannot be allowed to reach the form: handing a dump over with the
+// cursor anywhere but the end would otherwise eat the character under it.
+func TestHandingADumpOverKeepsEveryCharacterOfIt(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	var sent string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		sent = string(body)
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]any{"content": dentist}}},
+		})
+	}))
+	t.Cleanup(srv.Close)
+	m.ai = &ai.Client{BaseURL: srv.URL + "/v1", Model: "stand-in", HTTP: srv.Client()}
+
+	m, cmd := m.run("/add")
+	m = send(m, cmd())
+	m = typeIn(m, "dentist about the crown")
+	m = send(m, tea.KeyPressMsg{Code: tea.KeyLeft})
+	m = send(m, tea.KeyPressMsg{Code: tea.KeyLeft})
+	m = done(m)
+
+	if !strings.Contains(sent, "dentist about the crown") {
+		t.Errorf("the broker was sent %q, want every character that was typed", sent)
+	}
+}
+
+// The same name said twice is one id. The broker choosing "Home" and "home"
+// would otherwise carry the List twice and append the membership twice.
+func TestANameSaidTwiceIsCarriedOnce(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+	m.ai = standIn(t, `{"title":"Call the dentist","lists":["Home","home"],"tags":["urgent","Urgent"]}`)
+
+	m, cmd := m.run("/add")
+	m = send(m, cmd())
+	m = typeIn(m, "dentist")
+	m = done(m)
+
+	if m.draft == nil {
+		t.Fatalf("the form did not open: %v", m.err)
+	}
+	if !slices.Equal(m.draft.Lists, []string{idOf(t, "Home", m.lists, m.tags)}) {
+		t.Errorf("the draft is in Lists %v, want Home once", m.draft.Lists)
+	}
+	if !slices.Equal(m.draft.Tags, []string{idOf(t, "urgent", m.lists, m.tags)}) {
+		t.Errorf("the draft carries Tags %v, want urgent once", m.draft.Tags)
 	}
 }
