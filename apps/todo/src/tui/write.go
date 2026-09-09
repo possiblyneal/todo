@@ -127,13 +127,15 @@ func added(was, now []string) []string {
 	return out
 }
 
-// lifecycle completes, reopens or deletes the Task under the cursor, each one
-// taking the Lease covering its tree and giving it back.
+// lifecycle completes, declines, reopens or deletes the Task under the cursor,
+// each one taking the Lease covering its tree and giving it back.
 func (m *Model) lifecycle(taskID, what string) error {
 	return m.store.WithLease(m.actor, taskID, store.WriteTTL, func() error {
 		switch what {
 		case "complete":
 			return m.store.CompleteTask(m.actor, taskID)
+		case "decline":
+			return m.store.DeclineTask(m.actor, taskID)
 		case "reopen":
 			return m.store.ReopenTask(m.actor, taskID)
 		case "delete":

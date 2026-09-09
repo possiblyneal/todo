@@ -260,6 +260,49 @@ func TestThePaletteRunsTheChosenCommand(t *testing.T) {
 	}
 }
 
+// /decline is the palette's other ending, and it takes the same Lease the
+// other lifecycle commands do.
+func TestThePaletteDeclinesTheTaskUnderTheCursor(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	// Declining refuses over an open child, so the cursor goes to a leaf.
+	for {
+		task, ok := m.selected()
+		if ok && task.Title == "Buy apples" {
+			break
+		}
+		m = press(m, "j")
+	}
+	task, _ := m.selected()
+
+	m, _ = m.run("/decline")
+	if m.err != nil {
+		t.Fatalf("/decline reported %v", m.err)
+	}
+
+	declined, err := s.Tasks(store.Query{IncludeDeclined: true})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	var seen bool
+	for _, got := range declined {
+		if got.ID != task.ID {
+			continue
+		}
+		seen = true
+		if got.DeclinedAt.IsZero() {
+			t.Error("/decline did not decline the Task under the cursor")
+		}
+		if !got.CompletedAt.IsZero() {
+			t.Error("/decline completed the Task instead of declining it")
+		}
+	}
+	if !seen {
+		t.Error("the declined Task is not readable with IncludeDeclined")
+	}
+}
+
 func TestCreatingAListFromTheFormKeepsTheDraft(t *testing.T) {
 	s := fixture(t)
 	m := newModel(t, s)

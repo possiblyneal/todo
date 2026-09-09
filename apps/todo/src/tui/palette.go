@@ -26,6 +26,7 @@ func commands() []list.Item {
 		command{"/add", "a new Task"},
 		command{"/edit", "the Task under the cursor"},
 		command{"/complete", "the Task under the cursor"},
+		command{"/decline", "the Task under the cursor: it will not be done"},
 		command{"/reopen", "the Task under the cursor"},
 		command{"/delete", "the Task under the cursor"},
 		command{"/list", "a new List"},
@@ -98,7 +99,7 @@ func (m Model) run(name string) (Model, tea.Cmd) {
 		m.editor = m.form(m.draft)
 		return m, m.editor.Init()
 
-	case "/complete", "/reopen", "/delete":
+	case "/complete", "/decline", "/reopen", "/delete":
 		what := strings.TrimPrefix(name, "/")
 		return m.onSelected(func(id string) error { return m.lifecycle(id, what) })
 

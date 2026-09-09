@@ -199,7 +199,7 @@ func addTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 
 func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	fs := flags("list", stderr)
-	all := fs.Bool("all", false, "include completed, snoozed and deleted tasks")
+	all := fs.Bool("all", false, "include completed, declined, snoozed and deleted tasks")
 	in := fs.String("list", "", "only the tasks in this list, by id")
 	sort := fs.String("sort", string(store.SortCreated),
 		"order siblings by "+strings.Join(store.SortNames(), ", "))
@@ -208,6 +208,7 @@ func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	}
 	q := store.Query{
 		IncludeCompleted: *all,
+		IncludeDeclined:  *all,
 		IncludeSnoozed:   *all,
 		IncludeDeleted:   *all,
 		List:             *in,
@@ -285,7 +286,8 @@ func editTask(s *store.Store, args []string, stderr io.Writer) int {
 	}))
 }
 
-// lifecycle is complete, reopen and delete: one id, no flags, the same guard.
+// lifecycle is complete, decline, reopen and delete: one id, no flags, the
+// same guard.
 func lifecycle(s *store.Store, verb string, args []string, stderr io.Writer) int {
 	fs := flags(verb, stderr)
 	if err := fs.Parse(args); err != nil {
@@ -299,6 +301,7 @@ func lifecycle(s *store.Store, verb string, args []string, stderr io.Writer) int
 
 	act := map[string]func(string, string) error{
 		"complete": s.CompleteTask,
+		"decline":  s.DeclineTask,
 		"reopen":   s.ReopenTask,
 		"delete":   s.DeleteTask,
 	}[verb]
@@ -331,7 +334,7 @@ func attachTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "todo attach: say which pointer to take off\n")
 			return 2
 		}
-		tasks, err := s.Tasks(store.Query{IncludeCompleted: true, IncludeSnoozed: true, IncludeDeleted: true})
+		tasks, err := s.Tasks(store.Query{IncludeCompleted: true, IncludeDeclined: true, IncludeSnoozed: true, IncludeDeleted: true})
 		if err != nil {
 			fmt.Fprintf(stderr, "todo attach: %v\n", err)
 			return 1

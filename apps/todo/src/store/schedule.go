@@ -257,7 +257,8 @@ func (s *Store) detach(actor, taskID string, on time.Time, a Attributes, lists, 
 func Detached(t Task, on time.Time) Task {
 	t.ID, t.Parent, t.Depth, t.Series = "", "", 0, ""
 	t.Deadline = day(on)
-	t.CreatedAt, t.CompletedAt, t.DeletedAt = time.Time{}, time.Time{}, time.Time{}
+	t.CreatedAt, t.CompletedAt = time.Time{}, time.Time{}
+	t.DeclinedAt, t.DeletedAt = time.Time{}, time.Time{}
 	t.SnoozedUntil = time.Time{}
 	t.Attachments = nil
 	return t
@@ -382,7 +383,7 @@ func (s *Store) marks(seriesID string) (map[string]string, error) {
 // taskByID reads one Task through the same read every surface uses, so a copy
 // made here sees exactly what a person sees.
 func (s *Store) taskByID(id string) (Task, error) {
-	tasks, err := s.Tasks(Query{IncludeCompleted: true, IncludeSnoozed: true, IncludeDeleted: true})
+	tasks, err := s.Tasks(Query{IncludeCompleted: true, IncludeDeclined: true, IncludeSnoozed: true, IncludeDeleted: true})
 	if err != nil {
 		return Task{}, err
 	}

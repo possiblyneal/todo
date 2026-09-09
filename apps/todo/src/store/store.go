@@ -41,6 +41,7 @@ const (
 	KindTaskAdded     = "task_added"
 	KindTaskDescribed = "task_described"
 	KindTaskCompleted = "task_completed"
+	KindTaskDeclined  = "task_declined"
 	KindTaskReopened  = "task_reopened"
 	KindTaskDeleted   = "task_deleted"
 	KindLeaseTaken    = "lease_taken"
@@ -151,7 +152,12 @@ type Task struct {
 	// Occurrences and are never stored ahead of being acted on.
 	Series string
 
+	// CompletedAt and DeclinedAt are the two terminal states, and a Task is
+	// in at most one of them: the work was done, or it was refused. Either
+	// takes the Task out of the everyday view, reopening undoes either, and
+	// the a_task_ends_once trigger is what keeps a Task out of both.
 	CompletedAt time.Time
+	DeclinedAt  time.Time
 	DeletedAt   time.Time
 
 	// Overdue is the expression deadline < now, worked out by the read that
@@ -171,6 +177,9 @@ func (t Task) Marks() []string {
 	}
 	if !t.CompletedAt.IsZero() {
 		marks = append(marks, "done")
+	}
+	if !t.DeclinedAt.IsZero() {
+		marks = append(marks, "declined")
 	}
 	if !t.DeletedAt.IsZero() {
 		marks = append(marks, "deleted")
@@ -258,6 +267,7 @@ CREATE TABLE IF NOT EXISTS task (
 	snoozed_until    TEXT,
 	colour           TEXT,
 	completed_at     TEXT,
+	declined_at      TEXT,
 	deleted_at       TEXT,
 	-- The rule this Task repeats on, or NULL. Tracking points at Scheduling;
 	-- Scheduling never holds a word of what the Task says.
@@ -313,21 +323,40 @@ END;
 -- children are consulted: an open grandchild keeps its own parent open, so the
 -- rule reaches the whole tree one level at a time.
 --
--- Completing is the direction a person drives, so it is the direction that
--- refuses. The other two directions into an open child -- reopening one, and
--- adding one -- cannot refuse without stranding the person, so they reopen
--- every completed Task above instead. Both walks are below.
-CREATE TRIGGER IF NOT EXISTS a_parent_completes_after_its_children
-BEFORE UPDATE OF completed_at ON task
-WHEN NEW.completed_at IS NOT NULL
+-- A child is open until it reaches one of the two terminal states, so a
+-- declined child no more holds its parent open than a completed one does.
+--
+-- Completing and declining are both directions a person drives, so both are
+-- directions that refuse. The two directions into an open child -- reopening
+-- one, and adding one -- cannot refuse without stranding the person, so they
+-- reopen every ended Task above instead. Both walks are below.
+DROP TRIGGER IF EXISTS a_parent_completes_after_its_children;
+DROP TRIGGER IF EXISTS a_parent_ends_after_its_children;
+CREATE TRIGGER a_parent_ends_after_its_children
+BEFORE UPDATE OF completed_at, declined_at ON task
+WHEN (NEW.completed_at IS NOT NULL OR NEW.declined_at IS NOT NULL)
  AND EXISTS (
 	SELECT 1 FROM task child
 	WHERE child.parent_id = NEW.id
 	  AND child.completed_at IS NULL
+	  AND child.declined_at IS NULL
 	  AND child.deleted_at IS NULL
  )
 BEGIN
-	SELECT RAISE(ABORT, 'a parent cannot complete while a child is open');
+	SELECT RAISE(ABORT, 'a parent cannot complete or decline while a child is open');
+END;
+
+-- A Task ends once. Completing one that was declined, or declining one that
+-- was completed, is somebody correcting themselves, and it is refused rather
+-- than silently overwritten: reopening first is the one extra keystroke that
+-- leaves a Change History reading reopened and then ended the other way,
+-- instead of an ending that quietly replaced another one.
+DROP TRIGGER IF EXISTS a_task_ends_once;
+CREATE TRIGGER a_task_ends_once
+BEFORE UPDATE OF completed_at, declined_at ON task
+WHEN NEW.completed_at IS NOT NULL AND NEW.declined_at IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'a Task that has ended is reopened before it ends the other way');
 END;
 
 -- A Subtask added open under a completed parent leaves the parent complete
@@ -339,7 +368,7 @@ CREATE TRIGGER an_open_child_reopens_its_parent
 AFTER INSERT ON task
 WHEN NEW.completed_at IS NULL AND NEW.parent_id IS NOT NULL
 BEGIN
-	UPDATE task SET completed_at = NULL WHERE id IN (
+	UPDATE task SET completed_at = NULL, declined_at = NULL WHERE id IN (
 		WITH RECURSIVE ancestry(id, parent_id) AS (
 			SELECT id, parent_id FROM task WHERE id = NEW.parent_id
 			UNION ALL
@@ -421,6 +450,21 @@ BEGIN
 	UPDATE task SET completed_at = NEW.at WHERE id = NEW.subject;
 END;
 
+-- Declining is the other terminal state: the work was refused rather than
+-- done. It is its own entry and its own column, because a tracker that folded
+-- it into completion could not tell a person afterwards which of the two
+-- happened, and that is the whole reason for having it.
+CREATE TRIGGER IF NOT EXISTS fold_task_declined
+AFTER INSERT ON change_history WHEN NEW.kind = 'task_declined'
+BEGIN
+	UPDATE task SET declined_at = NEW.at WHERE id = NEW.subject;
+END;
+
+-- Reopening undoes either terminal state, on the Task and on everything above
+-- it. One entry serves both because reopening is the same act either way: the
+-- Task is open again, and the Change History already says which state it was
+-- reopened out of.
+--
 -- Reopening a Subtask reopens everything above it, in one statement. A trigger
 -- that cleared the parent and left the parent's own trigger to clear the
 -- grandparent reaches exactly one level: SQLite runs no trigger from inside a
@@ -430,7 +474,7 @@ DROP TRIGGER IF EXISTS fold_task_reopened;
 CREATE TRIGGER fold_task_reopened
 AFTER INSERT ON change_history WHEN NEW.kind = 'task_reopened'
 BEGIN
-	UPDATE task SET completed_at = NULL WHERE id IN (
+	UPDATE task SET completed_at = NULL, declined_at = NULL WHERE id IN (
 		WITH RECURSIVE ancestry(id, parent_id) AS (
 			SELECT id, parent_id FROM task WHERE id = NEW.subject
 			UNION ALL
@@ -701,11 +745,37 @@ func applySchema(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+	if err := addDeclinedAt(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
 	if _, err := tx.Exec(schema); err != nil {
 		_ = tx.Rollback()
 		return err
 	}
 	return tx.Commit()
+}
+
+// addDeclinedAt gives a store opened before Declined existed the column the
+// schema below now names. CREATE TABLE IF NOT EXISTS leaves an existing table
+// as it is, so a column added later has to be asked for by name, and SQLite
+// has no ADD COLUMN IF NOT EXISTS: the pragma is the condition. It runs before
+// the schema so the trigger bodies that read the column are created after it
+// exists, on a store of either age, and it is a no-op on both a fresh file and
+// one already carrying the column.
+func addDeclinedAt(tx *sql.Tx) error {
+	var columns, declined int
+	err := tx.QueryRow(`
+SELECT COUNT(*), COALESCE(SUM(name = 'declined_at'), 0) FROM pragma_table_info('task')`).
+		Scan(&columns, &declined)
+	if err != nil {
+		return fmt.Errorf("read the task table's columns: %w", err)
+	}
+	if columns == 0 || declined > 0 {
+		return nil
+	}
+	_, err = tx.Exec(`ALTER TABLE task ADD COLUMN declined_at TEXT`)
+	return err
 }
 
 // WALToken is a cheap stand-in for "has anyone written since I last looked".
@@ -895,14 +965,22 @@ func (s *Store) EditTask(actor, taskID string, a Attributes) error {
 	return s.guarded(actor, taskID, KindTaskDescribed, payload)
 }
 
-// CompleteTask, ReopenTask and DeleteTask are the rest of a Task's life. Each
-// honours the same guard as an edit.
+// CompleteTask, DeclineTask, ReopenTask and DeleteTask are the rest of a
+// Task's life. Each honours the same guard as an edit.
 //
 // Reopening is its own entry rather than a second Task Described, because it
 // undoes a terminal state and the business cares that it happened. Deleting is
 // an entry too: the fold marks the Task gone and the Change History keeps it.
 func (s *Store) CompleteTask(actor, taskID string) error {
 	return s.guarded(actor, taskID, KindTaskCompleted, map[string]any{})
+}
+
+// DeclineTask ends a Task that will not be done. It is not a deletion: a
+// deleted Task is one that should not have been there, and a declined one was
+// there, was looked at, and was refused. Nothing here records why, and the
+// entry carries no reason.
+func (s *Store) DeclineTask(actor, taskID string) error {
+	return s.guarded(actor, taskID, KindTaskDeclined, map[string]any{})
 }
 
 func (s *Store) ReopenTask(actor, taskID string) error {
@@ -1045,9 +1123,12 @@ var sortKeys = map[Sort]string{
 }
 
 // Query narrows what Tasks returns. The zero Query is the everyday view: open
-// Tasks that are neither snoozed nor deleted, in creation order.
+// Tasks that are neither snoozed nor deleted, in creation order. Completed and
+// Declined are asked for separately, because they are different answers to
+// "what happened to this" and a reader is usually after one of them.
 type Query struct {
 	IncludeCompleted bool
+	IncludeDeclined  bool
 	IncludeSnoozed   bool
 	IncludeDeleted   bool
 
@@ -1086,6 +1167,7 @@ WITH RECURSIVE depth_first(id, path) AS (
 	  AND (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = task.id AND m.list_id = ?))
 	  AND (? OR deleted_at IS NULL)
 	  AND (? OR completed_at IS NULL)
+	  AND (? OR declined_at IS NULL)
 	  AND (? OR snoozed_until IS NULL OR snoozed_until <= ?)
 	UNION ALL
 	SELECT t.id, d.path || '/' || %[1]s || '/' || t.id
@@ -1093,12 +1175,13 @@ WITH RECURSIVE depth_first(id, path) AS (
 	WHERE (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = t.id AND m.list_id = ?))
 	  AND (? OR t.deleted_at IS NULL)
 	  AND (? OR t.completed_at IS NULL)
+	  AND (? OR t.declined_at IS NULL)
 	  AND (? OR t.snoozed_until IS NULL OR t.snoozed_until <= ?)
 )
 SELECT
 	t.id, COALESCE(t.parent_id, ''), t.depth, t.title, t.description, t.why, t.created_at,
 	t.deadline, t.estimate_seconds, t.priority, t.impact, t.snoozed_until, t.colour,
-	t.completed_at, t.deleted_at, COALESCE(t.series_id, ''),
+	t.completed_at, t.declined_at, t.deleted_at, COALESCE(t.series_id, ''),
 	(t.deadline IS NOT NULL AND t.deadline < ?) AS overdue,
 	COALESCE((SELECT json_group_object(key, value) FROM task_field f WHERE f.task_id = t.id), '{}'),
 	COALESCE((SELECT json_group_array(list_id) FROM task_list m WHERE m.task_id = t.id), '[]'),
@@ -1108,8 +1191,8 @@ SELECT
 	)), '[]')
 FROM task t JOIN depth_first d ON d.id = t.id
 ORDER BY d.path`, key),
-		q.List, q.List, q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at,
-		q.List, q.List, q.IncludeDeleted, q.IncludeCompleted, q.IncludeSnoozed, at,
+		q.List, q.List, q.IncludeDeleted, q.IncludeCompleted, q.IncludeDeclined, q.IncludeSnoozed, at,
+		q.List, q.List, q.IncludeDeleted, q.IncludeCompleted, q.IncludeDeclined, q.IncludeSnoozed, at,
 		at)
 	if err != nil {
 		return nil, fmt.Errorf("read tasks: %w", err)
@@ -1122,13 +1205,15 @@ ORDER BY d.path`, key),
 			t                                            Task
 			description, why, deadline, priority, impact *string
 			snoozedUntil, colour, completedAt, deletedAt *string
+			declinedAt                                   *string
 			createdAt, fields, lists, tags, attachments  string
 			estimate                                     *int64
 		)
 		err := rows.Scan(
 			&t.ID, &t.Parent, &t.Depth, &t.Title, &description, &why, &createdAt,
 			&deadline, &estimate, &priority, &impact, &snoozedUntil, &colour,
-			&completedAt, &deletedAt, &t.Series, &t.Overdue, &fields, &lists, &tags, &attachments,
+			&completedAt, &declinedAt, &deletedAt, &t.Series, &t.Overdue,
+			&fields, &lists, &tags, &attachments,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("read task: %w", err)
@@ -1140,6 +1225,7 @@ ORDER BY d.path`, key),
 		t.Deadline = parseStamp(deadline)
 		t.SnoozedUntil = parseStamp(snoozedUntil)
 		t.CompletedAt = parseStamp(completedAt)
+		t.DeclinedAt = parseStamp(declinedAt)
 		t.DeletedAt = parseStamp(deletedAt)
 		t.Priority = Level(text(priority))
 		t.Impact = Level(text(impact))

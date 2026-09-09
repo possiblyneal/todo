@@ -139,7 +139,7 @@ func runVerb(args []string, stdout, stderr io.Writer) int {
 		return attachTask(s, rest, stdout, stderr)
 	case "repeat":
 		return repeatTask(s, rest, stdout, stderr)
-	case "complete", "reopen", "delete":
+	case "complete", "decline", "reopen", "delete":
 		return lifecycle(s, verb, rest, stderr)
 	default:
 		fmt.Fprintf(stderr, "todo: unknown verb %q\n", verb)

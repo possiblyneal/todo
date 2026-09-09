@@ -23,8 +23,12 @@ _Avoid_: Audit, provenance, logging
 ### Tracking
 
 **Task**:
-A single piece of work the tracker holds, with its own lifecycle — added, described, completed, reopened, deleted. There is one kind of Task: what a person works on and what an agent works on are the same thing, seen two ways.
+A single piece of work the tracker holds, with its own lifecycle — added, described, completed, declined, reopened, deleted. There is one kind of Task: what a person works on and what an agent works on are the same thing, seen two ways.
 _Avoid_: Todo, item, entry, ticket
+
+**Declined**:
+Said of a Task that will not be done. It ends the Task the way completing does, and a Task ends once — a Task that has ended is reopened before it ends the other way. It is not a deletion: a deleted Task is one that should not have been there, and a declined one was there, was looked at, and was refused. Nothing records why. Reopening undoes it.
+_Avoid_: Rejected, cancelled, dropped, won't-do
 
 **Subtask**:
 A Task nested under another Task, to five levels. A Subtask is fixed where it was created: it never moves to a different parent and never leaves the Task it sits under. A top-level Task and everything nested beneath it are written and kept correct as one whole.
