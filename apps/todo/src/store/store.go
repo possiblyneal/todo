@@ -154,7 +154,8 @@ type Task struct {
 
 	// CompletedAt and DeclinedAt are the two terminal states, and a Task is
 	// in at most one of them: the work was done, or it was refused. Either
-	// takes the Task out of the everyday view, and reopening undoes either.
+	// takes the Task out of the everyday view, reopening undoes either, and
+	// the a_task_ends_once trigger is what keeps a Task out of both.
 	CompletedAt time.Time
 	DeclinedAt  time.Time
 	DeletedAt   time.Time
@@ -343,6 +344,19 @@ WHEN (NEW.completed_at IS NOT NULL OR NEW.declined_at IS NOT NULL)
  )
 BEGIN
 	SELECT RAISE(ABORT, 'a parent cannot complete or decline while a child is open');
+END;
+
+-- A Task ends once. Completing one that was declined, or declining one that
+-- was completed, is somebody correcting themselves, and it is refused rather
+-- than silently overwritten: reopening first is the one extra keystroke that
+-- leaves a Change History reading reopened and then ended the other way,
+-- instead of an ending that quietly replaced another one.
+DROP TRIGGER IF EXISTS a_task_ends_once;
+CREATE TRIGGER a_task_ends_once
+BEFORE UPDATE OF completed_at, declined_at ON task
+WHEN NEW.completed_at IS NOT NULL AND NEW.declined_at IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'a Task that has ended is reopened before it ends the other way');
 END;
 
 -- A Subtask added open under a completed parent leaves the parent complete

@@ -27,7 +27,7 @@ A single piece of work the tracker holds, with its own lifecycle — added, desc
 _Avoid_: Todo, item, entry, ticket
 
 **Declined**:
-Said of a Task that will not be done. It ends the Task the way completing does and is not a deletion: a deleted Task is one that should not have been there, and a declined one was there, was looked at, and was refused. Nothing records why. Reopening undoes it.
+Said of a Task that will not be done. It ends the Task the way completing does, and a Task ends once — a Task that has ended is reopened before it ends the other way. It is not a deletion: a deleted Task is one that should not have been there, and a declined one was there, was looked at, and was refused. Nothing records why. Reopening undoes it.
 _Avoid_: Rejected, cancelled, dropped, won't-do
 
 **Subtask**:

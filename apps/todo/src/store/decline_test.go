@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDecliningEndsATaskWithoutCompletingIt(t *testing.T) {
@@ -56,6 +57,40 @@ func TestCompletedAndDeclinedAreAskedForSeparately(t *testing.T) {
 	}
 	if got := only(t, s, Query{IncludeDeclined: true}); got.ID != refused {
 		t.Error("IncludeDeclined returned the completed Task")
+	}
+}
+
+// The two endings are mutually exclusive, and the store is what keeps them so:
+// a Task carrying both marks could not answer which ending it got, which is
+// the only reason Declined exists apart from Completed.
+func TestATaskEndsOnce(t *testing.T) {
+	s := openTemp(t)
+	for _, ending := range []struct {
+		first, second func(string, string) error
+		name          string
+	}{
+		{s.DeclineTask, s.CompleteTask, "completing a declined Task"},
+		{s.CompleteTask, s.DeclineTask, "declining a completed Task"},
+	} {
+		id := leased(t, s, "alice", Attributes{Title: Set("Review the deck")})
+		if err := ending.first("alice", id); err != nil {
+			t.Fatalf("the first ending: %v", err)
+		}
+
+		err := ending.second("alice", id)
+		if err == nil {
+			t.Errorf("%s went through", ending.name)
+		} else if !strings.Contains(err.Error(), "a Task that has ended is reopened before it ends the other way") {
+			t.Errorf("the refusal reads %v, want the domain's own words", err)
+		}
+
+		got := only(t, s, Query{IncludeCompleted: true, IncludeDeclined: true})
+		if len(got.Marks()) != 1 {
+			t.Errorf("after %s the Task reads %v, want one ending", ending.name, got.Marks())
+		}
+		if err := s.DeleteTask("alice", id); err != nil {
+			t.Fatalf("DeleteTask: %v", err)
+		}
 	}
 }
 
@@ -183,5 +218,21 @@ CREATE TABLE task (
 	}
 	if got := only(t, s, Query{IncludeDeclined: true}); got.DeclinedAt.IsZero() {
 		t.Error("the decline did not fold into the added column")
+	}
+}
+
+// Detached is the one statement of what a detached copy carries, read by both
+// the screen that previews the copy and the append that writes it. A copy is
+// an ordinary open Task, so it carries neither ending.
+func TestADetachedCopyCarriesNeitherEnding(t *testing.T) {
+	source := Task{
+		Title:       "Water the plants",
+		CompletedAt: time.Now().UTC(),
+		DeclinedAt:  time.Now().UTC(),
+		DeletedAt:   time.Now().UTC(),
+	}
+	copied := Detached(source, time.Now())
+	if !copied.CompletedAt.IsZero() || !copied.DeclinedAt.IsZero() || !copied.DeletedAt.IsZero() {
+		t.Errorf("a detached copy reads %v, want an open Task", copied.Marks())
 	}
 }
