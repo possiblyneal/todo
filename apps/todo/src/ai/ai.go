@@ -1,5 +1,7 @@
-// Package ai is the breakdown box: an outbound OpenAI-compatible HTTP call to
-// inference-runtime-broker, which already runs on the LAN.
+// Package ai talks to the broker: an outbound OpenAI-compatible HTTP call to
+// inference-runtime-broker, which already runs on the LAN. The broker is what
+// infers; nothing in this repository does, and the word is deliberately not
+// Agent, which CONTEXT.md gives to an Actor that writes.
 //
 // Nothing is inferred in this process and nothing durable is left here. A
 // breakdown is a conversation that produces proposals; a proposal is a value
@@ -22,17 +24,17 @@ import (
 	"time"
 )
 
-// Broker is where the box lives. It is the one on the LAN; TODO_AI_URL points
-// somewhere else, which is what a test and a second machine use.
+// Broker is the one on the LAN. TODO_AI_URL points somewhere else, which is
+// what a test and a second machine use.
 const Broker = "http://10.10.10.13:4010/v1"
 
-// Client talks to the box. The zero Model means "whichever one the box says it
-// can chat with", asked once and kept for the run.
+// Client talks to the broker. The zero Model means "whichever one the broker
+// says it can chat with", asked once and kept for the run.
 type Client struct {
 	BaseURL string
 
 	// Model is the one to talk to, when the caller has picked one. Empty
-	// asks the box what it is serving and settles on the first that can
+	// asks the broker what it is serving and settles on the first that can
 	// chat.
 	Model string
 	HTTP  *http.Client
@@ -45,8 +47,8 @@ type Client struct {
 	settled string
 }
 
-// New reads the environment. Nothing here is configured in a file: the box is
-// a LAN address and the model is whatever it is serving today.
+// New reads the environment. Nothing here is configured in a file: the
+// broker is a LAN address and the model is whatever it is serving today.
 func New() *Client {
 	c := &Client{BaseURL: Broker, Model: os.Getenv("TODO_AI_MODEL")}
 	if url := os.Getenv("TODO_AI_URL"); url != "" {
@@ -55,9 +57,9 @@ func New() *Client {
 	return c
 }
 
-// Brief is a Task as the box is shown it: what it says, and nothing about how
-// this program stores it. No id crosses the wire, because an id means nothing
-// to the box and a proposal is matched to its parent on this side.
+// Brief is a Task as the broker is shown it: what it says, and nothing about
+// how this program stores it. No id crosses the wire, because an id means
+// nothing to the broker and a proposal is matched to its parent on this side.
 type Brief struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
@@ -68,14 +70,14 @@ type Brief struct {
 	Impact      string `json:"impact,omitempty"`
 }
 
-// QA is one thing the box asked and what the person answered.
+// QA is one thing the broker asked and what the person answered.
 type QA struct {
 	Question string `json:"question"`
 	Answer   string `json:"answer"`
 }
 
-// Proposal is one atomic Task the box suggests. It is a suggestion and nothing
-// else: no id, no row, and no life beyond the screen it is shown on.
+// Proposal is one atomic Task the broker suggests. It is a suggestion and
+// nothing else: no id, no row, and no life beyond the screen it is shown on.
 type Proposal struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -86,7 +88,7 @@ type Proposal struct {
 }
 
 // Step is one turn of a breakdown. Questions and Proposals are alternatives:
-// the box asks for what it still needs, or it has enough and proposes.
+// the broker asks for what it still needs, or it has enough and proposes.
 type Step struct {
 	Questions []string   `json:"questions"`
 	Proposals []Proposal `json:"proposals"`
@@ -110,7 +112,7 @@ the list as JSON. Answer in a few sentences of plain prose, naming tasks by
 their titles. Do not invent tasks that are not in the list.`
 
 // Breakdown takes one turn: the Task, everything already answered, and back
-// comes either what the box still needs to know or what it proposes.
+// comes either what the broker still needs to know or what it proposes.
 func (c *Client) Breakdown(ctx context.Context, task Brief, answers []QA) (Step, error) {
 	brief, _ := json.Marshal(task)
 	turn := "The task:\n" + string(brief)
@@ -125,20 +127,20 @@ func (c *Client) Breakdown(ctx context.Context, task Brief, answers []QA) (Step,
 	}
 	var step Step
 	if err := json.Unmarshal([]byte(object(said)), &step); err != nil {
-		return Step{}, fmt.Errorf("the box answered with something that is not a breakdown: %w", err)
+		return Step{}, fmt.Errorf("the broker answered with something that is not a breakdown: %w", err)
 	}
 	return step, nil
 }
 
 // Ask answers a question about the list. The whole list goes with the
-// question, because the box holds nothing between calls.
+// question, because the broker holds nothing between calls.
 func (c *Client) Ask(ctx context.Context, question string, list []Brief) (string, error) {
 	tasks, _ := json.Marshal(list)
 	return c.complete(ctx, asking, "The list:\n"+string(tasks)+"\n\nThe question: "+question, false)
 }
 
-// Models are the ids the box says it can chat with. An embedding model is on
-// the same box and is not one of them.
+// Models are the ids the broker says it can chat with. An embedding model is on
+// the same broker and is not one of them.
 func (c *Client) Models(ctx context.Context) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/models", nil)
 	if err != nil {
@@ -155,7 +157,7 @@ func (c *Client) Models(ctx context.Context) ([]string, error) {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &list); err != nil {
-		return nil, fmt.Errorf("the box listed its models as something else: %w", err)
+		return nil, fmt.Errorf("the broker listed its models as something else: %w", err)
 	}
 	ids := make([]string, 0, len(list.Data))
 	for _, m := range list.Data {
@@ -167,7 +169,7 @@ func (c *Client) Models(ctx context.Context) ([]string, error) {
 }
 
 // model settles which one to talk to, once. Two callers arriving together ask
-// the box twice at worst and agree on the answer, which is the cheaper trade
+// the broker twice at worst and agree on the answer, which is the cheaper trade
 // than holding the lock across the call.
 func (c *Client) model(ctx context.Context) (string, error) {
 	if c.Model != "" {
@@ -185,7 +187,7 @@ func (c *Client) model(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if len(ids) == 0 {
-		return "", fmt.Errorf("the box is serving no model that can chat")
+		return "", fmt.Errorf("the broker is serving no model that can chat")
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -195,7 +197,7 @@ func (c *Client) model(ctx context.Context) (string, error) {
 	return c.settled, nil
 }
 
-// complete is the one call. json asks the box for an object, which every
+// complete is the one call. json asks the broker for an object, which every
 // OpenAI-compatible server understands and none of them guarantees, so the
 // parse on the way back is lenient either way.
 func (c *Client) complete(ctx context.Context, role, turn string, asJSON bool) (string, error) {
@@ -235,14 +237,14 @@ func (c *Client) complete(ctx context.Context, role, turn string, asJSON bool) (
 		} `json:"choices"`
 	}
 	if err := json.Unmarshal(answer, &reply); err != nil || len(reply.Choices) == 0 {
-		return "", fmt.Errorf("the box answered with no completion in it")
+		return "", fmt.Errorf("the broker answered with no completion in it")
 	}
 	return strings.TrimSpace(reply.Choices[0].Message.Content), nil
 }
 
-// do sends the request and reads the whole answer. A 429 is the box saying its
-// memory budget is spoken for, which is a wait rather than a fault, so it says
-// how long.
+// do sends the request and reads the whole answer. A 429 is the broker saying
+// its memory budget is spoken for, which is a wait rather than a fault, so it
+// says how long.
 func (c *Client) do(req *http.Request) ([]byte, error) {
 	client := c.HTTP
 	if client == nil {
@@ -250,13 +252,13 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 	}
 	res, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("the box at %s did not answer: %w", c.BaseURL, err)
+		return nil, fmt.Errorf("the broker at %s did not answer: %w", c.BaseURL, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("reading the box's answer: %w", err)
+		return nil, fmt.Errorf("reading the broker's answer: %w", err)
 	}
 	if res.StatusCode == http.StatusTooManyRequests {
 		var busy struct {
@@ -264,17 +266,17 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 			After float64 `json:"retry_after_seconds"`
 		}
 		_ = json.Unmarshal(body, &busy)
-		return nil, fmt.Errorf("the box is busy (%s): try again in %.0f seconds", busy.Error, busy.After)
+		return nil, fmt.Errorf("the broker is busy (%s): try again in %.0f seconds", busy.Error, busy.After)
 	}
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("the box answered %s: %s", res.Status, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("the broker answered %s: %s", res.Status, strings.TrimSpace(string(body)))
 	}
 	return body, nil
 }
 
-// object finds the JSON object in what came back. A box that says "Sure!" and
-// then fences its answer is still answering, and re-asking would cost another
-// minute of somebody's GPU.
+// object finds the JSON object in what came back. A broker that says "Sure!"
+// and then fences its answer is still answering, and re-asking would cost
+// another minute of somebody's GPU.
 func object(said string) string {
 	start := strings.Index(said, "{")
 	end := strings.LastIndex(said, "}")

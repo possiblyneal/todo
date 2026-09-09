@@ -33,8 +33,8 @@ func commands() []list.Item {
 		command{"/tag", "a new Tag"},
 		command{"/snooze", "the Task under the cursor, until a date you pick"},
 		command{"/repeat", "the Task under the cursor, on a schedule you write"},
-		command{"/breakdown", "the Task under the cursor, into Subtasks, with the box's help"},
-		command{"/ask", "the box a question about this list"},
+		command{"/breakdown", "the Task under the cursor, into Subtasks, with the broker's help"},
+		command{"/ask", "the broker a question about this list"},
 		command{"/sort", "by the next order"},
 		command{"/quit", "leave"},
 	}

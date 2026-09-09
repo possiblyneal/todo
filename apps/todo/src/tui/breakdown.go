@@ -16,13 +16,13 @@ import (
 )
 
 // breakdownTTL is how long the Lease over the tree is held. A breakdown is
-// think-time by construction: the box asks, a person answers, and the
+// think-time by construction: the broker asks, a person answers, and the
 // proposals are read before any of them is approved. Holding the whole
 // top-level tree for that long is the cost ADR 0002 names by name, and it is
 // paid deliberately here rather than worked around.
 const breakdownTTL = 10 * time.Minute
 
-// breakdown is one interaction with the box. Everything in it dies when it
+// breakdown is one interaction with the broker. Everything in it dies when it
 // does: the questions, the answers, and above all the proposals, which are
 // values on this struct and become Tasks only where somebody ticks them.
 type breakdown struct {
@@ -44,7 +44,7 @@ type breakdown struct {
 	waiting bool
 }
 
-// stepMsg is a turn coming back from the box, off the event loop. The call
+// stepMsg is a turn coming back from the broker, off the event loop. The call
 // takes as long as it takes and the view stays drawn while it does.
 type stepMsg struct {
 	// bd is the breakdown that asked. Escaping does not cancel the call
@@ -71,7 +71,7 @@ type answerMsg struct {
 	err    error
 }
 
-// startBreakdown takes the Lease over the Task's whole tree and asks the box
+// startBreakdown takes the Lease over the Task's whole tree and asks the broker
 // for a first turn. A tree somebody else holds refuses here, before any of
 // this is on screen.
 func (m Model) startBreakdown() (Model, tea.Cmd) {
@@ -92,7 +92,7 @@ func (m Model) startBreakdown() (Model, tea.Cmd) {
 	return m, m.turn(m.bd)
 }
 
-// turn asks the box for the next step, carrying everything answered so far.
+// turn asks the broker for the next step, carrying everything answered so far.
 func (m Model) turn(bd *breakdown) tea.Cmd {
 	client, task, answers := m.ai, brief(bd.task), append([]ai.QA(nil), bd.answers...)
 	return func() tea.Msg {
@@ -131,7 +131,7 @@ func (m Model) updateBreakdown(msg tea.Msg) (Model, tea.Cmd) {
 			m.bd.replies = make([]string, len(msg.step.Questions))
 			m.bd.form = m.questionForm(m.bd)
 		default:
-			m.err = fmt.Errorf("the box had nothing to ask and nothing to propose")
+			m.err = fmt.Errorf("the broker had nothing to ask and nothing to propose")
 			return m.endBreakdown(), nil
 		}
 		return m, m.bd.form.Init()
@@ -191,7 +191,7 @@ func (m Model) endBreakdown() Model {
 	return m
 }
 
-// questionForm puts what the box still needs to know to the person.
+// questionForm puts what the broker still needs to know to the person.
 func (m Model) questionForm(bd *breakdown) *huh.Form {
 	fields := make([]huh.Field, 0, len(bd.asking))
 	for i, q := range bd.asking {
@@ -268,7 +268,7 @@ func (m Model) updateInquiry(msg tea.Msg) (Model, tea.Cmd) {
 	return m, cmd
 }
 
-// enquire sends the question and the Tasks in view. The box holds nothing
+// enquire sends the question and the Tasks in view. The broker holds nothing
 // between calls, so the list goes with every question.
 func (m Model) enquire(ask *inquiry, question string) tea.Cmd {
 	client := m.ai
@@ -284,7 +284,7 @@ func (m Model) enquire(ask *inquiry, question string) tea.Cmd {
 	}
 }
 
-// brief is a Task as the box is shown it. No id crosses the wire.
+// brief is a Task as the broker is shown it. No id crosses the wire.
 func brief(t store.Task) ai.Brief {
 	b := ai.Brief{
 		Title:       t.Title,
@@ -303,7 +303,7 @@ func brief(t store.Task) ai.Brief {
 }
 
 // proposed turns an approved proposal into the attributes a Subtask is written
-// with. An attribute the box wrote in a way this program cannot read is
+// with. An attribute the broker wrote in a way this program cannot read is
 // dropped rather than refused: the person approved a Task, not a guess at how
 // long it takes.
 func proposed(p ai.Proposal) store.Attributes {
@@ -353,13 +353,13 @@ func describeProposal(p ai.Proposal) string {
 	return line
 }
 
-// breakdownView draws whichever half of the interaction is current: the box
+// breakdownView draws whichever half of the interaction is current: the broker
 // being waited on, the questions, or the proposals waiting to be approved.
 func (m Model) breakdownView() string {
 	head := headerStyle.Render("Breakdown: " + m.bd.task.Title)
 	switch {
 	case m.bd.waiting:
-		return head + "\n\n" + dimStyle.Render("asking the box… esc to give up")
+		return head + "\n\n" + dimStyle.Render("asking the broker… esc to give up")
 	case m.bd.form != nil:
 		return head + "\n\n" + m.bd.form.View()
 	}
@@ -370,7 +370,7 @@ func (m Model) breakdownView() string {
 func (m Model) inquiryView() string {
 	switch {
 	case m.ask.waiting:
-		return dimStyle.Render("asking the box… esc to give up")
+		return dimStyle.Render("asking the broker… esc to give up")
 	case m.ask.Answer != "":
 		return headerStyle.Render(m.ask.Question) + "\n\n" +
 			lipgloss.NewStyle().Width(min(m.width-8, 72)).Render(m.ask.Answer) +

@@ -11,7 +11,7 @@ import (
 )
 
 // broker stands in for inference-runtime-broker. Every test here is about what
-// this program sends and what it makes of what comes back; the box itself is
+// this program sends and what it makes of what comes back; the broker itself is
 // somebody else's deployable and is not started by a test.
 func broker(t *testing.T, reply func(w http.ResponseWriter, body map[string]any)) *Client {
 	t.Helper()
@@ -37,7 +37,7 @@ func broker(t *testing.T, reply func(w http.ResponseWriter, body map[string]any)
 	return &Client{BaseURL: srv.URL + "/v1", HTTP: srv.Client()}
 }
 
-// completion is what an OpenAI-compatible box answers with.
+// completion is what an OpenAI-compatible broker answers with.
 func completion(w http.ResponseWriter, content string) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"choices": []any{map[string]any{"message": map[string]any{"content": content}}},
@@ -56,13 +56,13 @@ func TestTheModelIsTheOneTheBoxSaysItCanChatWith(t *testing.T) {
 		t.Fatalf("Models: %v", err)
 	}
 	if len(models) != 1 || models[0] != "qwen3.8-flash-next" {
-		t.Errorf("the box offered %v, want only the chat model", models)
+		t.Errorf("the broker offered %v, want only the chat model", models)
 	}
 	if _, err := c.Breakdown(context.Background(), Brief{Title: "Paint the shed"}, nil); err != nil {
 		t.Fatalf("Breakdown: %v", err)
 	}
 	if asked != "qwen3.8-flash-next" {
-		t.Errorf("the call named model %q, want the one the box said it could chat with", asked)
+		t.Errorf("the call named model %q, want the one the broker said it could chat with", asked)
 	}
 }
 
@@ -80,8 +80,9 @@ func TestAskingForMoreComesBackAsQuestions(t *testing.T) {
 	}
 }
 
-// What was answered goes back with the next turn. Without it the box asks the
-// same question forever, because nothing here keeps a conversation for it.
+// What was answered goes back with the next turn. Without it the broker asks
+// the same question forever, because nothing here keeps a conversation for
+// it.
 func TestTheAnswersGoBackWithTheNextTurn(t *testing.T) {
 	var sent string
 	c := broker(t, func(w http.ResponseWriter, body map[string]any) {
@@ -106,7 +107,7 @@ func TestTheAnswersGoBackWithTheNextTurn(t *testing.T) {
 	}
 }
 
-// A box that wraps its JSON in a code fence is still answering. Nothing here
+// A broker that wraps its JSON in a code fence is still answering. Nothing here
 // runs a grammar on the far end, so the parse is the lenient one.
 func TestJSONInACodeFenceIsStillJSON(t *testing.T) {
 	c := broker(t, func(w http.ResponseWriter, body map[string]any) {
@@ -122,7 +123,7 @@ func TestJSONInACodeFenceIsStillJSON(t *testing.T) {
 	}
 }
 
-// The box is shared and its memory budget is finite: it answers 429 with how
+// The broker is shared and its memory budget is finite: it answers 429 with how
 // long to wait. That is a sentence to read, not a stack trace.
 func TestABusyBoxSaysWhenToComeBack(t *testing.T) {
 	c := broker(t, func(w http.ResponseWriter, body map[string]any) {
@@ -132,10 +133,10 @@ func TestABusyBoxSaysWhenToComeBack(t *testing.T) {
 
 	_, err := c.Breakdown(context.Background(), Brief{Title: "Paint the shed"}, nil)
 	if err == nil {
-		t.Fatal("a busy box came back as success")
+		t.Fatal("a busy broker came back as success")
 	}
 	if !strings.Contains(err.Error(), "busy") || !strings.Contains(err.Error(), "30") {
-		t.Errorf("a busy box read %q, want it to say it is busy and for how long", err)
+		t.Errorf("a busy broker read %q, want it to say it is busy and for how long", err)
 	}
 }
 
