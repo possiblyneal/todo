@@ -129,6 +129,8 @@ func runVerb(args []string, stdout, stderr io.Writer) int {
 	switch verb {
 	case "add":
 		return addTask(s, rest, stdout, stderr)
+	case "capture":
+		return captureTask(s, rest, stdout, stderr)
 	case "list":
 		return listTasks(s, rest, stdout, stderr)
 	case "edit":

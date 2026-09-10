@@ -23,8 +23,8 @@ func (c command) FilterValue() string { return c.name + " " + c.what }
 // widget the main view searches with, pointed at verbs instead of Tasks.
 func commands() []list.Item {
 	items := []list.Item{
-		command{"/add", "a new Task"},
-		command{"/edit", "the Task under the cursor"},
+		command{"/add", "a new Task: say it, and the broker fills the form in"},
+		command{"/edit", "the Task under the cursor: say what changes"},
 		command{"/complete", "the Task under the cursor"},
 		command{"/decline", "the Task under the cursor: it will not be done"},
 		command{"/reopen", "the Task under the cursor"},
@@ -33,8 +33,8 @@ func commands() []list.Item {
 		command{"/tag", "a new Tag"},
 		command{"/snooze", "the Task under the cursor, until a date you pick"},
 		command{"/repeat", "the Task under the cursor, on a schedule you write"},
-		command{"/breakdown", "the Task under the cursor, into Subtasks, with the box's help"},
-		command{"/ask", "the box a question about this list"},
+		command{"/breakdown", "the Task under the cursor, into Subtasks, with the broker's help"},
+		command{"/ask", "the broker a question about this list"},
 		command{"/sort", "by the next order"},
 		command{"/quit", "leave"},
 	}
@@ -85,19 +85,19 @@ func (m Model) run(name string) (Model, tea.Cmd) {
 	}
 
 	switch name {
+	// Both screens open on the brain dump box rather than on the form: one
+	// textbox is how a Task is said, and the form is where what the broker
+	// made of it is corrected and approved. An empty box is the way to the
+	// form on its own.
 	case "/add":
-		m.draft = &draft{}
-		m.editor = m.form(m.draft)
-		return m, m.editor.Init()
+		return m.startCapture(nil)
 
 	case "/edit":
 		t, ok := m.selected()
 		if !ok {
 			return m, nil
 		}
-		m.draft = draftOf(t)
-		m.editor = m.form(m.draft)
-		return m, m.editor.Init()
+		return m.startCapture(&t)
 
 	case "/complete", "/decline", "/reopen", "/delete":
 		what := strings.TrimPrefix(name, "/")

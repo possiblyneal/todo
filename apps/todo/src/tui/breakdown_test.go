@@ -11,8 +11,9 @@ import (
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
 
-// standIn is the box, played by an httptest server. Each call answers with the
-// next reply in turn, which is how a two-turn conversation is written down.
+// standIn is the broker, played by an httptest server. Each call answers with
+// the next reply in turn, which is how a two-turn conversation is written
+// down.
 func standIn(t *testing.T, replies ...string) *ai.Client {
 	t.Helper()
 	turn := 0
@@ -78,7 +79,7 @@ func TestTheBoxAsksBeforeItProposes(t *testing.T) {
 		t.Fatalf("the breakdown did not open: %v", m.err)
 	}
 	if len(m.bd.asking) != 1 || m.bd.asking[0] != "Which side of the roof?" {
-		t.Fatalf("the box asked %v, want its one question", m.bd.asking)
+		t.Fatalf("the broker asked %v, want its one question", m.bd.asking)
 	}
 
 	for _, key := range []string{"N", "o", "r", "t", "h", "enter"} {
@@ -88,7 +89,7 @@ func TestTheBoxAsksBeforeItProposes(t *testing.T) {
 		t.Fatalf("the turn carried %v, want the answer that was typed", m.bd.answers)
 	}
 	if len(m.bd.proposals) != 2 {
-		t.Fatalf("the box proposed %v, want the two", m.bd.proposals)
+		t.Fatalf("the broker proposed %v, want the two", m.bd.proposals)
 	}
 	if !strings.Contains(m.View().Content, "Order felt") {
 		t.Error("the proposals were not put on screen to be approved")
@@ -198,7 +199,7 @@ func TestTheTreeIsUnwritableForTheDuration(t *testing.T) {
 }
 
 // TestAQuestionAboutTheListWritesNothing. `/ask` is a read: the list goes to
-// the box with the question and the prose comes back on screen.
+// the broker with the question and the prose comes back on screen.
 func TestAQuestionAboutTheListWritesNothing(t *testing.T) {
 	s := fixture(t)
 	m := newModel(t, s)
@@ -237,7 +238,7 @@ func titlesIn(tasks []store.Task) []string {
 	return out
 }
 
-// sameTitleTwice is what a box that repeats itself sends back. Nothing stops
+// sameTitleTwice is what a broker that repeats itself sends back. Nothing stops
 // it, and the two are different proposals with different attributes.
 const sameTitleTwice = `{"proposals":[
 	{"title":"Order felt","estimate":"30m"},
