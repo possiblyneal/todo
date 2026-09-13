@@ -6,7 +6,7 @@ import (
 )
 
 // The screen's whole palette, in one place. Every style below is built from
-// these five roles rather than from a code typed where it is used, so a change
+// these four roles rather than from a code typed where it is used, so a change
 // of look is a change here and the surfaces stay in agreement.
 //
 // The numbers are ANSI 256 rather than hex because the TUI is served over SSH
@@ -77,7 +77,7 @@ func formTheme(isDark bool) *huh.Styles {
 	t.Focused.FocusedButton = t.Focused.FocusedButton.Foreground(lipgloss.Color("0")).Background(accent)
 	t.Focused.BlurredButton = t.Focused.BlurredButton.Foreground(muted).Background(lipgloss.Color("0"))
 
-	// A field nobody is in keeps the same shape and loses the colour, so
+	// A field nobody is in keeps the same shape and loses the color, so
 	// the eye has one place to be.
 	t.Blurred = t.Focused
 	t.Blurred.Base = t.Blurred.Base.BorderForeground(faint)

@@ -265,7 +265,7 @@ CREATE TABLE IF NOT EXISTS task (
 	priority         TEXT,
 	impact           TEXT,
 	snoozed_until    TEXT,
-	color           TEXT,
+	color            TEXT,
 	completed_at     TEXT,
 	declined_at      TEXT,
 	deleted_at       TEXT,
@@ -423,7 +423,7 @@ BEGIN
 		priority         = CASE WHEN json_type(NEW.payload, '$.priority')         IS NULL THEN priority         ELSE json_extract(NEW.payload, '$.priority')         END,
 		impact           = CASE WHEN json_type(NEW.payload, '$.impact')           IS NULL THEN impact           ELSE json_extract(NEW.payload, '$.impact')           END,
 		snoozed_until    = CASE WHEN json_type(NEW.payload, '$.snoozed_until')    IS NULL THEN snoozed_until    ELSE json_extract(NEW.payload, '$.snoozed_until')    END,
-		color           = CASE WHEN json_type(NEW.payload, '$.color')           IS NULL THEN color           ELSE json_extract(NEW.payload, '$.color')           END,
+		color            = CASE WHEN json_type(NEW.payload, '$.color')            IS NULL THEN color            ELSE json_extract(NEW.payload, '$.color')            END,
 		series_id        = CASE WHEN json_type(NEW.payload, '$.series')           IS NULL THEN series_id        ELSE json_extract(NEW.payload, '$.series')           END
 	WHERE id = NEW.subject;
 END;
@@ -517,14 +517,14 @@ END;
 CREATE TABLE IF NOT EXISTS list (
 	id         TEXT PRIMARY KEY,
 	name       TEXT NOT NULL,
-	color     TEXT,
+	color      TEXT,
 	created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS tag (
 	id         TEXT PRIMARY KEY,
 	name       TEXT NOT NULL,
-	color     TEXT,
+	color      TEXT,
 	created_at TEXT NOT NULL
 );
 
@@ -554,7 +554,7 @@ AFTER INSERT ON change_history WHEN NEW.kind = 'list_described'
 BEGIN
 	UPDATE list SET
 		name   = CASE WHEN json_type(NEW.payload, '$.name')   IS NULL THEN name   ELSE json_extract(NEW.payload, '$.name')   END,
-		color = CASE WHEN json_type(NEW.payload, '$.color') IS NULL THEN color ELSE json_extract(NEW.payload, '$.color') END
+		color  = CASE WHEN json_type(NEW.payload, '$.color')  IS NULL THEN color  ELSE json_extract(NEW.payload, '$.color')  END
 	WHERE id = NEW.subject;
 END;
 
@@ -572,7 +572,7 @@ AFTER INSERT ON change_history WHEN NEW.kind = 'tag_described'
 BEGIN
 	UPDATE tag SET
 		name   = CASE WHEN json_type(NEW.payload, '$.name')   IS NULL THEN name   ELSE json_extract(NEW.payload, '$.name')   END,
-		color = CASE WHEN json_type(NEW.payload, '$.color') IS NULL THEN color ELSE json_extract(NEW.payload, '$.color') END
+		color  = CASE WHEN json_type(NEW.payload, '$.color')  IS NULL THEN color  ELSE json_extract(NEW.payload, '$.color')  END
 	WHERE id = NEW.subject;
 END;
 
@@ -742,7 +742,7 @@ func busy(err error) bool {
 }
 
 // applySchema puts the schema on under the write lock, in one transaction.
-// Two of the triggers are a DROP followed by a CREATE, so that a store
+// Several of the triggers are a DROP followed by a CREATE, so that a store
 // written by an older build gets the current definition; applied without the
 // lock, two processes opening the same store at once interleave those pairs
 // and one of them fails on a trigger the other has just created.

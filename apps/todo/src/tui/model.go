@@ -308,8 +308,7 @@ func (m Model) press(msg tea.KeyPressMsg) (bool, Model, tea.Cmd) {
 		return true, m.showingSnoozed(), nil
 
 	case "L":
-		m.dropdown = !m.dropdown
-		return true, m, nil
+		return true, m.listing(), nil
 
 	case "enter":
 		if m.dropdown {
@@ -360,6 +359,12 @@ func (m Model) showingSnoozed() Model {
 	return m
 }
 
+// listing opens or closes the List dropdown, which is what "L" does.
+func (m Model) listing() Model {
+	m.dropdown = !m.dropdown
+	return m
+}
+
 // searching hands the keyboard to the searchbox, which is what "f" does.
 func (m Model) searching() (Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -372,8 +377,7 @@ func (m Model) searching() (Model, tea.Cmd) {
 // on where things are.
 func (m Model) click(msg tea.MouseClickMsg) (Model, tea.Cmd) {
 	if in(m.zones, "listbox", msg) || in(m.zones, "hint:lists", msg) {
-		m.dropdown = !m.dropdown
-		return m, nil
+		return m.listing(), nil
 	}
 	if in(m.zones, "sortbox", msg) || in(m.zones, "hint:sort", msg) {
 		return m.sorted(), nil
@@ -390,12 +394,6 @@ func (m Model) click(msg tea.MouseClickMsg) (Model, tea.Cmd) {
 	if in(m.zones, "hint:quit", msg) {
 		return m, tea.Quit
 	}
-	// A Task blown up covers the rows, so the only thing left to click is
-	// the way back to them.
-	if m.expanded {
-		m.expanded = false
-		return m, nil
-	}
 	if m.dropdown {
 		if in(m.zones, "list:every", msg) {
 			m.list, m.dropdown = everyList, false
@@ -409,6 +407,12 @@ func (m Model) click(msg tea.MouseClickMsg) (Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		return m, nil
+	}
+	// A Task blown up covers the rows, so the only thing left to click is
+	// the way back to them.
+	if m.expanded {
+		m.expanded = false
 		return m, nil
 	}
 	for _, t := range m.tags {
@@ -426,7 +430,10 @@ func (m Model) click(msg tea.MouseClickMsg) (Model, tea.Cmd) {
 	// under it blows it up. That is what makes a Task reachable by mouse
 	// without a slash command having to be typed at it blind, and it is
 	// also how a Task is chosen for one.
-	for i, item := range m.tasks.Items() {
+	// VisibleItems, not Items: Select and Index are the filtered list's
+	// coordinates, so a click made while the searchbox is narrowing would
+	// otherwise land the cursor on whatever sits at that unfiltered index.
+	for i, item := range m.tasks.VisibleItems() {
 		r, ok := item.(row)
 		if ok && in(m.zones, "task:"+r.task.ID, msg) {
 			m.expanded = i == m.tasks.Index()
@@ -438,8 +445,13 @@ func (m Model) click(msg tea.MouseClickMsg) (Model, tea.Cmd) {
 }
 
 // wheel scrolls the Tasks. bubbles/list binds keys and not the wheel, so this
-// is where a scroll becomes a move of the cursor.
+// is where a scroll becomes a move of the cursor. A Task blown up covers the
+// rows, so the wheel does nothing there rather than swapping the detail for
+// another Task's with no cursor on screen to say why.
 func (m Model) wheel(msg tea.MouseWheelMsg) (Model, tea.Cmd) {
+	if m.expanded {
+		return m, nil
+	}
 	switch msg.Button {
 	case tea.MouseWheelUp:
 		m.tasks.CursorUp()
@@ -480,12 +492,13 @@ func (m Model) View() tea.View {
 	m.tasks.SetSize(m.width-sidebarWidth, pane)
 
 	body := m.tasks.View()
+	r, chosen := m.tasks.SelectedItem().(row)
 	switch {
-	case m.expanded:
-		if r, ok := m.tasks.SelectedItem().(row); ok {
-			body = m.detail(r)
-		}
-	case len(m.tasks.Items()) == 0:
+	case m.expanded && chosen:
+		body = m.detail(r)
+	// A search that matches nothing is the list's own line to say, and it
+	// is the only one that can say how to clear the search.
+	case len(m.tasks.VisibleItems()) == 0 && m.tasks.FilterState() == list.Unfiltered:
 		body = m.nothing()
 	}
 	main := lipgloss.JoinHorizontal(lipgloss.Top,

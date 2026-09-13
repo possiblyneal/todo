@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -151,5 +152,96 @@ func TestTheSidebarIsDrawnTheHeightOfThePane(t *testing.T) {
 	drawn := m.View().Content
 	if got := lines(drawn); got != 30 {
 		t.Errorf("the screen drew %d lines into a terminal of 30", got)
+	}
+}
+
+// The searchbox narrows the list, and a click has to mean the Task drawn under
+// it rather than whatever sits at that index in the unfiltered list.
+func TestAClickChoosesTheRightTaskUnderASearch(t *testing.T) {
+	m := newModel(t, fixture(t))
+
+	m = press(m, "f")
+	for _, r := range "apples" {
+		m = send(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	m = press(m, "enter")
+
+	visible := m.tasks.VisibleItems()
+	if len(visible) != 1 {
+		t.Fatalf("the search left %d Tasks in view, want the one", len(visible))
+	}
+	wanted := visible[0].(row)
+	if len(m.tasks.Items()) == len(visible) {
+		t.Fatal("the search narrowed nothing, so the click cannot go wrong either way")
+	}
+
+	m = clickOn(t, m, "task:"+wanted.task.ID)
+	got, ok := m.tasks.SelectedItem().(row)
+	if !ok || got.task.ID != wanted.task.ID {
+		t.Errorf("the click chose %q, want %q", got.task.Title, wanted.task.Title)
+	}
+}
+
+// A Task blown up covers the rows, so there is nothing there for the wheel to
+// scroll and it leaves the detail on the Task it was opened on.
+func TestTheWheelLeavesABlownUpTaskAlone(t *testing.T) {
+	m := newModel(t, fixture(t))
+
+	m = press(m, "enter")
+	if !m.expanded {
+		t.Fatal("enter did not blow the Task up")
+	}
+
+	m = wheel(m, tea.MouseWheelDown)
+	if m.tasks.Index() != 0 {
+		t.Errorf("the wheel moved the cursor to %d behind the detail pane, want 0", m.tasks.Index())
+	}
+	if !m.expanded {
+		t.Error("the wheel closed the detail pane")
+	}
+}
+
+// The dropdown is drawn over a blown-up Task, so it is the dropdown that gets
+// the click rather than the way back to the list.
+func TestTheDropdownTakesItsOwnClicksOverABlownUpTask(t *testing.T) {
+	m := newModel(t, fixture(t))
+
+	m = press(m, "enter")
+	m = clickOn(t, m, "hint:lists")
+	if !m.expanded || !m.dropdown {
+		t.Fatalf("wanted the dropdown open over the blown-up Task; expanded=%v dropdown=%v", m.expanded, m.dropdown)
+	}
+
+	var home string
+	for _, l := range m.lists {
+		if l.Name == "Home" {
+			home = l.ID
+		}
+	}
+	m = clickOn(t, m, "list:"+home)
+	if m.list != home {
+		t.Errorf("the click chose List %q, want Home", m.list)
+	}
+	if m.dropdown {
+		t.Error("choosing a List left the dropdown open")
+	}
+}
+
+// A search matching nothing is the list's own line to say, because it is the
+// only one that can say how to clear the search. bubbles clears a search that
+// accepts with no matches, so the state this guards is mid-typing.
+func TestASearchMatchingNothingIsNotTheEmptyState(t *testing.T) {
+	m := newModel(t, fixture(t))
+
+	m = press(m, "f")
+	for _, r := range "zzzz" {
+		m = send(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+
+	if len(m.tasks.VisibleItems()) != 0 {
+		t.Fatalf("the search matched %d Tasks; it was meant to match none", len(m.tasks.VisibleItems()))
+	}
+	if drawn := m.View().Content; strings.Contains(drawn, "Nothing to do") {
+		t.Error("a search matching nothing drew the empty state, which says to add the first Task")
 	}
 }
