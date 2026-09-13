@@ -35,12 +35,16 @@ A Task nested under another Task, to five levels. A Subtask is fixed where it wa
 _Avoid_: Child task, step, checklist item
 
 **List**:
-A named collection a Task belongs to. It exists before any Task is in it and survives after the last one leaves, carries its own name and colour, and a Task may belong to more than one.
+A named collection a Task belongs to. It exists before any Task is in it and survives after the last one leaves, carries its own name and color, and a Task may belong to more than one.
 _Avoid_: Project, folder, category, bucket
 
 **Tag**:
-A named label a Task carries. It has an identity of its own rather than being the text typed on a Task — it can be renamed or recoloured once, and counted across the tracker.
+A named label a Task carries. It has an identity of its own rather than being the text typed on a Task — it can be renamed or recolored once, and counted across the tracker.
 _Avoid_: Keyword, label, topic
+
+**Color**:
+One of nine offered colors a Task, a List or a Tag can carry: red, orange, yellow, green, cyan, blue, violet, magenta, brown. It is named rather than coded, and it is one of the nine or it is none — nothing else is stored, so every surface knows how to paint whatever it reads back.
+_Avoid_: Colour, hex, swatch, highlight, theme
 
 **Lease**:
 An exclusive, expiring claim to edit one top-level Task and everything nested under it. Held by any actor before writing, and honoured by every other actor. Symmetric — a person's lease and an agent's lease are the same thing, and neither can tell which kind holds one.

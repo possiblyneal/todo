@@ -131,7 +131,7 @@ func TestTheFullAttributeSetRoundTrips(t *testing.T) {
 		Estimate:    Set(90 * time.Minute),
 		Priority:    Set(LevelHigh),
 		Impact:      Set(LevelMed),
-		Colour:      Set("#ff8800"),
+		Color:       Set("orange"),
 		Fields:      map[string]string{"repo": "todo", "pr": "42"},
 	})
 
@@ -151,8 +151,8 @@ func TestTheFullAttributeSetRoundTrips(t *testing.T) {
 		t.Errorf("priority = %q", got.Priority)
 	case got.Impact != LevelMed:
 		t.Errorf("impact = %q", got.Impact)
-	case got.Colour != "#ff8800":
-		t.Errorf("colour = %q", got.Colour)
+	case got.Color != "orange":
+		t.Errorf("color = %q", got.Color)
 	case got.CreatedAt.IsZero():
 		t.Error("creation date is unset")
 	case got.Fields["repo"] != "todo" || got.Fields["pr"] != "42":

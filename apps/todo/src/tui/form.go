@@ -41,7 +41,7 @@ type draft struct {
 	Estimate    string
 	Priority    store.Level
 	Impact      store.Level
-	Colour      string
+	Color       string
 	Lists       []string
 	Tags        []string
 
@@ -77,8 +77,8 @@ type draft struct {
 // built the form, and the copy that reads the answer back is a different one.
 type popupDraft struct {
 	// Noun is "List" or "Tag", and empty when the popup is a snooze.
-	Noun         string
-	Name, Colour string
+	Noun        string
+	Name, Color string
 
 	// Task is the Task the snooze popup was opened on.
 	Task, Until string
@@ -111,7 +111,7 @@ func (m Model) form(d *draft) *huh.Form {
 			Options(levelOptions(store.PriorityExamples)...),
 		huh.NewSelect[store.Level]().Title("Impact").Value(&d.Impact).
 			Options(levelOptions(store.ImpactExamples)...),
-		huh.NewInput().Title("Colour").Value(&d.Colour),
+		colorSelect("Color", &d.Color),
 		huh.NewInput().Title("Attach").Value(&d.Attach).
 			Placeholder("a web address, or ctrl+a to pick a file"),
 		huh.NewText().Title("Fields").Value(&d.Fields).Lines(3).
@@ -145,11 +145,11 @@ func (m Model) snoozeForm(until *string) *huh.Form {
 
 // collectionForm is the popup that creates a List or a Tag without leaving the
 // screen that wanted one.
-func (m Model) collectionForm(noun string, name, colour *string) *huh.Form {
+func (m Model) collectionForm(noun string, name, color *string) *huh.Form {
 	return huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("New "+noun).Value(name).Validate(required),
-		huh.NewInput().Title("Colour").Value(colour),
-	)).WithWidth(min(m.width-8, 48)).WithHeight(7)
+		colorSelect("Color", color),
+	)).WithWidth(min(m.width-8, 48)).WithHeight(16)
 }
 
 // rows is how tall a list of options has to be drawn to be read. huh sizes a
@@ -200,6 +200,28 @@ func dateInput(title string, value *string) *huh.Input {
 	return huh.NewInput().Title(title).Value(value).
 		Placeholder("4/4/25 9:34 AM, 2026-01-02, or 1 week").
 		Validate(validDate)
+}
+
+// colorSelect offers the nine colors a Task or a collection can carry, each
+// drawn in itself, with "none" for one that carries none. A color is chosen
+// rather than typed because only these nine paint.
+func colorSelect(title string, value *string) *huh.Select[string] {
+	options := colorOptions()
+	return huh.NewSelect[string]().Title(title).Value(value).
+		Height(rows(len(options))).Options(options...)
+}
+
+// colorOptions are the nine and none, each name drawn in the color it names.
+func colorOptions() []huh.Option[string] {
+	options := []huh.Option[string]{huh.NewOption("none", "")}
+	for _, c := range store.Colors {
+		label := c.Name
+		if paint, ok := colorStyle(c.Name); ok {
+			label = paint.Render(c.Name)
+		}
+		options = append(options, huh.NewOption(label, c.Name))
+	}
+	return options
 }
 
 func required(v string) error {
@@ -349,7 +371,7 @@ func (d draft) attributes() (store.Attributes, error) {
 		Estimate:     store.Set(estimate),
 		Priority:     store.Set(d.Priority),
 		Impact:       store.Set(d.Impact),
-		Colour:       store.Set(d.Colour),
+		Color:        store.Set(d.Color),
 		Fields:       fields,
 	}, nil
 }
@@ -364,7 +386,7 @@ func draftOf(t store.Task) *draft {
 		Why:         t.Why,
 		Priority:    t.Priority,
 		Impact:      t.Impact,
-		Colour:      t.Colour,
+		Color:       t.Color,
 		Lists:       append([]string(nil), t.Lists...),
 		Tags:        append([]string(nil), t.Tags...),
 		Attachments: append([]string(nil), t.Attachments...),

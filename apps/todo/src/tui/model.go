@@ -512,7 +512,7 @@ func (m Model) detail(r row) string {
 	if !t.SnoozedUntil.IsZero() {
 		add("snoozed until", day(t.SnoozedUntil))
 	}
-	add("colour", t.Colour)
+	add("color", t.Color)
 	add("lists", strings.Join(r.lists, ", "))
 	add("tags", strings.Join(m.nameEach(t.Tags), ", "))
 	for _, key := range sortedKeys(t.Fields) {

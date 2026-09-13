@@ -46,7 +46,7 @@ func (m Model) updateEditor(msg tea.Msg) (Model, tea.Cmd) {
 				noun = "Tag"
 			}
 			m.pop = &popupDraft{Noun: noun}
-			m.popup = m.collectionForm(noun, &m.pop.Name, &m.pop.Colour)
+			m.popup = m.collectionForm(noun, &m.pop.Name, &m.pop.Color)
 			return m, m.popup.Init()
 		}
 	}
@@ -131,9 +131,9 @@ func (m Model) createCollection() (Model, tea.Cmd) {
 		return m, nil
 	}
 	if pop.Noun == "List" {
-		id, err = m.store.AddList(m.actor, pop.Name, pop.Colour)
+		id, err = m.store.AddList(m.actor, pop.Name, pop.Color)
 	} else {
-		id, err = m.store.AddTag(m.actor, pop.Name, pop.Colour)
+		id, err = m.store.AddTag(m.actor, pop.Name, pop.Color)
 	}
 	if err != nil {
 		m.err = err

@@ -37,7 +37,7 @@ func fixture(t *testing.T) *store.Store {
 	home := add(s.AddList("alice", "Home", "blue"))
 	work := add(s.AddList("alice", "Work", "green"))
 	urgent := add(s.AddTag("alice", "urgent", "red"))
-	slow := add(s.AddTag("alice", "slow", "grey"))
+	slow := add(s.AddTag("alice", "slow", "violet"))
 
 	roof := add(s.AddTask("alice", store.Attributes{
 		Title:       store.Set("Fix the roof"),

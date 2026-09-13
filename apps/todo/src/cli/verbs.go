@@ -47,7 +47,7 @@ func attributeFlags(fs *flag.FlagSet) func() (store.Attributes, bool, error) {
 		priority    = fs.String("priority", "", "low, med or high")
 		impact      = fs.String("impact", "", "low, med or high")
 		snooze      = fs.String("snooze", "", "hide it for a while: a duration, or "+snoozeLabels())
-		colour      = fs.String("colour", "", "the task's colour")
+		color       = fs.String("color", "", "one of "+colorLabels())
 		pairs       = fields{}
 	)
 	fs.Var(pairs, "field", "a key=value pair, repeatable")
@@ -70,8 +70,8 @@ func attributeFlags(fs *flag.FlagSet) func() (store.Attributes, bool, error) {
 				a.Description = description
 			case "why":
 				a.Why = why
-			case "colour":
-				a.Colour = colour
+			case "color":
+				a.Color = color
 			case "priority":
 				var l store.Level
 				if l, err = store.ParseLevel(*priority); err == nil {
@@ -142,6 +142,16 @@ func parseSnooze(v string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("cannot read %q as a snooze: want a duration, or %s", v, snoozeLabels())
 	}
 	return now.Add(d).UTC(), nil
+}
+
+// colorLabels names the offered colors, which are the only ones the store
+// takes.
+func colorLabels() string {
+	labels := make([]string, len(store.Colors))
+	for i, c := range store.Colors {
+		labels[i] = c.Name
+	}
+	return strings.Join(labels, ", ")
 }
 
 func snoozeLabels() string {
@@ -487,7 +497,7 @@ func flags(verb string, stderr io.Writer) *flag.FlagSet {
 }
 
 // collections is `todo lists` and `todo tags`, which differ only in what they
-// act on. Bare, it shows them ranked; `new`, `rename` and `recolour` are the
+// act on. Bare, it shows them ranked; `new`, `rename` and `recolor` are the
 // three writes, and none of them needs a Lease: a List and a Tag are
 // aggregates of their own, not part of anybody's tree.
 func collections(s *store.Store, noun string, args []string, stdout, stderr io.Writer) int {
@@ -496,7 +506,7 @@ func collections(s *store.Store, noun string, args []string, stdout, stderr io.W
 		sub, args = args[0], args[1:]
 	}
 	fs := flags(noun, stderr)
-	colour := fs.String("colour", "", "the colour it carries")
+	color := fs.String("color", "", "one of "+colorLabels())
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -519,7 +529,7 @@ func collections(s *store.Store, noun string, args []string, stdout, stderr io.W
 		return 0
 
 	case "new":
-		id, err := add(actor(), strings.Join(fs.Args(), " "), *colour)
+		id, err := add(actor(), strings.Join(fs.Args(), " "), *color)
 		if err != nil {
 			fmt.Fprintf(stderr, "todo %s new: %v\n", noun, err)
 			return 2
@@ -527,7 +537,7 @@ func collections(s *store.Store, noun string, args []string, stdout, stderr io.W
 		fmt.Fprintln(stdout, id)
 		return 0
 
-	case "rename", "recolour":
+	case "rename", "recolor":
 		if fs.NArg() < 2 {
 			fmt.Fprintf(stderr, "todo %s %s: name one by id, then what to call it\n", noun, sub)
 			return 2
@@ -546,7 +556,7 @@ func collections(s *store.Store, noun string, args []string, stdout, stderr io.W
 		return 0
 
 	default:
-		fmt.Fprintf(stderr, "todo %s: unknown form %q: want new, rename or recolour\n", noun, sub)
+		fmt.Fprintf(stderr, "todo %s: unknown form %q: want new, rename or recolor\n", noun, sub)
 		return 2
 	}
 }

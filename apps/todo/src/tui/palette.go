@@ -105,7 +105,7 @@ func (m Model) run(name string) (Model, tea.Cmd) {
 
 	case "/list", "/tag":
 		m.pop = &popupDraft{Noun: strings.ToUpper(name[1:2]) + name[2:]}
-		m.popup = m.collectionForm(m.pop.Noun, &m.pop.Name, &m.pop.Colour)
+		m.popup = m.collectionForm(m.pop.Noun, &m.pop.Name, &m.pop.Color)
 		return m, m.popup.Init()
 
 	case "/snooze":

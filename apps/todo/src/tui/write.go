@@ -150,7 +150,7 @@ func (m *Model) snooze(taskID string, s store.Snooze) error {
 	return m.snoozeUntil(taskID, s.Until(time.Now()))
 }
 
-// snoozeUntil hides a Task until a moment the calendar picked. The zero time
+// snoozeUntil hides a Task until a moment that was typed. The zero time
 // takes the snooze off.
 func (m *Model) snoozeUntil(taskID string, until time.Time) error {
 	return m.store.WithLease(m.actor, taskID, store.WriteTTL, func() error {

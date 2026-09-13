@@ -59,6 +59,12 @@ func (d rowDelegate) Render(w io.Writer, m list.Model, index int, item list.Item
 func (d rowDelegate) render(r row, selected bool) string {
 	cursor := "  "
 	style := titleStyle
+	// A Task's color is on its title, and the cursor's own style wins while
+	// the row is the one under it: selection has to stay readable whatever
+	// color a Task carries.
+	if paint, ok := colorStyle(r.task.Color); ok {
+		style = paint.Bold(true)
+	}
 	if selected {
 		cursor, style = "▸ ", selectedStyle
 	}
@@ -82,6 +88,16 @@ func (d rowDelegate) render(r row, selected bool) string {
 		dimStyle.Render("    " + indent + body[1]),
 		foot,
 	}, "\n")
+}
+
+// colorStyle is what one of the offered colors paints in, and false when the
+// name is not one of them, which is what a Task carrying no color looks like.
+func colorStyle(name string) (lipgloss.Style, bool) {
+	c, ok := store.ColorNamed(name)
+	if !ok {
+		return lipgloss.Style{}, false
+	}
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(c.ANSI)), true
 }
 
 // describe cuts a description into exactly two lines, breaking on words.
@@ -120,7 +136,7 @@ func describe(text string, width int) [2]string {
 }
 
 // marks draws what a read worked out about a Task. The words are
-// store.Task.Marks; only the colour on "overdue" is the screen's.
+// store.Task.Marks; only the color on "overdue" is the screen's.
 func marks(t store.Task) string {
 	m := t.Marks()
 	if len(m) == 0 {

@@ -56,6 +56,61 @@ func (l Level) valid() bool {
 	return false
 }
 
+// Color is one a Task or a collection can carry. ANSI is the 256-color
+// terminal code a surface paints with, so the name is the whole of what is
+// stored and every surface renders it the same.
+type Color struct {
+	Name string
+	ANSI string
+}
+
+// Colors are the nine offered, chosen to stay apart from one another on a
+// terminal that has 256 of them. A color is one of these or it is nothing:
+// anything else is refused, so a name that reached the store is a name a
+// surface knows how to paint.
+var Colors = []Color{
+	{"red", "196"},
+	{"orange", "208"},
+	{"yellow", "226"},
+	{"green", "46"},
+	{"cyan", "51"},
+	{"blue", "33"},
+	{"violet", "93"},
+	{"magenta", "201"},
+	{"brown", "130"},
+}
+
+// ColorNamed is the offered color of that name, and false when there is
+// none. The empty name is no color, which is what clearing one leaves.
+func ColorNamed(name string) (Color, bool) {
+	for _, c := range Colors {
+		if strings.EqualFold(name, c.Name) {
+			return c, true
+		}
+	}
+	return Color{}, false
+}
+
+// checkColor refuses anything but an offered color. Empty is allowed: it is
+// how a color comes off.
+func checkColor(name string) error {
+	if name == "" {
+		return nil
+	}
+	if _, ok := ColorNamed(name); !ok {
+		return fmt.Errorf("%q is not one of the colors; try %s", name, colorNames())
+	}
+	return nil
+}
+
+func colorNames() string {
+	names := make([]string, 0, len(Colors))
+	for _, c := range Colors {
+		names = append(names, c.Name)
+	}
+	return strings.Join(names, ", ")
+}
+
 // Snooze is one of the offered ways to hide a Task for a while.
 type Snooze struct {
 	Label string
@@ -103,7 +158,7 @@ type Attributes struct {
 	Priority     *Level
 	Impact       *Level
 	SnoozedUntil *time.Time
-	Colour       *string
+	Color        *string
 
 	// Fields are the any-number-of key/value pairs. A key mapped to the empty
 	// string removes it; keys absent from the map are left alone.
@@ -125,7 +180,12 @@ func (a Attributes) payload(requireTitle bool) (map[string]any, error) {
 
 	putText(p, "description", a.Description)
 	putText(p, "why", a.Why)
-	putText(p, "colour", a.Colour)
+	if a.Color != nil {
+		if err := checkColor(*a.Color); err != nil {
+			return nil, err
+		}
+	}
+	putText(p, "color", a.Color)
 	putTime(p, "deadline", a.Deadline)
 	putTime(p, "snoozed_until", a.SnoozedUntil)
 

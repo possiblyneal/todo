@@ -133,7 +133,7 @@ type Task struct {
 	Priority     Level
 	Impact       Level
 	SnoozedUntil time.Time
-	Colour       string
+	Color        string
 	Fields       map[string]string
 
 	// Lists and Tags are the ids the Task carries, never the names: a List
@@ -265,7 +265,7 @@ CREATE TABLE IF NOT EXISTS task (
 	priority         TEXT,
 	impact           TEXT,
 	snoozed_until    TEXT,
-	colour           TEXT,
+	color           TEXT,
 	completed_at     TEXT,
 	declined_at      TEXT,
 	deleted_at       TEXT,
@@ -380,12 +380,13 @@ END;
 
 -- The folds. Each fires inside the appending writer's transaction, so current
 -- state and the entry that produced it commit together or not at all.
-CREATE TRIGGER IF NOT EXISTS fold_task_added
+DROP TRIGGER IF EXISTS fold_task_added;
+CREATE TRIGGER fold_task_added
 AFTER INSERT ON change_history WHEN NEW.kind = 'task_added'
 BEGIN
 	INSERT INTO task (
 		id, parent_id, depth, title, description, why, created_at,
-		deadline, estimate_seconds, priority, impact, snoozed_until, colour,
+		deadline, estimate_seconds, priority, impact, snoozed_until, color,
 		series_id
 	)
 	VALUES (
@@ -401,7 +402,7 @@ BEGIN
 		json_extract(NEW.payload, '$.priority'),
 		json_extract(NEW.payload, '$.impact'),
 		json_extract(NEW.payload, '$.snoozed_until'),
-		json_extract(NEW.payload, '$.colour'),
+		json_extract(NEW.payload, '$.color'),
 		json_extract(NEW.payload, '$.series')
 	);
 END;
@@ -409,7 +410,8 @@ END;
 -- An edit is partial. A key absent from the payload leaves the column alone; a
 -- key holding JSON null clears it. json_type tells the two apart, which
 -- json_extract on its own cannot.
-CREATE TRIGGER IF NOT EXISTS fold_task_described
+DROP TRIGGER IF EXISTS fold_task_described;
+CREATE TRIGGER fold_task_described
 AFTER INSERT ON change_history WHEN NEW.kind = 'task_described'
 BEGIN
 	UPDATE task SET
@@ -421,7 +423,7 @@ BEGIN
 		priority         = CASE WHEN json_type(NEW.payload, '$.priority')         IS NULL THEN priority         ELSE json_extract(NEW.payload, '$.priority')         END,
 		impact           = CASE WHEN json_type(NEW.payload, '$.impact')           IS NULL THEN impact           ELSE json_extract(NEW.payload, '$.impact')           END,
 		snoozed_until    = CASE WHEN json_type(NEW.payload, '$.snoozed_until')    IS NULL THEN snoozed_until    ELSE json_extract(NEW.payload, '$.snoozed_until')    END,
-		colour           = CASE WHEN json_type(NEW.payload, '$.colour')           IS NULL THEN colour           ELSE json_extract(NEW.payload, '$.colour')           END,
+		color           = CASE WHEN json_type(NEW.payload, '$.color')           IS NULL THEN color           ELSE json_extract(NEW.payload, '$.color')           END,
 		series_id        = CASE WHEN json_type(NEW.payload, '$.series')           IS NULL THEN series_id        ELSE json_extract(NEW.payload, '$.series')           END
 	WHERE id = NEW.subject;
 END;
@@ -515,14 +517,14 @@ END;
 CREATE TABLE IF NOT EXISTS list (
 	id         TEXT PRIMARY KEY,
 	name       TEXT NOT NULL,
-	colour     TEXT,
+	color     TEXT,
 	created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS tag (
 	id         TEXT PRIMARY KEY,
 	name       TEXT NOT NULL,
-	colour     TEXT,
+	color     TEXT,
 	created_at TEXT NOT NULL
 );
 
@@ -538,35 +540,39 @@ CREATE TABLE IF NOT EXISTS task_tag (
 	PRIMARY KEY (task_id, tag_id)
 );
 
-CREATE TRIGGER IF NOT EXISTS fold_list_created
+DROP TRIGGER IF EXISTS fold_list_created;
+CREATE TRIGGER fold_list_created
 AFTER INSERT ON change_history WHEN NEW.kind = 'list_created'
 BEGIN
-	INSERT INTO list (id, name, colour, created_at)
-	VALUES (NEW.subject, json_extract(NEW.payload, '$.name'), json_extract(NEW.payload, '$.colour'), NEW.at);
+	INSERT INTO list (id, name, color, created_at)
+	VALUES (NEW.subject, json_extract(NEW.payload, '$.name'), json_extract(NEW.payload, '$.color'), NEW.at);
 END;
 
-CREATE TRIGGER IF NOT EXISTS fold_list_described
+DROP TRIGGER IF EXISTS fold_list_described;
+CREATE TRIGGER fold_list_described
 AFTER INSERT ON change_history WHEN NEW.kind = 'list_described'
 BEGIN
 	UPDATE list SET
 		name   = CASE WHEN json_type(NEW.payload, '$.name')   IS NULL THEN name   ELSE json_extract(NEW.payload, '$.name')   END,
-		colour = CASE WHEN json_type(NEW.payload, '$.colour') IS NULL THEN colour ELSE json_extract(NEW.payload, '$.colour') END
+		color = CASE WHEN json_type(NEW.payload, '$.color') IS NULL THEN color ELSE json_extract(NEW.payload, '$.color') END
 	WHERE id = NEW.subject;
 END;
 
-CREATE TRIGGER IF NOT EXISTS fold_tag_created
+DROP TRIGGER IF EXISTS fold_tag_created;
+CREATE TRIGGER fold_tag_created
 AFTER INSERT ON change_history WHEN NEW.kind = 'tag_created'
 BEGIN
-	INSERT INTO tag (id, name, colour, created_at)
-	VALUES (NEW.subject, json_extract(NEW.payload, '$.name'), json_extract(NEW.payload, '$.colour'), NEW.at);
+	INSERT INTO tag (id, name, color, created_at)
+	VALUES (NEW.subject, json_extract(NEW.payload, '$.name'), json_extract(NEW.payload, '$.color'), NEW.at);
 END;
 
-CREATE TRIGGER IF NOT EXISTS fold_tag_described
+DROP TRIGGER IF EXISTS fold_tag_described;
+CREATE TRIGGER fold_tag_described
 AFTER INSERT ON change_history WHEN NEW.kind = 'tag_described'
 BEGIN
 	UPDATE tag SET
 		name   = CASE WHEN json_type(NEW.payload, '$.name')   IS NULL THEN name   ELSE json_extract(NEW.payload, '$.name')   END,
-		colour = CASE WHEN json_type(NEW.payload, '$.colour') IS NULL THEN colour ELSE json_extract(NEW.payload, '$.colour') END
+		color = CASE WHEN json_type(NEW.payload, '$.color') IS NULL THEN color ELSE json_extract(NEW.payload, '$.color') END
 	WHERE id = NEW.subject;
 END;
 
@@ -749,6 +755,10 @@ func applySchema(db *sql.DB) error {
 		_ = tx.Rollback()
 		return err
 	}
+	if err := renameColour(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
 	if _, err := tx.Exec(schema); err != nil {
 		_ = tx.Rollback()
 		return err
@@ -776,6 +786,32 @@ SELECT COUNT(*), COALESCE(SUM(name = 'declined_at'), 0) FROM pragma_table_info('
 	}
 	_, err = tx.Exec(`ALTER TABLE task ADD COLUMN declined_at TEXT`)
 	return err
+}
+
+// renameColour gives a store written before the spelling settled the column
+// the schema now names. It runs before the schema for the same reason
+// addDeclinedAt does, and is a no-op on a fresh file and on one already
+// renamed. The six folds that read the column are DROP-and-CREATE pairs, so a
+// store of either age ends up with bodies that write `color` from a payload
+// that says `color`; the entries already in the Change History keep whichever
+// key they were appended with, because nothing re-reads them.
+func renameColour(tx *sql.Tx) error {
+	for _, table := range []string{"task", "list", "tag"} {
+		var columns, old int
+		err := tx.QueryRow(`
+SELECT COUNT(*), COALESCE(SUM(name = 'colour'), 0) FROM pragma_table_info(?)`, table).
+			Scan(&columns, &old)
+		if err != nil {
+			return fmt.Errorf("read the %s table's columns: %w", table, err)
+		}
+		if columns == 0 || old == 0 {
+			continue
+		}
+		if _, err := tx.Exec("ALTER TABLE " + table + " RENAME COLUMN colour TO color"); err != nil {
+			return fmt.Errorf("rename %s.colour: %w", table, err)
+		}
+	}
+	return nil
 }
 
 // WALToken is a cheap stand-in for "has anyone written since I last looked".
@@ -1180,7 +1216,7 @@ WITH RECURSIVE depth_first(id, path) AS (
 )
 SELECT
 	t.id, COALESCE(t.parent_id, ''), t.depth, t.title, t.description, t.why, t.created_at,
-	t.deadline, t.estimate_seconds, t.priority, t.impact, t.snoozed_until, t.colour,
+	t.deadline, t.estimate_seconds, t.priority, t.impact, t.snoozed_until, t.color,
 	t.completed_at, t.declined_at, t.deleted_at, COALESCE(t.series_id, ''),
 	(t.deadline IS NOT NULL AND t.deadline < ?) AS overdue,
 	COALESCE((SELECT json_group_object(key, value) FROM task_field f WHERE f.task_id = t.id), '{}'),
@@ -1204,14 +1240,14 @@ ORDER BY d.path`, key),
 		var (
 			t                                            Task
 			description, why, deadline, priority, impact *string
-			snoozedUntil, colour, completedAt, deletedAt *string
+			snoozedUntil, color, completedAt, deletedAt  *string
 			declinedAt                                   *string
 			createdAt, fields, lists, tags, attachments  string
 			estimate                                     *int64
 		)
 		err := rows.Scan(
 			&t.ID, &t.Parent, &t.Depth, &t.Title, &description, &why, &createdAt,
-			&deadline, &estimate, &priority, &impact, &snoozedUntil, &colour,
+			&deadline, &estimate, &priority, &impact, &snoozedUntil, &color,
 			&completedAt, &declinedAt, &deletedAt, &t.Series, &t.Overdue,
 			&fields, &lists, &tags, &attachments,
 		)
@@ -1220,7 +1256,7 @@ ORDER BY d.path`, key),
 		}
 		t.Description = text(description)
 		t.Why = text(why)
-		t.Colour = text(colour)
+		t.Color = text(color)
 		t.CreatedAt, _ = time.Parse(stamp, createdAt)
 		t.Deadline = parseStamp(deadline)
 		t.SnoozedUntil = parseStamp(snoozedUntil)
