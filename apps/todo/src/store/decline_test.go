@@ -194,7 +194,7 @@ CREATE TABLE task (
 	priority         TEXT,
 	impact           TEXT,
 	snoozed_until    TEXT,
-	colour           TEXT,
+	color           TEXT,
 	completed_at     TEXT,
 	deleted_at       TEXT,
 	series_id        TEXT

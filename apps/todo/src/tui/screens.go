@@ -10,8 +10,9 @@ import (
 // updatePalette gives the slash palette the keyboard. Enter runs the command
 // under the cursor and closes; escape closes without running one.
 func (m Model) updatePalette(msg tea.Msg) (Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyPressMsg); ok {
-		switch key.String() {
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch msg.String() {
 		case "enter":
 			m.paletteOpen = false
 			if c, ok := m.palette.SelectedItem().(command); ok {
@@ -22,6 +23,28 @@ func (m Model) updatePalette(msg tea.Msg) (Model, tea.Cmd) {
 			m.paletteOpen = false
 			return m, nil
 		}
+
+	// A command is run by the click that lands on it. There is no
+	// two-step here as there is on a Task row: a palette entry is a verb,
+	// and nothing else is done to the one under the cursor.
+	case tea.MouseClickMsg:
+		for _, item := range m.palette.VisibleItems() {
+			c, ok := item.(command)
+			if ok && in(m.zones, "command:"+c.name, msg) {
+				m.paletteOpen = false
+				return m.run(c.name)
+			}
+		}
+		return m, nil
+
+	case tea.MouseWheelMsg:
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			m.palette.CursorUp()
+		case tea.MouseWheelDown:
+			m.palette.CursorDown()
+		}
+		return m, nil
 	}
 	var cmd tea.Cmd
 	m.palette, cmd = m.palette.Update(msg)
@@ -46,7 +69,7 @@ func (m Model) updateEditor(msg tea.Msg) (Model, tea.Cmd) {
 				noun = "Tag"
 			}
 			m.pop = &popupDraft{Noun: noun}
-			m.popup = m.collectionForm(noun, &m.pop.Name, &m.pop.Colour)
+			m.popup = m.collectionForm(noun, &m.pop.Name, &m.pop.Color)
 			return m, m.popup.Init()
 		}
 	}
@@ -98,7 +121,7 @@ func (m Model) updatePopup(msg tea.Msg) (Model, tea.Cmd) {
 	return m, cmd
 }
 
-// applySnooze hides the Task the picker was opened on until the date it
+// applySnooze hides the Task the popup was opened on until the date it
 // settled on. An empty date takes the snooze off, which is what clearing it in
 // the calendar means.
 func (m Model) applySnooze() (Model, tea.Cmd) {
@@ -131,9 +154,9 @@ func (m Model) createCollection() (Model, tea.Cmd) {
 		return m, nil
 	}
 	if pop.Noun == "List" {
-		id, err = m.store.AddList(m.actor, pop.Name, pop.Colour)
+		id, err = m.store.AddList(m.actor, pop.Name, pop.Color)
 	} else {
-		id, err = m.store.AddTag(m.actor, pop.Name, pop.Colour)
+		id, err = m.store.AddTag(m.actor, pop.Name, pop.Color)
 	}
 	if err != nil {
 		m.err = err

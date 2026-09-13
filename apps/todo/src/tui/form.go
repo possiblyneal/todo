@@ -12,10 +12,18 @@ import (
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
 
-// dateLayouts are how a date is written down between the picker and the
-// draft. Nobody types one any more: the calendar in src/datepicker is what
-// fills a deadline in, and these are only the way it is carried as text.
+// dateLayouts are how a date is written down between the form and the draft,
+// and the first is what a date is written back as.
 var dateLayouts = []string{"2006-01-02 15:04", time.DateOnly}
+
+// typedLayouts are read and never written: the slashed date a person types,
+// with the year in either length, the hour in either clock, and the day and
+// month padded or not.
+var typedLayouts = []string{
+	"1/2/2006 3:04 PM", "1/2/06 3:04 PM",
+	"1/2/2006 15:04", "1/2/06 15:04",
+	"1/2/2006", "1/2/06",
+}
 
 // draft is what the add and edit screens fill in. It is text, because that is
 // what a person types; turning it into Attributes is attributes(), and that is
@@ -33,7 +41,7 @@ type draft struct {
 	Estimate    string
 	Priority    store.Level
 	Impact      store.Level
-	Colour      string
+	Color       string
 	Lists       []string
 	Tags        []string
 
@@ -69,10 +77,10 @@ type draft struct {
 // built the form, and the copy that reads the answer back is a different one.
 type popupDraft struct {
 	// Noun is "List" or "Tag", and empty when the popup is a snooze.
-	Noun         string
-	Name, Colour string
+	Noun        string
+	Name, Color string
 
-	// Task is the Task the snooze picker was opened on.
+	// Task is the Task the snooze popup was opened on.
 	Task, Until string
 }
 
@@ -88,15 +96,22 @@ func (m Model) form(d *draft) *huh.Form {
 		huh.NewText().Title("Description").Value(&d.Description).Lines(3),
 		huh.NewInput().Title("Why").Value(&d.Why).
 			Placeholder("what happens if this never gets done"),
-		newDateField("Deadline", &d.Deadline, snoozeShortcuts()),
-		newDateField("Snooze until", &d.Snooze, snoozeShortcuts()),
+		dateInput("Deadline", &d.Deadline),
+	}
+	// A snooze is asked for only where there is something to hide. A Task
+	// being created is not in the way of anything yet, and /snooze is how one
+	// gets hidden after that.
+	if d.taskID != "" {
+		fields = append(fields, dateInput("Snooze until", &d.Snooze))
+	}
+	fields = append(fields,
 		huh.NewInput().Title("Estimate").Value(&d.Estimate).
 			Placeholder("90m, 3h, 2h30m").Validate(validDuration),
 		huh.NewSelect[store.Level]().Title("Priority").Value(&d.Priority).
 			Options(levelOptions(store.PriorityExamples)...),
 		huh.NewSelect[store.Level]().Title("Impact").Value(&d.Impact).
 			Options(levelOptions(store.ImpactExamples)...),
-		huh.NewInput().Title("Colour").Value(&d.Colour),
+		colorSelect("Color", &d.Color),
 		huh.NewInput().Title("Attach").Value(&d.Attach).
 			Placeholder("a web address, or ctrl+a to pick a file"),
 		huh.NewText().Title("Fields").Value(&d.Fields).Lines(3).
@@ -105,7 +120,7 @@ func (m Model) form(d *draft) *huh.Form {
 			Height(rows(len(m.lists))).Options(listOptions(m.lists)...),
 		huh.NewMultiSelect[string]().Title("Tags").Value(&d.Tags).
 			Height(rows(len(m.tags))).Options(tagOptions(m.tags)...),
-	}
+	)
 	// The pointers already held are shown only when there are some, all
 	// ticked: unticking one is how it comes off, and an empty list of them
 	// is a field with nothing in it.
@@ -116,25 +131,26 @@ func (m Model) form(d *draft) *huh.Form {
 	}
 	return huh.NewForm(huh.NewGroup(fields...)).
 		WithWidth(min(m.width-4, 72)).
-		WithHeight(max(m.height-4, 10))
+		WithHeight(max(m.height-4, 10)).
+		WithTheme(huh.ThemeFunc(formTheme))
 }
 
-// snoozeForm is the popup that hides a Task until a date the same calendar
-// picks. The four offered snoozes are its shortcut keys, so "1 week" is one
-// keystroke and "the 14th" is on the same screen rather than another one.
+// snoozeForm is the popup that hides a Task until a date. It is the same one
+// field the add screen has, so "1 week" and "4/4/25 9:34 AM" are both written
+// the same way here as there.
 func (m Model) snoozeForm(until *string) *huh.Form {
 	return huh.NewForm(huh.NewGroup(
-		newDateField("Snooze until", until, snoozeShortcuts()),
-	)).WithWidth(min(m.width-8, 48)).WithHeight(16)
+		dateInput("Snooze until", until),
+	)).WithWidth(min(m.width-8, 48)).WithHeight(7).WithTheme(huh.ThemeFunc(formTheme))
 }
 
 // collectionForm is the popup that creates a List or a Tag without leaving the
 // screen that wanted one.
-func (m Model) collectionForm(noun string, name, colour *string) *huh.Form {
+func (m Model) collectionForm(noun string, name, color *string) *huh.Form {
 	return huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("New "+noun).Value(name).Validate(required),
-		huh.NewInput().Title("Colour").Value(colour),
-	)).WithWidth(min(m.width-8, 48)).WithHeight(7)
+		colorSelect("Color", color),
+	)).WithWidth(min(m.width-8, 48)).WithHeight(16).WithTheme(huh.ThemeFunc(formTheme))
 }
 
 // rows is how tall a list of options has to be drawn to be read. huh sizes a
@@ -178,11 +194,47 @@ func tagOptions(tags []store.Tag) []huh.Option[string] {
 	return options
 }
 
+// dateInput is a deadline typed rather than picked. Every layout parseDate
+// reads is one a person can type, and the offered snoozes are typed by name,
+// so "1 week" is still one thing to write down.
+func dateInput(title string, value *string) *huh.Input {
+	return huh.NewInput().Title(title).Value(value).
+		Placeholder("4/4/25 9:34 AM, 2026-01-02, or 1 week").
+		Validate(validDate)
+}
+
+// colorSelect offers the nine colors a Task or a collection can carry, each
+// drawn in itself, with "none" for one that carries none. A color is chosen
+// rather than typed because only these nine paint.
+func colorSelect(title string, value *string) *huh.Select[string] {
+	options := colorOptions()
+	return huh.NewSelect[string]().Title(title).Value(value).
+		Height(rows(len(options))).Options(options...)
+}
+
+// colorOptions are the nine and none, each name drawn in the color it names.
+func colorOptions() []huh.Option[string] {
+	options := []huh.Option[string]{huh.NewOption("none", "")}
+	for _, c := range store.Colors {
+		label := c.Name
+		if paint, ok := colorStyle(c.Name); ok {
+			label = paint.Render(c.Name)
+		}
+		options = append(options, huh.NewOption(label, c.Name))
+	}
+	return options
+}
+
 func required(v string) error {
 	if strings.TrimSpace(v) == "" {
 		return fmt.Errorf("this one is needed")
 	}
 	return nil
+}
+
+func validDate(v string) error {
+	_, err := parseDate(v)
+	return err
 }
 
 func validDuration(v string) error {
@@ -235,12 +287,32 @@ func parseDate(v string) (time.Time, error) {
 	if v == "" {
 		return time.Time{}, nil
 	}
-	for _, layout := range dateLayouts {
-		if t, err := time.ParseInLocation(layout, v, time.Local); err == nil {
-			return t, nil
+	if when, ok := offered(v, time.Now()); ok {
+		return when, nil
+	}
+	// The clock layouts read "PM", and a person types whichever case is under
+	// their hands. Nothing else in a date is a letter, so the whole string
+	// goes up rather than the tail of it.
+	for _, try := range []string{v, strings.ToUpper(v)} {
+		for _, layout := range slices.Concat(dateLayouts, typedLayouts) {
+			if t, err := time.ParseInLocation(layout, try, time.Local); err == nil {
+				return t, nil
+			}
 		}
 	}
-	return time.Time{}, fmt.Errorf("%q is not a date; try 2006-01-02 or 2006-01-02 15:04", v)
+	return time.Time{}, fmt.Errorf(
+		"%q is not a date; try 4/4/25 9:34 AM, 2026-01-02, or one of the snoozes by name", v)
+}
+
+// offered reads one of the store's snoozes typed by name, which is what the
+// calendar offered as its shortcut keys.
+func offered(v string, now time.Time) (time.Time, bool) {
+	for _, s := range store.SnoozeDefaults {
+		if strings.EqualFold(v, s.Label) {
+			return s.Until(now), true
+		}
+	}
+	return time.Time{}, false
 }
 
 func parseDuration(v string) (time.Duration, error) {
@@ -294,13 +366,13 @@ func (d draft) attributes() (store.Attributes, error) {
 		Description: store.Set(d.Description),
 		Why:         store.Set(d.Why),
 		Deadline:    store.Set(deadline),
-		// The store reads a snooze against the clock in UTC, and the
-		// picker fills the draft in local time.
+		// The store reads a snooze against the clock in UTC, and a date
+		// typed into the draft is read in local time.
 		SnoozedUntil: store.Set(snooze.UTC()),
 		Estimate:     store.Set(estimate),
 		Priority:     store.Set(d.Priority),
 		Impact:       store.Set(d.Impact),
-		Colour:       store.Set(d.Colour),
+		Color:        store.Set(d.Color),
 		Fields:       fields,
 	}, nil
 }
@@ -315,7 +387,7 @@ func draftOf(t store.Task) *draft {
 		Why:         t.Why,
 		Priority:    t.Priority,
 		Impact:      t.Impact,
-		Colour:      t.Colour,
+		Color:       t.Color,
 		Lists:       append([]string(nil), t.Lists...),
 		Tags:        append([]string(nil), t.Tags...),
 		Attachments: append([]string(nil), t.Attachments...),

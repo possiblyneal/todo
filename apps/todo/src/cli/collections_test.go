@@ -18,7 +18,7 @@ func TestListsAndTagsAreCreatedRenamedAndCounted(t *testing.T) {
 	storeInTemp(t)
 	t.Setenv("TODO_ACTOR", "alice")
 
-	home := newCollection(t, "lists", "Home", "-colour", "#88cc88")
+	home := newCollection(t, "lists", "Home", "-color", "green")
 	deep := newCollection(t, "tags", "deep-work")
 	task := added(t, "Fix the sink")
 
@@ -82,7 +82,7 @@ func TestListNarrowsToAListAndSorts(t *testing.T) {
 	if strings.Index(byTitle, anvil) > strings.Index(byTitle, zebra) {
 		t.Errorf("sorted by title the order is wrong:\n%s", byTitle)
 	}
-	if code, _, _ := run(t, "list", "-sort", "colour"); code != 2 {
+	if code, _, _ := run(t, "list", "-sort", "color"); code != 2 {
 		t.Errorf("an unknown sort exited %d, want 2", code)
 	}
 }

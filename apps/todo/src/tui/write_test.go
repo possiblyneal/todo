@@ -27,8 +27,7 @@ func TestTheFormValidatesWhatItAsksFor(t *testing.T) {
 	if err := required("  "); err == nil {
 		t.Error("a blank title was accepted")
 	}
-	// A deadline is picked, not typed, so what the draft carries is only ever
-	// what the calendar wrote into it.
+	// A deadline is typed, and these are the layouts the form writes back.
 	for _, good := range []string{"", "2026-01-02", "2026-01-02 15:04"} {
 		if _, err := parseDate(good); err != nil {
 			t.Errorf("%q was refused as a date: %v", good, err)
@@ -310,7 +309,7 @@ func TestCreatingAListFromTheFormKeepsTheDraft(t *testing.T) {
 	m = addScreen(m)
 	m.draft.Title = "Half typed"
 
-	m.pop = &popupDraft{Noun: "List", Name: "Errands", Colour: "amber"}
+	m.pop = &popupDraft{Noun: "List", Name: "Errands", Color: "orange"}
 	m, _ = m.createCollection()
 
 	if m.err != nil {

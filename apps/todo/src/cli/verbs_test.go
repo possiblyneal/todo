@@ -109,7 +109,7 @@ func TestAddTakesTheWholeAttributeSet(t *testing.T) {
 		"-estimate", "90m",
 		"-priority", "high",
 		"-impact", "med",
-		"-colour", "#ff8800",
+		"-color", "orange",
 		"-field", "repo=todo",
 		"-field", "pr=42",
 		"Ship the thing",
@@ -134,8 +134,8 @@ func TestAddTakesTheWholeAttributeSet(t *testing.T) {
 		t.Errorf("estimate = %v", got.Estimate)
 	case got.Priority != store.LevelHigh || got.Impact != store.LevelMed:
 		t.Errorf("priority/impact = %q/%q", got.Priority, got.Impact)
-	case got.Colour != "#ff8800":
-		t.Errorf("colour = %q", got.Colour)
+	case got.Color != "orange":
+		t.Errorf("color = %q", got.Color)
 	case got.Fields["repo"] != "todo" || got.Fields["pr"] != "42":
 		t.Errorf("fields = %v", got.Fields)
 	case got.Deadline.Format("2006-01-02") != "2027-03-04":

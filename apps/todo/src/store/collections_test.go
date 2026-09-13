@@ -11,7 +11,7 @@ func TestAListOutlivesTheTasksInIt(t *testing.T) {
 	s := openTemp(t)
 
 	// It exists before any Task is in it.
-	id, err := s.AddList("alice", "Home", "#88cc88")
+	id, err := s.AddList("alice", "Home", "green")
 	if err != nil {
 		t.Fatalf("AddList: %v", err)
 	}
@@ -19,7 +19,7 @@ func TestAListOutlivesTheTasksInIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Lists: %v", err)
 	}
-	if len(lists) != 1 || lists[0].Name != "Home" || lists[0].Colour != "#88cc88" || lists[0].Count != 0 {
+	if len(lists) != 1 || lists[0].Name != "Home" || lists[0].Color != "green" || lists[0].Count != 0 {
 		t.Fatalf("an empty List reads back as %+v", lists)
 	}
 
@@ -116,7 +116,7 @@ func TestRenamingAListChangesOneThing(t *testing.T) {
 
 func TestATagIsCountedAcrossTheTracker(t *testing.T) {
 	s := openTemp(t)
-	deep, err := s.AddTag("alice", "deep-work", "#4444ff")
+	deep, err := s.AddTag("alice", "deep-work", "blue")
 	if err != nil {
 		t.Fatalf("AddTag: %v", err)
 	}
@@ -146,12 +146,12 @@ func TestATagIsCountedAcrossTheTracker(t *testing.T) {
 		t.Fatalf("the tags rank as %+v", tags)
 	}
 
-	// Recoloured once, and every Task carrying it is untouched.
-	if err := s.DescribeTag("alice", deep, nil, Set("#000000")); err != nil {
+	// Recolored once, and every Task carrying it is untouched.
+	if err := s.DescribeTag("alice", deep, nil, Set("violet")); err != nil {
 		t.Fatalf("DescribeTag: %v", err)
 	}
-	if tags, _ = s.Tags(); tags[0].Colour != "#000000" || tags[0].Name != "deep-work" {
-		t.Errorf("recolouring changed %+v", tags[0])
+	if tags, _ = s.Tags(); tags[0].Color != "violet" || tags[0].Name != "deep-work" {
+		t.Errorf("recoloring changed %+v", tags[0])
 	}
 }
 
@@ -234,7 +234,7 @@ func TestTasksSortByDeadlineOrTitle(t *testing.T) {
 		}
 	}
 
-	if _, err := s.Tasks(Query{Sort: "colour"}); err == nil {
+	if _, err := s.Tasks(Query{Sort: "color"}); err == nil {
 		t.Error("an unknown sort was accepted")
 	}
 }

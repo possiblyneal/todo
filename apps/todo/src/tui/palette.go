@@ -1,14 +1,20 @@
 package tui
 
 import (
+	"fmt"
 	"io"
 	"strings"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
+
+// verbWidth is the column a command's name is padded into: the longest of
+// them is "/snooze 1 month".
+const verbWidth = 15
 
 // command is one entry in the slash palette.
 type command struct {
@@ -44,26 +50,29 @@ func commands() []list.Item {
 	return items
 }
 
-// commandDelegate draws a command in one line.
-type commandDelegate struct{}
+// commandDelegate draws a command in one line, marked so it can be clicked.
+type commandDelegate struct{ zones *zone.Manager }
 
 func (commandDelegate) Height() int                         { return 1 }
 func (commandDelegate) Spacing() int                        { return 0 }
 func (commandDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
-func (commandDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+func (d commandDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	c, ok := item.(command)
 	if !ok {
 		return
 	}
-	line := "  " + c.name + "  " + dimStyle.Render(c.what)
+	// The names are padded into one column so the eye runs down the verbs
+	// and the descriptions start in the same place.
+	name := fmt.Sprintf("%-*s", verbWidth, c.name)
+	line := "  " + name + "  " + dimStyle.Render(c.what)
 	if index == m.Index() {
-		line = selectedStyle.Render("▸ " + c.name + "  " + c.what)
+		line = selectedStyle.Render("┃ "+name) + "  " + dimStyle.Render(c.what)
 	}
-	io.WriteString(w, line)
+	io.WriteString(w, d.zones.Mark("command:"+c.name, line))
 }
 
-func newPalette(width, height int) list.Model {
-	l := list.New(commands(), commandDelegate{}, width, height)
+func newPalette(zones *zone.Manager, width, height int) list.Model {
+	l := list.New(commands(), commandDelegate{zones: zones}, width, height)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
@@ -105,7 +114,7 @@ func (m Model) run(name string) (Model, tea.Cmd) {
 
 	case "/list", "/tag":
 		m.pop = &popupDraft{Noun: strings.ToUpper(name[1:2]) + name[2:]}
-		m.popup = m.collectionForm(m.pop.Noun, &m.pop.Name, &m.pop.Colour)
+		m.popup = m.collectionForm(m.pop.Noun, &m.pop.Name, &m.pop.Color)
 		return m, m.popup.Init()
 
 	case "/snooze":

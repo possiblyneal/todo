@@ -274,7 +274,7 @@ func detachedFrom(t Task) Attributes {
 		Estimate:    Set(t.Estimate),
 		Priority:    Set(t.Priority),
 		Impact:      Set(t.Impact),
-		Colour:      Set(t.Colour),
+		Color:       Set(t.Color),
 	}
 	if len(t.Fields) > 0 {
 		a.Fields = t.Fields

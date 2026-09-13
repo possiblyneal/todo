@@ -82,7 +82,8 @@ func (m Model) captureForm(c *capture) *huh.Form {
 		huh.NewText().Title(title).
 			Description("However you think of it. ctrl+d hands it to the broker, esc goes back, and an empty box opens the form itself.").
 			Value(&c.Text).Lines(8),
-	)).WithWidth(min(m.width-8, 72)).WithHeight(max(m.height-8, 12)).WithKeyMap(keys)
+	)).WithWidth(min(m.width-8, 72)).WithHeight(max(m.height-8, 12)).WithKeyMap(keys).
+		WithTheme(huh.ThemeFunc(formTheme))
 }
 
 // updateCapture drives the box. Escape ends it at any point, including while

@@ -68,7 +68,7 @@ func TestTheModelIsTheOneTheBoxSaysItCanChatWith(t *testing.T) {
 
 func TestAskingForMoreComesBackAsQuestions(t *testing.T) {
 	c := broker(t, func(w http.ResponseWriter, body map[string]any) {
-		completion(w, `{"questions":["What colour?","Which shed?"],"proposals":[]}`)
+		completion(w, `{"questions":["What color?","Which shed?"],"proposals":[]}`)
 	})
 
 	step, err := c.Breakdown(context.Background(), Brief{Title: "Paint the shed"}, nil)
@@ -92,11 +92,11 @@ func TestTheAnswersGoBackWithTheNextTurn(t *testing.T) {
 	})
 
 	step, err := c.Breakdown(context.Background(), Brief{Title: "Paint the shed"},
-		[]QA{{Question: "What colour?", Answer: "Green"}})
+		[]QA{{Question: "What color?", Answer: "Green"}})
 	if err != nil {
 		t.Fatalf("Breakdown: %v", err)
 	}
-	if !strings.Contains(sent, "What colour?") || !strings.Contains(sent, "Green") {
+	if !strings.Contains(sent, "What color?") || !strings.Contains(sent, "Green") {
 		t.Errorf("the turn carried %s, want the question and its answer", sent)
 	}
 	if len(step.Proposals) != 1 || step.Proposals[0].Title != "Sand it" {
