@@ -198,7 +198,8 @@ func (m Model) questionForm(bd *breakdown) *huh.Form {
 		fields = append(fields, huh.NewInput().Title(q).Value(&bd.replies[i]))
 	}
 	return huh.NewForm(huh.NewGroup(fields...)).
-		WithWidth(min(m.width-8, 72)).WithHeight(max(m.height-8, 8))
+		WithWidth(min(m.width-8, 72)).WithHeight(max(m.height-8, 8)).
+		WithTheme(huh.ThemeFunc(formTheme))
 }
 
 // approvalForm is the gate. Every proposal starts ticked and unticking one is
@@ -213,7 +214,8 @@ func (m Model) approvalForm(bd *breakdown) *huh.Form {
 			Title("Subtasks of " + bd.task.Title).
 			Description("Untick anything you do not want. Nothing is written until you submit.").
 			Value(&bd.approved).Height(rows(len(options)) + 2).Options(options...),
-	)).WithWidth(min(m.width-8, 72)).WithHeight(max(m.height-8, 10))
+	)).WithWidth(min(m.width-8, 72)).WithHeight(max(m.height-8, 10)).
+		WithTheme(huh.ThemeFunc(formTheme))
 }
 
 // startInquiry opens the question box for `/ask`.
@@ -221,7 +223,7 @@ func (m Model) startInquiry() (Model, tea.Cmd) {
 	m.ask = &inquiry{}
 	m.ask.form = huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("Ask about the list").Value(&m.ask.Question).Validate(required),
-	)).WithWidth(min(m.width-8, 64)).WithHeight(7)
+	)).WithWidth(min(m.width-8, 64)).WithHeight(7).WithTheme(huh.ThemeFunc(formTheme))
 	return m, m.ask.form.Init()
 }
 

@@ -131,7 +131,8 @@ func (m Model) form(d *draft) *huh.Form {
 	}
 	return huh.NewForm(huh.NewGroup(fields...)).
 		WithWidth(min(m.width-4, 72)).
-		WithHeight(max(m.height-4, 10))
+		WithHeight(max(m.height-4, 10)).
+		WithTheme(huh.ThemeFunc(formTheme))
 }
 
 // snoozeForm is the popup that hides a Task until a date. It is the same one
@@ -140,7 +141,7 @@ func (m Model) form(d *draft) *huh.Form {
 func (m Model) snoozeForm(until *string) *huh.Form {
 	return huh.NewForm(huh.NewGroup(
 		dateInput("Snooze until", until),
-	)).WithWidth(min(m.width-8, 48)).WithHeight(7)
+	)).WithWidth(min(m.width-8, 48)).WithHeight(7).WithTheme(huh.ThemeFunc(formTheme))
 }
 
 // collectionForm is the popup that creates a List or a Tag without leaving the
@@ -149,7 +150,7 @@ func (m Model) collectionForm(noun string, name, color *string) *huh.Form {
 	return huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("New "+noun).Value(name).Validate(required),
 		colorSelect("Color", color),
-	)).WithWidth(min(m.width-8, 48)).WithHeight(16)
+	)).WithWidth(min(m.width-8, 48)).WithHeight(16).WithTheme(huh.ThemeFunc(formTheme))
 }
 
 // rows is how tall a list of options has to be drawn to be read. huh sizes a

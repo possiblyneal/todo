@@ -97,7 +97,7 @@ func (m Model) editRule() (Model, tea.Cmd) {
 	m.rep.form = huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("Repeats").Value(&m.rep.text).
 			Placeholder("every 2 weeks on mon,thu").Validate(validRule),
-	)).WithWidth(min(m.width-8, 56)).WithHeight(7)
+	)).WithWidth(min(m.width-8, 56)).WithHeight(7).WithTheme(huh.ThemeFunc(formTheme))
 	return m, m.rep.form.Init()
 }
 
