@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // wheel scrolls the view the way a mouse does, one notch.
@@ -29,8 +30,8 @@ func TestTheWheelMovesTheCursor(t *testing.T) {
 }
 
 // A click puts the cursor on a Task. It takes a second one on the same Task to
-// blow it up, which is what leaves a Task reachable by mouse for a slash
-// command without the detail pane opening over the list first.
+// blow it up, which is what leaves a Task reachable by mouse for a verb
+// without the detail pane opening over the list first.
 func TestAClickChoosesATaskAndASecondOpensIt(t *testing.T) {
 	m := newModel(t, fixture(t))
 	var second row
@@ -65,28 +66,30 @@ func TestTheFooterKeysAreClickable(t *testing.T) {
 	m := newModel(t, fixture(t))
 
 	was := m.sort
-	m = clickOn(t, m, "hint:sort")
+	m = clickOn(t, m, "key:s")
 	if m.sort == was {
 		t.Errorf("clicking sort left the order at %q", m.sort)
 	}
 
-	m = clickOn(t, m, "hint:snoozed")
+	m = clickOn(t, m, "key:h")
 	if !m.snoozed {
-		t.Error("clicking snoozed did not show the Tasks that are away")
+		t.Error("clicking hidden did not show the Tasks that are away")
 	}
 
-	m = clickOn(t, m, "hint:lists")
+	m = clickOn(t, m, "key:l")
 	if !m.dropdown {
 		t.Error("clicking lists did not open the dropdown")
 	}
-	m = clickOn(t, m, "hint:lists")
+	m = clickOn(t, m, "key:l")
 	if m.dropdown {
 		t.Error("clicking lists again did not close the dropdown")
 	}
 
-	m = clickOn(t, m, "hint:commands")
-	if !m.paletteOpen {
-		t.Error("clicking commands did not open the palette")
+	// A Task verb is a hit box too, and the snooze it opens is a form: it
+	// asks before it writes, so clicking it keeps this a read.
+	m = clickOn(t, m, "key:z")
+	if m.popup == nil {
+		t.Error("clicking snooze opened no field")
 	}
 }
 
@@ -97,49 +100,6 @@ func TestTheSortInTheHeaderIsClickable(t *testing.T) {
 	m = clickOn(t, m, "sortbox")
 	if m.sort == was {
 		t.Errorf("clicking the header's sort left the order at %q", m.sort)
-	}
-}
-
-// A palette entry runs on the click that lands on it, with no second one:
-// a verb is not something a cursor is parked on.
-func TestAClickRunsAPaletteCommand(t *testing.T) {
-	m := newModel(t, fixture(t))
-	was := m.sort
-
-	m = press(m, "/")
-	m = clickOn(t, m, "command:/sort")
-	if m.paletteOpen {
-		t.Error("running a command by click left the palette open")
-	}
-	if m.sort == was {
-		t.Errorf("clicking /sort left the order at %q", m.sort)
-	}
-	if m.sort != nextSort(was) {
-		t.Errorf("clicking /sort ordered by %q, want %q", m.sort, nextSort(was))
-	}
-}
-
-// The wheel moves the palette's cursor too, and moving it writes nothing.
-func TestTheWheelMovesThePaletteCursor(t *testing.T) {
-	s := fixture(t)
-	before, err := s.HistoryLength()
-	if err != nil {
-		t.Fatalf("HistoryLength: %v", err)
-	}
-	m := newModel(t, s)
-
-	m = press(m, "/")
-	m = wheel(m, tea.MouseWheelDown)
-	if m.palette.Index() != 1 {
-		t.Errorf("a notch down left the palette's cursor at %d, want 1", m.palette.Index())
-	}
-
-	after, err := s.HistoryLength()
-	if err != nil {
-		t.Fatalf("HistoryLength: %v", err)
-	}
-	if after != before {
-		t.Errorf("the Change History grew from %d to %d; scrolling wrote something", before, after)
 	}
 }
 
@@ -160,7 +120,7 @@ func TestTheSidebarIsDrawnTheHeightOfThePane(t *testing.T) {
 func TestAClickChoosesTheRightTaskUnderASearch(t *testing.T) {
 	m := newModel(t, fixture(t))
 
-	m = press(m, "f")
+	m = press(m, "/")
 	for _, r := range "apples" {
 		m = send(m, tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
@@ -207,7 +167,7 @@ func TestTheDropdownTakesItsOwnClicksOverABlownUpTask(t *testing.T) {
 	m := newModel(t, fixture(t))
 
 	m = press(m, "enter")
-	m = clickOn(t, m, "hint:lists")
+	m = clickOn(t, m, "key:l")
 	if !m.expanded || !m.dropdown {
 		t.Fatalf("wanted the dropdown open over the blown-up Task; expanded=%v dropdown=%v", m.expanded, m.dropdown)
 	}
@@ -233,7 +193,7 @@ func TestTheDropdownTakesItsOwnClicksOverABlownUpTask(t *testing.T) {
 func TestASearchMatchingNothingIsNotTheEmptyState(t *testing.T) {
 	m := newModel(t, fixture(t))
 
-	m = press(m, "f")
+	m = press(m, "/")
 	for _, r := range "zzzz" {
 		m = send(m, tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
@@ -243,5 +203,36 @@ func TestASearchMatchingNothingIsNotTheEmptyState(t *testing.T) {
 	}
 	if drawn := m.View().Content; strings.Contains(drawn, "Nothing to do") {
 		t.Error("a search matching nothing drew the empty state, which says to add the first Task")
+	}
+}
+
+// The sidebar's state rows are hit boxes like the Tags under them.
+func TestTheSidebarStatesAreClickable(t *testing.T) {
+	m := newModel(t, fixture(t))
+
+	m = clickOn(t, m, "state:done")
+	if !m.done {
+		t.Error("clicking done did not bring the completed Tasks into view")
+	}
+	m = clickOn(t, m, "state:snoozed")
+	if !m.snoozed || !m.done {
+		t.Errorf("clicking snoozed left snoozed=%v done=%v, want both", m.snoozed, m.done)
+	}
+	m = clickOn(t, m, "state:done")
+	if m.done {
+		t.Error("clicking done again left it on")
+	}
+}
+
+// Nothing is drawn past the terminal's last column, however narrow the window
+// is: a row that overran its pane would push the sidebar's rule off the edge.
+func TestNothingIsDrawnPastTheEdgeOfANarrowTerminal(t *testing.T) {
+	m := newModel(t, fixture(t))
+	m = m.resize(tea.WindowSizeMsg{Width: 40, Height: 20})
+
+	for i, line := range strings.Split(m.View().Content, "\n") {
+		if got := lipgloss.Width(line); got > 40 {
+			t.Errorf("line %d is %d cells wide in a terminal of 40: %q", i, got, line)
+		}
 	}
 }

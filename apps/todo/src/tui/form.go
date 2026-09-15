@@ -33,6 +33,11 @@ type draft struct {
 	// edited, which is the only difference between the two screens.
 	taskID string
 
+	// parentID is the Task a new one is nested under, and empty for a
+	// top-level Task. It is read only when taskID is empty: an edit never
+	// moves a Task to another parent.
+	parentID string
+
 	Title       string
 	Description string
 	Why         string
@@ -79,6 +84,12 @@ type popupDraft struct {
 	// Noun is "List" or "Tag", and empty when the popup is a snooze.
 	Noun        string
 	Name, Color string
+
+	// ID is the List or Tag being described, and empty when the popup is
+	// making a new one. Delete is what was ticked on the way out: the
+	// collection goes and every Task that carried it stays, unfiled.
+	ID     string
+	Delete bool
 
 	// Task is the Task the snooze popup was opened on.
 	Task, Until string
@@ -150,6 +161,20 @@ func (m Model) collectionForm(noun string, name, color *string) *huh.Form {
 	return huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("New "+noun).Value(name).Validate(required),
 		colorSelect("Color", color),
+	)).WithWidth(min(m.width-8, 48)).WithHeight(16).WithTheme(huh.ThemeFunc(formTheme))
+}
+
+// describeForm is the same popup opened on a List or a Tag that already
+// exists: the name and the color as they are, and the one way to get rid of
+// it. Deleting is a tick rather than a key of its own, so it cannot be the
+// thing that happens when a finger slips.
+func (m Model) describeForm(pop *popupDraft) *huh.Form {
+	return huh.NewForm(huh.NewGroup(
+		huh.NewInput().Title(pop.Noun).Value(&pop.Name).Validate(required),
+		colorSelect("Color", &pop.Color),
+		huh.NewConfirm().Title("Delete").Value(&pop.Delete).
+			Description("the Tasks stay, and lose it").
+			Affirmative("delete it").Negative("keep it"),
 	)).WithWidth(min(m.width-8, 48)).WithHeight(16).WithTheme(huh.ThemeFunc(formTheme))
 }
 

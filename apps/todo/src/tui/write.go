@@ -50,6 +50,19 @@ func (m *Model) save(d *draft) error {
 		})
 	}
 
+	// A Subtask is a write to the parent's tree, so the add and the
+	// memberships go inside the one Lease over that tree; a top-level Task
+	// has no tree until it exists, so its Lease is taken on itself after.
+	if d.taskID == "" && d.parentID != "" {
+		return m.store.WithLease(m.actor, d.parentID, store.WriteTTL, func() error {
+			id, err := m.store.AddSubtask(m.actor, d.parentID, a)
+			if err != nil {
+				return err
+			}
+			return m.memberships(id, store.Task{}, d)
+		})
+	}
+
 	if d.taskID == "" {
 		id, err := m.store.AddTask(m.actor, a)
 		if err != nil {
@@ -143,11 +156,6 @@ func (m *Model) lifecycle(taskID, what string) error {
 		}
 		return fmt.Errorf("no such command %q", what)
 	})
-}
-
-// snooze hides a Task for one of the offered lengths, counted from now.
-func (m *Model) snooze(taskID string, s store.Snooze) error {
-	return m.snoozeUntil(taskID, s.Until(time.Now()))
 }
 
 // snoozeUntil hides a Task until a moment that was typed. The zero time

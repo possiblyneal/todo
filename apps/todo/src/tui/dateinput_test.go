@@ -60,7 +60,7 @@ func TestSnoozeHidesTheTaskUntilWhatIsTyped(t *testing.T) {
 	m := newModel(t, s)
 	task, _ := m.selected()
 
-	m, cmd := m.run("/snooze")
+	m, cmd := m.do("z")
 	if m.popup == nil || m.pop == nil || m.pop.Task != task.ID {
 		t.Fatalf("/snooze opened no field for %s", task.ID)
 	}

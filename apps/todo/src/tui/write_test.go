@@ -215,7 +215,9 @@ func TestTheWatcherNoticesAnotherProcess(t *testing.T) {
 	}
 }
 
-func TestThePaletteRunsTheChosenCommand(t *testing.T) {
+// A key is the whole of the command: the one under the cursor is what it acts
+// on, and there is no palette in between.
+func TestAKeyRunsTheVerbOnTheTaskUnderTheCursor(t *testing.T) {
 	s := fixture(t)
 	m := newModel(t, s)
 
@@ -230,22 +232,9 @@ func TestThePaletteRunsTheChosenCommand(t *testing.T) {
 	}
 	task, _ := m.selected()
 
-	m = press(m, "/")
-	if !m.paletteOpen {
-		t.Fatal("/ did not open the palette")
-	}
-	for _, key := range []string{"c", "o", "m", "p"} {
-		m = press(m, key)
-	}
-	if c, ok := m.palette.SelectedItem().(command); !ok || c.name != "/complete" {
-		t.Fatalf("typing comp selected %v, want /complete", m.palette.SelectedItem())
-	}
-	m = press(m, "enter")
-	if m.paletteOpen {
-		t.Error("running a command left the palette open")
-	}
+	m = press(m, "c")
 	if m.err != nil {
-		t.Fatalf("/complete reported %v", m.err)
+		t.Fatalf("completing reported %v", m.err)
 	}
 
 	done, err := s.Tasks(store.Query{IncludeCompleted: true})
@@ -254,12 +243,12 @@ func TestThePaletteRunsTheChosenCommand(t *testing.T) {
 	}
 	for _, got := range done {
 		if got.ID == task.ID && got.CompletedAt.IsZero() {
-			t.Error("/complete did not complete the Task under the cursor")
+			t.Error("c did not complete the Task under the cursor")
 		}
 	}
 }
 
-// /decline is the palette's other ending, and it takes the same Lease the
+// Declining is the other ending, and it takes the same Lease the
 // other lifecycle commands do.
 func TestThePaletteDeclinesTheTaskUnderTheCursor(t *testing.T) {
 	s := fixture(t)
@@ -275,7 +264,7 @@ func TestThePaletteDeclinesTheTaskUnderTheCursor(t *testing.T) {
 	}
 	task, _ := m.selected()
 
-	m, _ = m.run("/decline")
+	m, _ = m.do("x")
 	if m.err != nil {
 		t.Fatalf("/decline reported %v", m.err)
 	}
@@ -335,7 +324,7 @@ func TestWhatIsTypedIntoThePopupIsWhatIsCreated(t *testing.T) {
 	s := fixture(t)
 	m := newModel(t, s)
 
-	m, cmd := m.run("/list")
+	m, cmd := m.do("ctrl+l")
 	m = send(m, cmd())
 	for _, key := range []string{"E", "r", "r", "a", "n", "d", "s", "enter", "enter"} {
 		m = press(m, key)
@@ -349,22 +338,6 @@ func TestWhatIsTypedIntoThePopupIsWhatIsCreated(t *testing.T) {
 		}
 	}
 	t.Errorf("no List named Errands: %v", m.lists)
-}
-
-func TestSnoozeHidesTheTask(t *testing.T) {
-	s := fixture(t)
-	m := newModel(t, s)
-	task, _ := m.selected()
-
-	m, _ = m.run("/snooze 1 day")
-	if m.err != nil {
-		t.Fatalf("snoozing: %v", m.err)
-	}
-	for _, item := range m.tasks.Items() {
-		if item.(row).task.ID == task.ID {
-			t.Error("a snoozed Task is still in the view")
-		}
-	}
 }
 
 // TestEmojiAndNerdGlyphsKeepTheirWidth measures what the row drawing measures.
@@ -497,7 +470,7 @@ func TestTheScheduleScreenMarksADate(t *testing.T) {
 	})
 
 	m.tasks.Select(indexOf(t, m, apples.ID))
-	m, _ = m.run("/repeat")
+	m, _ = m.do("r")
 	if m.rep == nil {
 		t.Fatal("/repeat opened nothing")
 	}
@@ -546,7 +519,7 @@ func TestDetachingADateFromTheScreenClosesIt(t *testing.T) {
 		return err
 	})
 	m.tasks.Select(indexOf(t, m, apples.ID))
-	m, _ = m.run("/repeat")
+	m, _ = m.do("r")
 
 	m = press(m, "d")
 	if m.err != nil {
@@ -602,7 +575,7 @@ func TestAScheduleWithNoDatesLeftTakesNoMark(t *testing.T) {
 		return err
 	})
 	m.tasks.Select(indexOf(t, m, apples.ID))
-	m, _ = m.run("/repeat")
+	m, _ = m.do("r")
 	if m.rep == nil || len(m.rep.dates) != 0 {
 		t.Fatalf("the screen opened on %d dates, want a rule that has run out", len(m.rep.dates))
 	}
@@ -657,7 +630,7 @@ func TestTheScheduleScreenOpensOnTodayInTheLocalZone(t *testing.T) {
 			})
 
 			m.tasks.Select(indexOf(t, m, apples.ID))
-			m, _ = m.run("/repeat")
+			m, _ = m.do("r")
 			if m.rep == nil || len(m.rep.dates) == 0 {
 				t.Fatal("/repeat showed no dates for a daily rule")
 			}
@@ -715,10 +688,10 @@ func taskIn(t *testing.T, s *store.Store, id string) (store.Task, bool) {
 	return store.Task{}, false
 }
 
-// A snoozed Task is out of the way, not gone. "z" is how it comes back into
-// view, which is the only way the edit screen can be opened on one to take
-// the snooze off again.
-func TestZBringsSnoozedTasksBackIntoView(t *testing.T) {
+// A snoozed Task is out of the way, not gone. "h" is how what is hidden comes
+// back into view, which is the only way the edit screen can be opened on one
+// to take the snooze off again.
+func TestHiddenBringsSnoozedTasksBackIntoView(t *testing.T) {
 	s := fixture(t)
 	m := newModel(t, s)
 
@@ -733,10 +706,10 @@ func TestZBringsSnoozedTasksBackIntoView(t *testing.T) {
 		t.Fatal("a snoozed Task is still in the main view")
 	}
 
-	m = press(m, "z")
+	m = press(m, "h")
 	back, drawn := m.taskByID(task.ID)
 	if !drawn {
-		t.Fatal("z did not bring the snoozed Task back")
+		t.Fatal("h did not bring the snoozed Task back")
 	}
 	if !slices.Contains(back.Marks(), "snoozed") {
 		t.Errorf("the Task came back marked %v, want it to say snoozed", back.Marks())
@@ -744,15 +717,15 @@ func TestZBringsSnoozedTasksBackIntoView(t *testing.T) {
 
 	// And off again, because the point of the key is that the view goes
 	// back to what is in front of you.
-	m = press(m, "z")
+	m = press(m, "h")
 	if _, drawn := m.taskByID(task.ID); drawn {
-		t.Error("z a second time left the snoozed Task in view")
+		t.Error("h a second time left the snoozed Task in view")
 	}
 
 	// And back on, because the snooze is taken off from the screen it is
 	// visible on. #30 was that this path was unreachable, so the edit goes
 	// through a Task the view actually holds.
-	m = press(m, "z")
+	m = press(m, "h")
 	off := draftOf(back)
 	off.Snooze = ""
 	if err := m.save(off); err != nil {
@@ -783,7 +756,7 @@ func TestEditingOneDateDetachesIt(t *testing.T) {
 		return err
 	})
 	m.tasks.Select(indexOf(t, m, apples.ID))
-	m, _ = m.run("/repeat")
+	m, _ = m.do("r")
 	on := m.rep.dates[0].Date
 
 	// Escaping writes nothing: the Series still produces the date, and the
@@ -847,5 +820,238 @@ func TestEditingOneDateDetachesIt(t *testing.T) {
 	}
 	if again, ok := taskNamed(m, "Buy apples"); !ok || again.ID != apples.ID {
 		t.Error("the recurring Task did not survive the edit under its own title")
+	}
+}
+
+// A Task verb with nothing under the cursor does nothing at all: the footer
+// draws it faint rather than dropping it, so the row does not move as the
+// cursor does, and pressing it is not a write against whatever was there last.
+func TestTaskVerbsDoNothingWithNoTaskUnderTheCursor(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "todo.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	m := newModel(t, s)
+
+	before, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+	for _, v := range taskVerbs {
+		if !v.needs {
+			continue
+		}
+		m = press(m, v.key)
+		if m.err != nil {
+			t.Fatalf("%q on an empty view reported %v", v.key, m.err)
+		}
+		if m.popup != nil || m.editor != nil || m.capturing != nil || m.rep != nil || m.bd != nil {
+			t.Fatalf("%q on an empty view opened a screen", v.key)
+		}
+		if !strings.Contains(m.footer(), v.what) {
+			t.Errorf("the footer stopped naming %q with nothing to act on", v.what)
+		}
+	}
+	after, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+	if after != before {
+		t.Errorf("the Change History grew from %d to %d", before, after)
+	}
+
+	// Adding is the one that does not need a Task, and it still works.
+	m = press(m, "a")
+	if m.capturing == nil {
+		t.Error("a opened no box on an empty view")
+	}
+}
+
+// The sidebar's top rows are the states a read leaves out. Choosing one widens
+// the view rather than replacing it, so an ended Task can be looked at beside
+// the open ones, and several can be on at once.
+func TestTheSidebarStatesWidenTheView(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+
+	done, ok := taskNamed(m, "Buy apples")
+	declined, ok2 := taskNamed(m, "Send the invoice")
+	if !ok || !ok2 {
+		t.Fatal("the fixture is missing the two Tasks this ends")
+	}
+	if err := m.lifecycle(done.ID, "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if err := m.refresh(); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if err := m.lifecycle(declined.ID, "decline"); err != nil {
+		t.Fatalf("decline: %v", err)
+	}
+	if err := m.refresh(); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	open := len(m.tasks.Items())
+
+	m = m.showing(doneState)
+	if _, drawn := m.taskByID(done.ID); !drawn {
+		t.Fatal("choosing done did not bring the completed Task into view")
+	}
+	if _, drawn := m.taskByID(declined.ID); drawn {
+		t.Error("choosing done brought the declined Task in too")
+	}
+
+	m = m.showing(declinedState)
+	if _, drawn := m.taskByID(done.ID); !drawn {
+		t.Error("choosing declined took the completed Task back out; the states stack")
+	}
+	if _, drawn := m.taskByID(declined.ID); !drawn {
+		t.Fatal("choosing declined did not bring the declined Task into view")
+	}
+	if got := len(m.tasks.Items()); got != open+2 {
+		t.Errorf("both states on left %d Tasks in view, want the %d open ones and the two ended", got, open)
+	}
+
+	m = m.showing(doneState)
+	if _, drawn := m.taskByID(done.ID); drawn {
+		t.Error("taking done off left the completed Task in view")
+	}
+	if _, drawn := m.taskByID(declined.ID); !drawn {
+		t.Error("taking done off took the declined Task out with it")
+	}
+}
+
+// A Subtask is written by hand from the same box the broker's breakdown fills
+// in: "n" opens it on the Task under the cursor, and what is saved lands under
+// that Task rather than beside it.
+func TestNWritesASubtaskUnderTheTaskUnderTheCursor(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+	parent, _ := m.selected()
+
+	m, cmd := m.do("n")
+	for _, msg := range run(cmd) {
+		m = send(m, msg)
+	}
+	if m.capturing == nil || m.capturing.under == nil || m.capturing.under.ID != parent.ID {
+		t.Fatalf("n did not open the box under %q: %v", parent.Title, m.err)
+	}
+	if view := m.capturing.form.View(); !strings.Contains(view, parent.Title) {
+		t.Errorf("the box does not say what it is under:\n%s", view)
+	}
+
+	m = done(m)
+	if m.draft == nil || m.draft.parentID != parent.ID {
+		t.Fatalf("the form opened on %+v, want a draft under the parent", m.draft)
+	}
+
+	before := historyLength(t, s)
+	d := m.draft
+	d.Title = "Sweep the ladder down"
+	if err := m.save(d); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	// Lease Taken, Task Added, Lease Released.
+	if grew := historyLength(t, s) - before; grew != 3 {
+		t.Errorf("adding a Subtask appended %d entries, want 3", grew)
+	}
+
+	if err := m.refresh(); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	child, ok := taskNamed(m, "Sweep the ladder down")
+	if !ok {
+		t.Fatal("the Subtask is not in the view")
+	}
+	if child.Depth != parent.Depth+1 {
+		t.Errorf("the Subtask is drawn at depth %d, want %d", child.Depth, parent.Depth+1)
+	}
+}
+
+// ctrl+l opens the popup on the List the view is narrowed to, and what is
+// typed into it renames that List wherever it is carried.
+func TestCtrlLRenamesTheListInFrontOfYou(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+	home := idOf(t, "Home", m.lists, m.tags)
+	m.list = home
+
+	m, _ = m.do("ctrl+l")
+	if m.pop == nil || m.pop.ID != home || m.pop.Name != "Home" {
+		t.Fatalf("ctrl+l opened %+v, want the List in front of you", m.pop)
+	}
+
+	m.pop.Name, m.pop.Color = "House", "green"
+	m, _ = m.describeCollection()
+	if m.err != nil {
+		t.Fatalf("renaming: %v", m.err)
+	}
+	for _, l := range m.lists {
+		if l.ID == home && (l.Name != "House" || l.Color != "green") {
+			t.Errorf("the List reads %+v, want it renamed and recolored", l)
+		}
+	}
+
+	// With no List in front of you the key means what it always meant.
+	m.list = everyList
+	m, _ = m.do("ctrl+l")
+	if m.pop == nil || m.pop.ID != "" {
+		t.Errorf("with every List in view ctrl+l opened %+v, want a new one", m.pop)
+	}
+}
+
+// ctrl+t opens the popup on the one chosen Tag, and ticking delete gets rid of
+// it. The Tasks that carried it stay, without it.
+func TestCtrlTDeletesTheChosenTagAndKeepsTheTasks(t *testing.T) {
+	s := fixture(t)
+	m := newModel(t, s)
+	urgent := idOf(t, "urgent", m.lists, m.tags)
+	m.chosen[urgent] = true
+
+	m, _ = m.do("ctrl+t")
+	if m.pop == nil || m.pop.ID != urgent {
+		t.Fatalf("ctrl+t opened %+v, want the chosen Tag", m.pop)
+	}
+
+	carried := 0
+	tasks, err := s.Tasks(store.Query{})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	for _, task := range tasks {
+		if slices.Contains(task.Tags, urgent) {
+			carried++
+		}
+	}
+	if carried == 0 {
+		t.Fatal("no Task carries the Tag, so deleting it proves nothing")
+	}
+
+	m.pop.Delete = true
+	m, _ = m.describeCollection()
+	if m.err != nil {
+		t.Fatalf("deleting: %v", m.err)
+	}
+	for _, tag := range m.tags {
+		if tag.ID == urgent {
+			t.Error("the Tag is still in the sidebar")
+		}
+	}
+	if m.chosen[urgent] {
+		t.Error("the view is still narrowed by a Tag that is gone")
+	}
+
+	after, err := s.Tasks(store.Query{})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(after) != len(tasks) {
+		t.Errorf("%d Tasks survived the Tag, want the %d there were", len(after), len(tasks))
+	}
+	for _, task := range after {
+		if slices.Contains(task.Tags, urgent) {
+			t.Errorf("%q still carries the deleted Tag", task.Title)
+		}
 	}
 }
