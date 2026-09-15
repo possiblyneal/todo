@@ -26,7 +26,13 @@ const (
 	Daily   Unit = "day"
 	Weekly  Unit = "week"
 	Monthly Unit = "month"
+	Yearly  Unit = "year"
 )
+
+// Last is the Nth that means the last one in the month, so that "the last fri"
+// and "the fifth fri" are different rules: the last one is in every month and
+// the fifth is in some of them.
+const Last = -1
 
 // Rule is a Series: the whole recurrence, edited as one thing. It is stored as
 // the text String returns, so a Series is one value and not a row of columns
@@ -37,8 +43,15 @@ type Rule struct {
 	Unit  Unit
 
 	// Weekdays are the days a weekly rule lands on. Empty means the day the
-	// rule is anchored to.
+	// rule is anchored to. A monthly rule counting weekdays carries exactly
+	// one here, the day Nth counts.
 	Weekdays []time.Weekday
+
+	// Nth counts a weekday inside the month, so 3 with Tuesday is the third
+	// Tuesday and Last is the last one. Zero is a monthly rule that lands on
+	// a day of the month instead, and Last with no weekday is the month's
+	// last day whichever day of the week that is.
+	Nth int
 
 	// Anchor is the first date the rule can produce, and for a monthly rule
 	// it is also the day of the month, clamped to short months.
@@ -57,10 +70,19 @@ var weekdayNames = map[string]time.Weekday{
 
 var weekdayText = [...]string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
 
+var ordinals = map[string]int{
+	"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "last": Last,
+}
+
+var ordinalText = map[int]string{
+	1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth", Last: "last",
+}
+
 const dateLayout = time.DateOnly
 
 // Parse reads a rule as a person writes it: "every week on mon,thu from
-// 2026-01-05", "daily", "every 3 months on 15 until 2026-12-01".
+// 2026-01-05", "daily", "every 3 months on 15 until 2026-12-01", "every year",
+// "every month on the third tue", "every month on the last day".
 func Parse(text string) (Rule, error) {
 	words := strings.Fields(strings.ToLower(strings.TrimSpace(text)))
 	if len(words) == 0 {
@@ -76,13 +98,20 @@ func Parse(text string) (Rule, error) {
 	for len(rest) > 0 {
 		switch rest[0] {
 		case "on":
-			if len(rest) < 2 {
+			// "on" runs to the next keyword rather than taking one word,
+			// because "the third tue" is three of them and "mon,thu" is one.
+			rest = rest[1:]
+			end := 0
+			for end < len(rest) && rest[end] != "from" && rest[end] != "until" {
+				end++
+			}
+			if end == 0 {
 				return Rule{}, fmt.Errorf("%q needs a day after it", "on")
 			}
-			if err := parseOn(&r, rest[1]); err != nil {
+			if err := parseOn(&r, rest[:end]); err != nil {
 				return Rule{}, err
 			}
-			rest = rest[2:]
+			rest = rest[end:]
 		case "from", "until":
 			if len(rest) < 2 {
 				return Rule{}, fmt.Errorf("%q needs a date after it", rest[0])
@@ -124,9 +153,12 @@ func parseInterval(r *Rule, words []string) ([]string, error) {
 	case "monthly":
 		r.Unit = Monthly
 		return words[1:], nil
+	case "yearly":
+		r.Unit = Yearly
+		return words[1:], nil
 	case "every":
 	default:
-		return nil, fmt.Errorf("a rule starts with %q, %q, %q or %q", "every", "daily", "weekly", "monthly")
+		return nil, fmt.Errorf("a rule starts with %q, %q, %q, %q or %q", "every", "daily", "weekly", "monthly", "yearly")
 	}
 
 	rest := words[1:]
@@ -140,7 +172,7 @@ func parseInterval(r *Rule, words []string) ([]string, error) {
 		r.Every, rest = n, rest[1:]
 	}
 	if len(rest) == 0 {
-		return nil, fmt.Errorf("%q needs a day, week or month", "every")
+		return nil, fmt.Errorf("%q needs a day, week, month or year", "every")
 	}
 
 	switch strings.TrimSuffix(rest[0], "s") {
@@ -150,15 +182,35 @@ func parseInterval(r *Rule, words []string) ([]string, error) {
 		r.Unit = Weekly
 	case "month":
 		r.Unit = Monthly
+	case "year":
+		r.Unit = Yearly
 	default:
-		return nil, fmt.Errorf("%q is not a day, a week or a month", rest[0])
+		return nil, fmt.Errorf("%q is not a day, a week, a month or a year", rest[0])
 	}
 	return rest[1:], nil
 }
 
-// parseOn reads the days a weekly rule lands on, or the day of the month a
-// monthly one does.
-func parseOn(r *Rule, text string) error {
+// parseOn reads what a rule lands on: the days of the week a weekly rule does,
+// the day of the month a monthly one does, or the weekday a monthly one counts
+// inside the month.
+func parseOn(r *Rule, words []string) error {
+	if r.Unit == Yearly {
+		return fmt.Errorf("a yearly rule lands on the date it runs from, so it takes no %q", "on")
+	}
+	if words[0] == "the" {
+		words = words[1:]
+	}
+	if len(words) == 0 {
+		return fmt.Errorf("%q needs a day after it", "on")
+	}
+	if nth, ok := ordinals[words[0]]; ok {
+		return parseNth(r, nth, words)
+	}
+	if len(words) > 1 {
+		return fmt.Errorf("%q is not part of a rule", words[1])
+	}
+	text := words[0]
+
 	if r.Unit == Monthly {
 		day, err := strconv.Atoi(text)
 		if err != nil || day < 1 || day > 31 {
@@ -183,6 +235,31 @@ func parseOn(r *Rule, text string) error {
 	if r.Unit == Daily {
 		r.Unit = Weekly
 	}
+	return nil
+}
+
+// parseNth reads "the third tue", "the last fri" and "the last day". It is a
+// month's arithmetic and nothing else says it, so it is refused anywhere but a
+// monthly rule rather than quietly meaning a week.
+func parseNth(r *Rule, nth int, words []string) error {
+	if r.Unit != Monthly {
+		return fmt.Errorf("%q counts inside a month, so it needs %q", words[0], "every month")
+	}
+	if len(words) != 2 {
+		return fmt.Errorf("%q needs a weekday or %q after it", words[0], "day")
+	}
+	r.Nth = nth
+	if words[1] == "day" {
+		if nth != Last {
+			return fmt.Errorf("a month has one %q worth naming, the last", "day")
+		}
+		return nil
+	}
+	weekday, ok := weekdayNames[words[1]]
+	if !ok {
+		return fmt.Errorf("%q is not a day of the week", words[1])
+	}
+	r.Weekdays = []time.Weekday{weekday}
 	return nil
 }
 
@@ -217,6 +294,10 @@ func (r Rule) String() string {
 			names[i] = weekdayText[day]
 		}
 		text += " on " + strings.Join(names, ",")
+	case r.Unit == Monthly && r.Nth != 0 && len(r.Weekdays) == 0:
+		text += " on the last day"
+	case r.Unit == Monthly && r.Nth != 0:
+		text += fmt.Sprintf(" on the %s %s", ordinalText[r.Nth], weekdayText[r.Weekdays[0]])
 	case r.Unit == Monthly:
 		text += fmt.Sprintf(" on %d", r.Anchor.Day())
 	}
@@ -280,7 +361,31 @@ func (r Rule) walk(to time.Time) []time.Time {
 
 	case Monthly:
 		for i := 0; ; i++ {
+			first := firstOf(anchor).AddDate(0, i*r.Every, 0)
+			if first.After(to) {
+				break
+			}
 			date := monthly(anchor, i*r.Every)
+			if r.Nth != 0 {
+				date = nth(first, r.Nth, r.Weekdays)
+			}
+			if date.After(to) {
+				break
+			}
+			// A fifth Tuesday is in some months and not others, and a
+			// counted date in the anchor's own month can already be behind
+			// it. Both come back as a month this rule does not land in.
+			if !date.IsZero() && !date.Before(anchor) {
+				dates = append(dates, date)
+			}
+		}
+
+	case Yearly:
+		// Years are walked as twelves of months so that a rule anchored on
+		// the 29th of February clamps to the 28th rather than sliding into
+		// March, which is what AddDate would do with it.
+		for i := 0; ; i++ {
+			date := monthly(anchor, 12*i*r.Every)
 			if date.After(to) {
 				break
 			}
@@ -290,6 +395,31 @@ func (r Rule) walk(to time.Time) []time.Time {
 
 	sortDates(dates)
 	return dates
+}
+
+// firstOf is the first of the month a date falls in.
+func firstOf(date time.Time) time.Time {
+	return time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, date.Location())
+}
+
+// nth is the counted date inside the month first opens: the nth given weekday,
+// the last one when the count is Last, or the month's last day when no weekday
+// was named. It is the zero date when the month has no such weekday, which a
+// fifth of one often does not.
+func nth(first time.Time, count int, weekdays []time.Weekday) time.Time {
+	last := first.AddDate(0, 1, -1)
+	if len(weekdays) == 0 {
+		return last
+	}
+	weekday := weekdays[0]
+	if count == Last {
+		return last.AddDate(0, 0, -int((last.Weekday()-weekday+7)%7))
+	}
+	date := first.AddDate(0, 0, int((weekday-first.Weekday()+7)%7)+7*(count-1))
+	if date.Month() != first.Month() {
+		return time.Time{}
+	}
+	return date
 }
 
 // monthly moves the anchor on by months, clamping to the target month's last
@@ -321,6 +451,8 @@ func (r Rule) Next(from time.Time) (time.Time, bool) {
 	every := max(r.Every, 1)
 	var to time.Time
 	switch r.Unit {
+	case Yearly:
+		to = start.AddDate(2*every+1, 0, 0)
 	case Monthly:
 		to = start.AddDate(0, 2*every+1, 0)
 	case Weekly:

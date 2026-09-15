@@ -1,8 +1,8 @@
 // Package tui is the screen: the same store the verbs write through, read and
 // drawn, and written to by the same calls. The main view itself writes
-// nothing -- moving the cursor, sorting, expanding a row and opening the
-// palette all leave the Change History the length they found it -- and every
-// write goes through a screen a person opened on purpose.
+// nothing -- moving the cursor, sorting, searching and expanding a row all
+// leave the Change History the length they found it -- and every write goes
+// through a screen a person opened on purpose.
 package tui
 
 import (
@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strings"
 
-	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
@@ -56,10 +55,14 @@ type Model struct {
 	list string // the chosen List, or everyList
 	sort store.Sort
 
-	// snoozed is whether the view is showing Tasks that are put away. It
-	// is off by default, because the main view means what is in front of
-	// you; "z" is how a snooze is looked at, and taken off.
+	// snoozed, done and declined are the states the read leaves out unless
+	// it is asked for them. All three are off by default, because the main
+	// view means what is in front of you, and each is one of the sidebar's
+	// top rows; "h" is the snoozed one's key, because a snooze is looked
+	// at and taken off far more often than an ending is.
 	snoozed  bool
+	done     bool
+	declined bool
 	dropdown bool
 	expanded bool
 
@@ -67,12 +70,9 @@ type Model struct {
 	width, height int
 	err           error
 
-	// The palette is the slash commands, the editor is the add and edit
-	// screen, and the popup is the List or Tag being created from inside
-	// it. At most one of them has the keyboard, in that order outwards.
-	palette     list.Model
-	paletteOpen bool
-
+	// The editor is the add and edit screen, and the popup is the List or
+	// Tag being created from inside it. At most one screen has the
+	// keyboard, in the order screen() reads them.
 	editor *huh.Form
 	draft  *draft
 
@@ -126,10 +126,7 @@ func New(s *store.Store, actor string, r *rand.Rand) (Model, error) {
 	m.tasks.SetShowHelp(false)
 	m.tasks.SetFilteringEnabled(true)
 	m.tasks.SetShowFilter(true)
-	// The searchbox gives up "/" to the slash palette and takes "f"; both
-	// are the same fuzzy filter, pointed at Tasks and at verbs.
-	m.tasks.KeyMap.Filter = key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "search"))
-	m.palette = newPalette(m.zones, m.width/2, m.height-4)
+	m.keys()
 	m.wal = s.WALToken()
 	if err := m.refresh(); err != nil {
 		return Model{}, err
@@ -149,7 +146,13 @@ func (m *Model) refresh() error {
 	if err != nil {
 		return err
 	}
-	tasks, err := m.store.Tasks(store.Query{List: m.list, Sort: m.sort, IncludeSnoozed: m.snoozed})
+	tasks, err := m.store.Tasks(store.Query{
+		List:             m.list,
+		Sort:             m.sort,
+		IncludeSnoozed:   m.snoozed,
+		IncludeCompleted: m.done,
+		IncludeDeclined:  m.declined,
+	})
 	if err != nil {
 		return err
 	}
@@ -249,9 +252,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case m.rep != nil:
 		next, cmd := m.updateRepeat(msg)
 		return next, cmd
-	case m.paletteOpen:
-		next, cmd := m.updatePalette(msg)
-		return next, cmd
 	}
 
 	switch msg := msg.(type) {
@@ -286,29 +286,20 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 	m.width, m.height = msg.Width, msg.Height
 	m.tasks.SetSize(m.width-sidebarWidth, m.height-4)
 	m.tasks.SetDelegate(rowDelegate{zones: m.zones, width: m.width - sidebarWidth})
-	m.palette.SetSize(m.width/2, m.height-4)
 	return m
 }
 
 // press handles the view's own keys. It reports whether it took the key, so
 // everything else falls through to the task list.
 func (m Model) press(msg tea.KeyPressMsg) (bool, Model, tea.Cmd) {
-	switch msg.String() {
-	case "q", "ctrl+c":
-		return true, m, tea.Quit
-
-	case "/":
-		next, cmd := m.openPalette()
+	if _, ok := lookup(msg.String()); ok {
+		next, cmd := m.do(msg.String())
 		return true, next, cmd
+	}
 
-	case "s":
-		return true, m.sorted(), nil
-
-	case "z":
-		return true, m.showingSnoozed(), nil
-
-	case "L":
-		return true, m.listing(), nil
+	switch msg.String() {
+	case "ctrl+c":
+		return true, m, tea.Quit
 
 	case "enter":
 		if m.dropdown {
@@ -333,42 +324,53 @@ func (m Model) press(msg tea.KeyPressMsg) (bool, Model, tea.Cmd) {
 	return false, m, nil
 }
 
-// openPalette shows the slash commands, already filtering, so the slash the
-// person typed keeps going into the command they meant.
-func (m Model) openPalette() (Model, tea.Cmd) {
-	m.palette.ResetFilter()
-	m.paletteOpen = true
-	var cmd tea.Cmd
-	m.palette, cmd = m.palette.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
-	return m, cmd
-}
-
-// sorted moves to the next order, and showingSnoozed puts the Tasks that are
-// away in front of you or takes them back out. Both are here rather than
-// inline in press because the footer's keys are clickable and a click has to
-// mean exactly what the key means.
+// sorted moves to the next order.
 func (m Model) sorted() Model {
 	m.sort = nextSort(m.sort)
 	m.err = m.refresh()
 	return m
 }
 
-func (m Model) showingSnoozed() Model {
-	m.snoozed = !m.snoozed
+// showing turns one of the sidebar's states on or off. Choosing one adds
+// those Tasks to what is already in view rather than replacing it, so several
+// can be on at once and the view widens as they are.
+func (m Model) showing(state string) Model {
+	switch state {
+	case snoozedState:
+		m.snoozed = !m.snoozed
+	case doneState:
+		m.done = !m.done
+	case declinedState:
+		m.declined = !m.declined
+	}
 	m.err = m.refresh()
 	return m
 }
 
-// listing opens or closes the List dropdown, which is what "L" does.
+// shown says whether a state's Tasks are in view, which is what draws the tick
+// beside it.
+func (m Model) shown(state string) bool {
+	switch state {
+	case snoozedState:
+		return m.snoozed
+	case doneState:
+		return m.done
+	case declinedState:
+		return m.declined
+	}
+	return false
+}
+
+// listing opens or closes the List dropdown, which is what "l" does.
 func (m Model) listing() Model {
 	m.dropdown = !m.dropdown
 	return m
 }
 
-// searching hands the keyboard to the searchbox, which is what "f" does.
+// searching hands the keyboard to the searchbox, which is what "/" does.
 func (m Model) searching() (Model, tea.Cmd) {
 	var cmd tea.Cmd
-	m.tasks, cmd = m.tasks.Update(tea.KeyPressMsg{Code: 'f', Text: "f"})
+	m.tasks, cmd = m.tasks.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 	return m, cmd
 }
 
@@ -376,23 +378,20 @@ func (m Model) searching() (Model, tea.Cmd) {
 // a zone marked during the last render, so the layout stays the one authority
 // on where things are.
 func (m Model) click(msg tea.MouseClickMsg) (Model, tea.Cmd) {
-	if in(m.zones, "listbox", msg) || in(m.zones, "hint:lists", msg) {
-		return m.listing(), nil
+	if in(m.zones, "listbox", msg) {
+		return m.do("l")
 	}
-	if in(m.zones, "sortbox", msg) || in(m.zones, "hint:sort", msg) {
-		return m.sorted(), nil
+	if in(m.zones, "sortbox", msg) {
+		return m.do("s")
 	}
-	if in(m.zones, "hint:snoozed", msg) {
-		return m.showingSnoozed(), nil
-	}
-	if in(m.zones, "hint:commands", msg) {
-		return m.openPalette()
-	}
-	if in(m.zones, "hint:search", msg) {
-		return m.searching()
-	}
-	if in(m.zones, "hint:quit", msg) {
-		return m, tea.Quit
+	// A footer key is its verb's hit box, so the click runs what the key
+	// runs rather than a second copy of it.
+	for _, group := range [][]verb{taskVerbs, viewVerbs} {
+		for _, v := range group {
+			if in(m.zones, "key:"+v.key, msg) {
+				return m.do(v.key)
+			}
+		}
 	}
 	if m.dropdown {
 		if in(m.zones, "list:every", msg) {
@@ -415,6 +414,11 @@ func (m Model) click(msg tea.MouseClickMsg) (Model, tea.Cmd) {
 		m.expanded = false
 		return m, nil
 	}
+	for _, state := range states {
+		if in(m.zones, "state:"+state, msg) {
+			return m.showing(state), nil
+		}
+	}
 	for _, t := range m.tags {
 		if in(m.zones, "tag:"+t.ID, msg) {
 			if m.chosen[t.ID] {
@@ -428,8 +432,8 @@ func (m Model) click(msg tea.MouseClickMsg) (Model, tea.Cmd) {
 	}
 	// A click puts the cursor on a Task; a second one on the Task already
 	// under it blows it up. That is what makes a Task reachable by mouse
-	// without a slash command having to be typed at it blind, and it is
-	// also how a Task is chosen for one.
+	// without a verb having to be typed at it blind, and it is also how a
+	// Task is chosen for one.
 	// VisibleItems, not Items: Select and Index are the filtered list's
 	// coordinates, so a click made while the searchbox is narrowing would
 	// otherwise land the cursor on whatever sits at that unfiltered index.
@@ -504,6 +508,9 @@ func (m Model) View() tea.View {
 	main := lipgloss.JoinHorizontal(lipgloss.Top,
 		sidebarStyle.Height(pane).Render(m.sidebar()), body)
 
+	// Nothing drawn may run past the terminal's last column: a row's detail
+	// line or a Tag's name is as long as it is, and a narrow window would
+	// otherwise push the sidebar's rule off the edge and smear the frame.
 	screen := strings.Join([]string{header, main, footer}, "\n")
 
 	// v2 carries the screen and mouse modes on the View rather than on the
@@ -564,59 +571,108 @@ func (m Model) listName() string {
 	return m.list
 }
 
-// sidebar is every Tag, ranked by how often it is carried with the variation
-// rankTags draws in, each one clickable to narrow the view.
+// states are the sidebar's top rows, in the order a person meets them: the one
+// with a key of its own first, then the two endings. They are the store's own
+// marks, so a row says the same word here as it does on the Task it is drawn
+// beside.
+const (
+	snoozedState  = "snoozed"
+	doneState     = "done"
+	declinedState = "declined"
+)
+
+var states = []string{snoozedState, doneState, declinedState}
+
+// sidebar is the states a read can be widened with, then a blank row, then
+// every Tag ranked by how often it is carried with the variation rankTags
+// draws in. Everything in it is clickable: a state widens the view and a Tag
+// narrows it, which is what the blank row between them is there to say.
 func (m Model) sidebar() string {
-	lines := []string{headerStyle.Render("Tags"), ""}
+	lines := []string{headerStyle.Render("Show"), ""}
+	for _, state := range states {
+		lines = append(lines, m.zones.Mark("state:"+state, pick(state, m.shown(state))))
+	}
+	lines = append(lines, "", headerStyle.Render("Tags"), "")
 	for _, t := range m.tags {
 		// The count is what the ranking is by, so it is shown; it is not
 		// what the Tag is, so it is not drawn as loudly as the name.
-		label := t.Name + dimStyle.Render(fmt.Sprintf(" %d", t.Count))
-		if m.chosen[t.ID] {
-			label = chosenStyle.Render("✓ "+t.Name) + dimStyle.Render(fmt.Sprintf(" %d", t.Count))
-		} else {
-			label = "  " + label
-		}
+		label := pick(t.Name, m.chosen[t.ID]) + dimStyle.Render(fmt.Sprintf(" %d", t.Count))
 		lines = append(lines, m.zones.Mark("tag:"+t.ID, label))
 	}
 	return strings.Join(lines, "\n")
 }
 
-// hints are the footer's keys, in the order a person meets them: what opens
-// everything first, then the ways of narrowing, then the way out. Each is
-// clickable and does exactly what its key does.
-var hints = []struct{ key, what string }{
-	{"/", "commands"},
-	{"f", "search"},
-	{"s", "sort"},
-	{"z", "snoozed"},
-	{"L", "lists"},
-	{"q", "quit"},
+// pick draws a row of the sidebar that is either taken or not.
+func pick(label string, taken bool) string {
+	if taken {
+		return chosenStyle.Render("✓ " + label)
+	}
+	return "  " + label
 }
 
 // footer is the status line: how many Tasks are in front of you, or the last
-// error, and then the keys. An error takes the whole line, because a count
-// nobody asked about is not worth crowding it with.
+// error, then the keys, the Tasks' row above the view's. An error takes the
+// whole line, because a count nobody asked about is not worth crowding it
+// with.
 func (m Model) footer() string {
 	if m.err != nil {
 		return rule(m.width) + "\n" + overdueStyle.Render(" "+m.err.Error())
 	}
-	drawn := make([]string, 0, len(hints)+1)
-	drawn = append(drawn, dimStyle.Render(fmt.Sprintf(" %d shown", len(m.tasks.Items()))))
-	for _, h := range hints {
-		drawn = append(drawn, m.zones.Mark("hint:"+h.what,
-			hintKeyStyle.Render(h.key)+hintStyle.Render(" "+h.what)))
+	_, chosen := m.selected()
+	first := []string{dimStyle.Render(fmt.Sprintf("%d shown", len(m.tasks.Items())))}
+	for _, v := range taskVerbs {
+		first = append(first, m.hint(v, chosen || !v.needs))
 	}
-	return rule(m.width) + "\n" + strings.Join(drawn, "   ")
+	second := make([]string, 0, len(viewVerbs))
+	for _, v := range viewVerbs {
+		second = append(second, m.hint(v, true))
+	}
+	rows := append(flow(m.width, first), flow(m.width, second)...)
+	return rule(m.width) + "\n" + strings.Join(rows, "\n")
+}
+
+// hint draws one key and the name of its verb, marked so a click on it reaches
+// the same verb the key does. One with no Task to act on is drawn faint, which
+// is how the footer says why pressing it does nothing.
+func (m Model) hint(v verb, live bool) string {
+	drawn := hintKeyStyle.Render(v.label()) + hintStyle.Render(" "+v.what)
+	if !live {
+		drawn = faintStyle.Render(v.label() + " " + v.what)
+	}
+	return m.zones.Mark("key:"+v.key, drawn)
+}
+
+// flow lays cells out in rows no wider than the terminal. The footer is the
+// two rows it is written as on a wide screen and wraps to more on a narrow
+// one, rather than running off the side of it.
+func flow(width int, cells []string) []string {
+	var rows []string
+	row, used := "", 0
+	for _, cell := range cells {
+		w := lipgloss.Width(cell)
+		switch {
+		case row == "":
+			row, used = " "+cell, w+1
+		case used+2+w <= width:
+			row, used = row+"  "+cell, used+2+w
+		default:
+			rows = append(rows, row)
+			row, used = " "+cell, w+1
+		}
+	}
+	if row != "" {
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 // nothing is what the pane says when the narrowing has left it empty. A blank
 // pane looks broken; this one says which way back out.
 func (m Model) nothing() string {
 	if len(m.chosen) > 0 || m.list != everyList {
-		return dimStyle.Render("\n  Nothing here. Click a chosen Tag to let it go, or L for another List.")
+		return dimStyle.Render("\n  Nothing here. Click a chosen Tag to let it go, or l for another List.")
 	}
-	return dimStyle.Render("\n  Nothing to do. / add is where the first one comes from.")
+	return dimStyle.Render("\n  Nothing to do. \"a\" is where the first one comes from.")
 }
 
 // detail is the whole of a Task: every attribute it carries, its Lists and

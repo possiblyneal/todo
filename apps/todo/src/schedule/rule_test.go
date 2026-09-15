@@ -188,3 +188,77 @@ func TestNextTellsNotStartedFromRunOut(t *testing.T) {
 		t.Errorf("a finished rule offered %v (more=%v), want nothing", next, more)
 	}
 }
+
+func TestAYearlyRuleLandsOnTheSameDateEachYear(t *testing.T) {
+	r := rule(t, "every year from 2026-03-09")
+	same(t, r.Between(date(t, "2026-01-01"), date(t, "2029-01-01")),
+		"2026-03-09", "2027-03-09", "2028-03-09")
+
+	// A leap day is the 28th in the years that do not have one, the same
+	// clamp a monthly rule on the 31st gets.
+	leap := rule(t, "yearly from 2024-02-29")
+	same(t, leap.Between(date(t, "2024-01-01"), date(t, "2026-12-31")),
+		"2024-02-29", "2025-02-28", "2026-02-28")
+}
+
+func TestAMonthlyRuleCountsWeekdaysInsideTheMonth(t *testing.T) {
+	r := rule(t, "every month on the third tue from 2026-01-01")
+	same(t, r.Between(date(t, "2026-01-01"), date(t, "2026-04-01")),
+		"2026-01-20", "2026-02-17", "2026-03-17")
+
+	last := rule(t, "every month on the last fri from 2026-01-01")
+	same(t, last.Between(date(t, "2026-01-01"), date(t, "2026-04-01")),
+		"2026-01-30", "2026-02-27", "2026-03-27")
+
+	day := rule(t, "every month on the last day from 2026-01-01")
+	same(t, day.Between(date(t, "2026-01-01"), date(t, "2026-04-01")),
+		"2026-01-31", "2026-02-28", "2026-03-31")
+}
+
+func TestAFifthWeekdayIsOnlyInTheMonthsThatHaveOne(t *testing.T) {
+	// The last Friday is in every month and the fifth is not, which is why
+	// the two are different rules rather than one spelling.
+	r := rule(t, "every month on the fifth fri from 2026-01-01")
+	same(t, r.Between(date(t, "2026-01-01"), date(t, "2026-06-01")),
+		"2026-01-30", "2026-05-29")
+}
+
+func TestACountedRuleReadsTheWayItIsWritten(t *testing.T) {
+	for _, text := range []string{
+		"every year from 2026-03-09",
+		"every 2 years from 2026-03-09",
+		"every month on the third tue from 2026-01-01",
+		"every month on the last fri from 2026-01-01",
+		"every month on the last day from 2026-01-01",
+	} {
+		if got := rule(t, text).String(); got != text {
+			t.Errorf("got %q, want %q", got, text)
+		}
+	}
+}
+
+func TestACountWithNoMonthToCountInIsRefused(t *testing.T) {
+	for _, bad := range []string{
+		"every week on the third tue", "every year on 2026-01-01",
+		"every month on the third", "every month on the third day",
+		"every month on the sixth tue", "every month on the last caturday",
+		"monthly on the",
+	} {
+		if _, err := Parse(bad); err == nil {
+			t.Errorf("%q was accepted as a rule", bad)
+		}
+	}
+}
+
+func TestNextFindsACountedDate(t *testing.T) {
+	r := rule(t, "every month on the last day from 2026-01-01")
+	next, more := r.Next(date(t, "2026-02-05"))
+	if !more || next.Format(dateLayout) != "2026-02-28" {
+		t.Errorf("got %v %v, want 2026-02-28", next.Format(dateLayout), more)
+	}
+
+	yearly := rule(t, "every year from 2026-03-09")
+	if next, more := yearly.Next(date(t, "2026-04-01")); !more || next.Format(dateLayout) != "2027-03-09" {
+		t.Errorf("got %v %v, want 2027-03-09", next.Format(dateLayout), more)
+	}
+}

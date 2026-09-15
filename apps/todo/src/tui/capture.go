@@ -37,6 +37,12 @@ type capture struct {
 	// so an attribute the dump says nothing about comes back unchanged.
 	onto *store.Task
 
+	// under is the Task a new one is nested beneath, and nil for a
+	// top-level Task. It is the hand-written half of a breakdown: the same
+	// box, read the same way, landing as a Subtask rather than as a Task of
+	// its own.
+	under *store.Task
+
 	form    *huh.Form
 	waiting bool
 }
@@ -60,13 +66,30 @@ func (m Model) startCapture(onto *store.Task) (Model, tea.Cmd) {
 	return m, c.form.Init()
 }
 
+// startSubtask opens the same box under the Task the cursor is on. A Subtask
+// is written by hand here and by the broker in a breakdown; both end up at
+// store.AddSubtask under the tree's Lease.
+func (m Model) startSubtask() (Model, tea.Cmd) {
+	t, ok := m.selected()
+	if !ok {
+		return m, nil
+	}
+	c := &capture{under: &t}
+	c.form = m.captureForm(c)
+	m.capturing = c
+	return m, c.form.Init()
+}
+
 // captureForm is the one box. Enter is a new line in it rather than a submit,
 // which is the opposite of every other text field in this package and the
 // whole point of the screen: a dump is paragraphs, and ctrl+d is done.
 func (m Model) captureForm(c *capture) *huh.Form {
 	title := "Say what the Task is"
-	if c.onto != nil {
+	switch {
+	case c.onto != nil:
 		title = "Say what changes about " + c.onto.Title
+	case c.under != nil:
+		title = "Say what goes under " + c.under.Title
 	}
 	// ctrl+d never reaches the form: huh's Text acts on Next and Submit and
 	// then hands the same key to the textarea underneath, which binds ctrl+d
@@ -103,13 +126,13 @@ func (m Model) updateCapture(msg tea.Msg) (Model, tea.Cmd) {
 		if msg.cap != m.capturing {
 			return m, nil
 		}
-		onto := m.capturing.onto
+		onto, under := m.capturing.onto, m.capturing.under
 		m.capturing = nil
 		if msg.err != nil {
 			m.err = msg.err
 			return m, nil
 		}
-		return m.edit(m.drafted(msg.read, onto))
+		return m.edit(nested(m.drafted(msg.read, onto), under))
 	}
 
 	if m.capturing.waiting {
@@ -131,9 +154,9 @@ func (m Model) updateCapture(msg tea.Msg) (Model, tea.Cmd) {
 // the box, straight to the form the broker would have filled in.
 func (m Model) hand() (Model, tea.Cmd) {
 	if strings.TrimSpace(m.capturing.Text) == "" {
-		onto := m.capturing.onto
+		onto, under := m.capturing.onto, m.capturing.under
 		m.capturing = nil
-		return m.edit(blank(onto))
+		return m.edit(nested(blank(onto), under))
 	}
 	m.capturing.waiting = true
 	return m, m.read(m.capturing)
@@ -146,6 +169,15 @@ func (m Model) edit(d *draft) (Model, tea.Cmd) {
 	m.draft = d
 	m.editor = m.form(d)
 	return m, m.editor.Init()
+}
+
+// nested says which Task a draft is written under, and leaves a top-level one
+// alone.
+func nested(d *draft, under *store.Task) *draft {
+	if under != nil {
+		d.parentID = under.ID
+	}
+	return d
 }
 
 // blank is the draft a dump would have filled in, unfilled.

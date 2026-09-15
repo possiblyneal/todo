@@ -165,9 +165,9 @@ func TestThePhoneReadsAndWrites(t *testing.T) {
 	waitFor(t, func() bool { return strings.Contains(out.String(), "Fix the roof") },
 		"the Task never reached the far end of the wire")
 
-	// The palette, the command, and enter: the same keystrokes a person makes,
-	// arriving as bytes over SSH rather than from a local terminal.
-	if _, err := io.WriteString(stdin, "/complete\r"); err != nil {
+	// One key, the same one a person presses, arriving as bytes over SSH
+	// rather than from a local terminal.
+	if _, err := io.WriteString(stdin, "c"); err != nil {
 		t.Fatalf("writing keystrokes: %v", err)
 	}
 

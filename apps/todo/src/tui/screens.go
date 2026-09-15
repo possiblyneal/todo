@@ -7,50 +7,6 @@ import (
 	"charm.land/huh/v2"
 )
 
-// updatePalette gives the slash palette the keyboard. Enter runs the command
-// under the cursor and closes; escape closes without running one.
-func (m Model) updatePalette(msg tea.Msg) (Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "enter":
-			m.paletteOpen = false
-			if c, ok := m.palette.SelectedItem().(command); ok {
-				return m.run(c.name)
-			}
-			return m, nil
-		case "esc", "ctrl+c":
-			m.paletteOpen = false
-			return m, nil
-		}
-
-	// A command is run by the click that lands on it. There is no
-	// two-step here as there is on a Task row: a palette entry is a verb,
-	// and nothing else is done to the one under the cursor.
-	case tea.MouseClickMsg:
-		for _, item := range m.palette.VisibleItems() {
-			c, ok := item.(command)
-			if ok && in(m.zones, "command:"+c.name, msg) {
-				m.paletteOpen = false
-				return m.run(c.name)
-			}
-		}
-		return m, nil
-
-	case tea.MouseWheelMsg:
-		switch msg.Button {
-		case tea.MouseWheelUp:
-			m.palette.CursorUp()
-		case tea.MouseWheelDown:
-			m.palette.CursorDown()
-		}
-		return m, nil
-	}
-	var cmd tea.Cmd
-	m.palette, cmd = m.palette.Update(msg)
-	return m, cmd
-}
-
 // updateEditor gives the add or edit screen the keyboard, and writes when the
 // form says it is complete. The store is not touched before that: the form is
 // think-time, and think-time holds no transaction.
@@ -111,8 +67,12 @@ func (m Model) updatePopup(msg tea.Msg) (Model, tea.Cmd) {
 	switch m.popup.State {
 	case huh.StateCompleted:
 		m.popup = nil
-		if m.pop != nil && m.pop.Task != "" {
+		switch {
+		case m.pop == nil:
+		case m.pop.Task != "":
 			return m.applySnooze()
+		case m.pop.ID != "":
+			return m.describeCollection()
 		}
 		return m.createCollection()
 	case huh.StateAborted:
@@ -133,6 +93,38 @@ func (m Model) applySnooze() (Model, tea.Cmd) {
 		return m, nil
 	}
 	if err := m.snoozeUntil(pop.Task, until); err != nil {
+		m.err = err
+		return m, nil
+	}
+	m.err = m.refresh()
+	return m, nil
+}
+
+// describeCollection renames and recolors the List or Tag the popup was opened
+// on, or gets rid of it when that is what was ticked. A collection that goes
+// takes nothing with it: every Task that carried it keeps existing and loses
+// the membership, which is the store's own rule, and the view stops narrowing
+// by something that is no longer there.
+func (m Model) describeCollection() (Model, tea.Cmd) {
+	pop := m.pop
+	m.pop = nil
+
+	var err error
+	switch {
+	case pop.Delete && pop.Noun == "List":
+		if err = m.store.DeleteList(m.actor, pop.ID); err == nil && m.list == pop.ID {
+			m.list = everyList
+		}
+	case pop.Delete:
+		if err = m.store.DeleteTag(m.actor, pop.ID); err == nil {
+			delete(m.chosen, pop.ID)
+		}
+	case pop.Noun == "List":
+		err = m.store.DescribeList(m.actor, pop.ID, &pop.Name, &pop.Color)
+	default:
+		err = m.store.DescribeTag(m.actor, pop.ID, &pop.Name, &pop.Color)
+	}
+	if err != nil {
 		m.err = err
 		return m, nil
 	}
@@ -212,8 +204,6 @@ func (m Model) screen() (string, bool) {
 			}, "\n"), true
 		}
 		return boxStyle.Render(m.repeatView()), true
-	case m.paletteOpen:
-		return boxStyle.Render(m.palette.View()), true
 	}
 	return "", false
 }

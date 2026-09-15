@@ -50,10 +50,12 @@ const (
 
 	KindListCreated   = "list_created"
 	KindListDescribed = "list_described"
+	KindListDeleted   = "list_deleted"
 	KindTaskListed    = "task_listed"
 	KindTaskUnlisted  = "task_unlisted"
 	KindTagCreated    = "tag_created"
 	KindTagDescribed  = "tag_described"
+	KindTagDeleted    = "tag_deleted"
 	KindTagAttached   = "tag_attached"
 	KindTagDetached   = "tag_detached"
 
@@ -558,6 +560,15 @@ BEGIN
 	WHERE id = NEW.subject;
 END;
 
+-- A List goes, and the Tasks that were in it stay. Every membership is taken
+-- off by its own task_unlisted entry before this one lands, so the row this
+-- deletes is already carried by nobody.
+CREATE TRIGGER IF NOT EXISTS fold_list_deleted
+AFTER INSERT ON change_history WHEN NEW.kind = 'list_deleted'
+BEGIN
+	DELETE FROM list WHERE id = NEW.subject;
+END;
+
 DROP TRIGGER IF EXISTS fold_tag_created;
 CREATE TRIGGER fold_tag_created
 AFTER INSERT ON change_history WHEN NEW.kind = 'tag_created'
@@ -574,6 +585,12 @@ BEGIN
 		name   = CASE WHEN json_type(NEW.payload, '$.name')   IS NULL THEN name   ELSE json_extract(NEW.payload, '$.name')   END,
 		color  = CASE WHEN json_type(NEW.payload, '$.color')  IS NULL THEN color  ELSE json_extract(NEW.payload, '$.color')  END
 	WHERE id = NEW.subject;
+END;
+
+CREATE TRIGGER IF NOT EXISTS fold_tag_deleted
+AFTER INSERT ON change_history WHEN NEW.kind = 'tag_deleted'
+BEGIN
+	DELETE FROM tag WHERE id = NEW.subject;
 END;
 
 -- Membership is folded on the Task, whose Lease governed the append.

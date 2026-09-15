@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -88,6 +89,58 @@ func (s *Store) describe(actor, kind, id string, name, color *string) error {
 		return fmt.Errorf("an edit has to change something")
 	}
 	_, err := s.Append(actor, kind, id, payload)
+	return err
+}
+
+// DeleteList removes a List. Every Task that was in it goes on existing and
+// loses the membership, one appended task_unlisted per Task, so a Task's
+// history says it left the List rather than falling silent about it. The
+// unfiling and the removal are one transaction: a half-deleted List is a List
+// nothing can be filed under and everything is still in.
+func (s *Store) DeleteList(actor, listID string) error {
+	return s.remove(actor, listID, "task_list", "list_id", KindTaskUnlisted, "list", KindListDeleted)
+}
+
+// DeleteTag removes a Tag and takes it off every Task that carried it, on the
+// same terms as DeleteList.
+func (s *Store) DeleteTag(actor, tagID string) error {
+	return s.remove(actor, tagID, "task_tag", "tag_id", KindTagDetached, "tag", KindTagDeleted)
+}
+
+// remove is the shape the two deletes share.
+//
+// No Lease is taken over the Tasks it unfiles, which is the one place a write
+// touching a Task goes without one. A List is not in anybody's tree, so there
+// is no single Lease that covers this; taking one per tree would mean a List
+// could not be deleted while somebody held any Task that carried it, and
+// abandoning half the unfiling on the first refusal is worse than the
+// exception. What is appended takes nothing off a Task but a membership.
+func (s *Store) remove(actor, id, table, column, off, key, gone string) error {
+	_, err := s.inTx(func(tx *sql.Tx) (Entry, error) {
+		//nolint:gosec // table and column are constants above, never input.
+		rows, err := tx.Query(`SELECT task_id FROM `+table+` WHERE `+column+` = ?`, id)
+		if err != nil {
+			return Entry{}, fmt.Errorf("read what carries it: %w", err)
+		}
+		var carriers []string
+		for rows.Next() {
+			var taskID string
+			if err := rows.Scan(&taskID); err != nil {
+				_ = rows.Close()
+				return Entry{}, fmt.Errorf("read what carries it: %w", err)
+			}
+			carriers = append(carriers, taskID)
+		}
+		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return Entry{}, fmt.Errorf("read what carries it: %w", err)
+		}
+		for _, taskID := range carriers {
+			if _, err := appendTx(tx, actor, off, taskID, map[string]any{key: id}); err != nil {
+				return Entry{}, err
+			}
+		}
+		return appendTx(tx, actor, gone, id, map[string]any{})
+	})
 	return err
 }
 

@@ -90,12 +90,15 @@ func (d rowDelegate) render(r row, selected bool) string {
 		}
 		return gutter + dimStyle.Render("  "+indent+line)
 	}
-	return strings.Join([]string{
-		head,
-		said(body[0]),
-		said(body[1]),
-		gutter + dimStyle.Render(foot),
-	}, "\n")
+	// The description is cut to the pane's width on the way in, but a title
+	// and a foot are as long as the Task made them, so they are cut here.
+	// A row wider than its pane pushes the sidebar's rule off the edge of a
+	// narrow terminal and smears the frame.
+	drawn := []string{head, said(body[0]), said(body[1]), gutter + dimStyle.Render(foot)}
+	for i, line := range drawn {
+		drawn[i] = ansi.Truncate(line, max(d.width, 8), "…")
+	}
+	return strings.Join(drawn, "\n")
 }
 
 // colorStyle is what one of the offered colors paints in, and false when the

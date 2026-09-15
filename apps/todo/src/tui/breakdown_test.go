@@ -73,7 +73,7 @@ func TestTheBoxAsksBeforeItProposes(t *testing.T) {
 	m.ai = standIn(t, `{"questions":["Which side of the roof?"]}`, twoProposals)
 	m = onTask(t, m, "Buy apples")
 
-	m, cmd := m.run("/breakdown")
+	m, cmd := m.do("b")
 	m = send(m, cmd())
 	if m.bd == nil {
 		t.Fatalf("the breakdown did not open: %v", m.err)
@@ -106,7 +106,7 @@ func TestNothingIsWrittenWithoutApproval(t *testing.T) {
 	apples, _ := m.selected()
 
 	before := historyLength(t, s)
-	m, cmd := m.run("/breakdown")
+	m, cmd := m.do("b")
 	m = send(m, cmd())
 	if len(m.bd.proposals) != 2 {
 		t.Fatalf("the proposals never arrived: %v", m.err)
@@ -141,7 +141,7 @@ func TestApprovalWritesOnlyWhatWasTicked(t *testing.T) {
 	m = onTask(t, m, "Buy apples")
 	apples, _ := m.selected()
 
-	m, cmd := m.run("/breakdown")
+	m, cmd := m.do("b")
 	m = send(m, cmd())
 	if len(m.bd.proposals) != 2 {
 		t.Fatalf("the proposals never arrived: %v", m.err)
@@ -176,7 +176,7 @@ func TestTheTreeIsUnwritableForTheDuration(t *testing.T) {
 	m = onTask(t, m, "Fix the roof")
 	roof, _ := m.selected()
 
-	m, cmd := m.run("/breakdown")
+	m, cmd := m.do("b")
 	m = send(m, cmd())
 	if m.bd == nil {
 		t.Fatalf("the breakdown did not open: %v", m.err)
@@ -206,7 +206,7 @@ func TestAQuestionAboutTheListWritesNothing(t *testing.T) {
 	m.ai = standIn(t, "The roof, then the invoice.")
 
 	before := historyLength(t, s)
-	m, cmd := m.run("/ask")
+	m, cmd := m.do("?")
 	m = send(m, cmd())
 	for _, key := range []string{"W", "h", "a", "t", "enter"} {
 		m = press(m, key)
@@ -255,7 +255,7 @@ func TestDecliningOneOfTwoWithTheSameTitleWritesOnlyTheOther(t *testing.T) {
 	m = onTask(t, m, "Buy apples")
 	apples, _ := m.selected()
 
-	m, cmd := m.run("/breakdown")
+	m, cmd := m.do("b")
 	m = send(m, cmd())
 	if len(m.bd.proposals) != 2 {
 		t.Fatalf("the proposals never arrived: %v", m.err)
