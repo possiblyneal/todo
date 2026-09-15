@@ -29,9 +29,10 @@ const (
 	Yearly  Unit = "year"
 )
 
-// Last is the Nth that means the last one in the month, so that "the last fri"
-// and "the fifth fri" are different rules: the last one is in every month and
-// the fifth is in some of them.
+// Last is the Nth that counts from the end of the month rather than the
+// start, which is the only way to name a weekday in the month's last week: the
+// last Friday is in every month and a fixed count high enough to reach it is
+// not. See ordinals for why the counts from the start stop at a fourth.
 const Last = -1
 
 // Rule is a Series: the whole recurrence, edited as one thing. It is stored as
