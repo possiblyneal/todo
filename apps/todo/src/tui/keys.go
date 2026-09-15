@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -57,6 +58,11 @@ var viewVerbs = []verb{
 	{"?", "ask", false, Model.startInquiry},
 	{"q", "quit", false, func(m Model) (Model, tea.Cmd) { return m, tea.Quit }},
 }
+
+// allVerbs is both rows flattened, for the readers that answer "what does this
+// key do" rather than "what goes in which row". The footer is the only reader
+// that wants them apart.
+var allVerbs = slices.Concat(taskVerbs, viewVerbs)
 
 // writes is the shape the four lifecycle verbs share: one Task, the Lease
 // covering its tree, and a re-read.
@@ -134,11 +140,9 @@ func (v verb) label() string { return strings.ReplaceAll(v.key, "ctrl+", "^") }
 
 // lookup finds the verb a key names.
 func lookup(key string) (verb, bool) {
-	for _, group := range [][]verb{taskVerbs, viewVerbs} {
-		for _, v := range group {
-			if v.key == key {
-				return v, true
-			}
+	for _, v := range allVerbs {
+		if v.key == key {
+			return v, true
 		}
 	}
 	return verb{}, false

@@ -436,3 +436,28 @@ func TestDeletingATagTakesItOffTheTasksThatCarriedIt(t *testing.T) {
 		t.Errorf("the Task carries %v, want only the Tag that was kept", got)
 	}
 }
+
+func TestDeletingSomethingThatIsNotThereIsRefused(t *testing.T) {
+	s := openTemp(t)
+	was, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+
+	if err := s.DeleteList("alice", "no-such-list"); err == nil {
+		t.Error("deleting a list that does not exist was reported as done")
+	}
+	if err := s.DeleteTag("alice", "no-such-tag"); err == nil {
+		t.Error("deleting a tag that does not exist was reported as done")
+	}
+
+	// The Change History is append-only, so an entry deleting something that
+	// never existed is one nothing can take back.
+	now, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+	if now != was {
+		t.Errorf("history went from %d to %d entries, want it left alone", was, now)
+	}
+}

@@ -98,14 +98,36 @@ func (s *Store) describe(actor, kind, id string, name, color *string) error {
 // unfiling and the removal are one transaction: a half-deleted List is a List
 // nothing can be filed under and everything is still in.
 func (s *Store) DeleteList(actor, listID string) error {
-	return s.remove(actor, listID, "task_list", "list_id", KindTaskUnlisted, "list", KindListDeleted)
+	return s.remove(actor, listID, lists)
 }
 
 // DeleteTag removes a Tag and takes it off every Task that carried it, on the
 // same terms as DeleteList.
 func (s *Store) DeleteTag(actor, tagID string) error {
-	return s.remove(actor, tagID, "task_tag", "tag_id", KindTagDetached, "tag", KindTagDeleted)
+	return s.remove(actor, tagID, tags)
 }
+
+// collection is everything a delete needs to know about which of the two it is
+// deleting. The two are the same shape in five places at once, and naming them
+// once here is what keeps a pair of them from being passed in the wrong order.
+type collection struct {
+	// name is the collection's own table, the key its membership entries are
+	// written under, and the word an error calls it. All three are one word
+	// by design: "list" and "tag" are the vocabulary, not three spellings.
+	name string
+
+	// carries is the membership table and column joining a Task to one.
+	carries, column string
+
+	// off is appended once per Task that carried it, gone once for the
+	// collection itself.
+	off, gone string
+}
+
+var (
+	lists = collection{name: "list", carries: "task_list", column: "list_id", off: KindTaskUnlisted, gone: KindListDeleted}
+	tags  = collection{name: "tag", carries: "task_tag", column: "tag_id", off: KindTagDetached, gone: KindTagDeleted}
+)
 
 // remove is the shape the two deletes share.
 //
@@ -115,10 +137,23 @@ func (s *Store) DeleteTag(actor, tagID string) error {
 // could not be deleted while somebody held any Task that carried it, and
 // abandoning half the unfiling on the first refusal is worse than the
 // exception. What is appended takes nothing off a Task but a membership.
-func (s *Store) remove(actor, id, table, column, off, key, gone string) error {
+func (s *Store) remove(actor, id string, c collection) error {
 	_, err := s.inTx(func(tx *sql.Tx) (Entry, error) {
+		// An id naming nothing is refused rather than appended. The Change
+		// History is append-only, so an entry deleting a List that never
+		// existed is one no later write can take back, and a surface that
+		// reported a typo as done would leave the person believing it.
+		var exists int
+		//nolint:gosec // the table is a constant above, never input.
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM `+c.name+` WHERE id = ?`, id).Scan(&exists); err != nil {
+			return Entry{}, fmt.Errorf("read the %s: %w", c.name, err)
+		}
+		if exists == 0 {
+			return Entry{}, fmt.Errorf("no %s has the id %q", c.name, id)
+		}
+
 		//nolint:gosec // table and column are constants above, never input.
-		rows, err := tx.Query(`SELECT task_id FROM `+table+` WHERE `+column+` = ?`, id)
+		rows, err := tx.Query(`SELECT task_id FROM `+c.carries+` WHERE `+c.column+` = ?`, id)
 		if err != nil {
 			return Entry{}, fmt.Errorf("read what carries it: %w", err)
 		}
@@ -135,11 +170,11 @@ func (s *Store) remove(actor, id, table, column, off, key, gone string) error {
 			return Entry{}, fmt.Errorf("read what carries it: %w", err)
 		}
 		for _, taskID := range carriers {
-			if _, err := appendTx(tx, actor, off, taskID, map[string]any{key: id}); err != nil {
+			if _, err := appendTx(tx, actor, c.off, taskID, map[string]any{c.name: id}); err != nil {
 				return Entry{}, err
 			}
 		}
-		return appendTx(tx, actor, gone, id, map[string]any{})
+		return appendTx(tx, actor, c.gone, id, map[string]any{})
 	})
 	return err
 }

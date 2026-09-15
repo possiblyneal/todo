@@ -132,7 +132,7 @@ func (m Model) updateCapture(msg tea.Msg) (Model, tea.Cmd) {
 			m.err = msg.err
 			return m, nil
 		}
-		return m.edit(nested(m.drafted(msg.read, onto), under))
+		return m.edit(m.drafted(msg.read, onto), under)
 	}
 
 	if m.capturing.waiting {
@@ -156,7 +156,7 @@ func (m Model) hand() (Model, tea.Cmd) {
 	if strings.TrimSpace(m.capturing.Text) == "" {
 		onto, under := m.capturing.onto, m.capturing.under
 		m.capturing = nil
-		return m.edit(nested(blank(onto), under))
+		return m.edit(blank(onto), under)
 	}
 	m.capturing.waiting = true
 	return m, m.read(m.capturing)
@@ -164,20 +164,15 @@ func (m Model) hand() (Model, tea.Cmd) {
 
 // edit opens the add or edit screen on a draft, which is the one gate every
 // dump passes through: what the broker read is shown, corrected and submitted
-// by a person before a word of it is written.
-func (m Model) edit(d *draft) (Model, tea.Cmd) {
-	m.draft = d
-	m.editor = m.form(d)
-	return m, m.editor.Init()
-}
-
-// nested says which Task a draft is written under, and leaves a top-level one
-// alone.
-func nested(d *draft, under *store.Task) *draft {
+// by a person before a word of it is written. It is also where the Task a new
+// one goes under is written onto the draft; under is nil for a top-level Task.
+func (m Model) edit(d *draft, under *store.Task) (Model, tea.Cmd) {
 	if under != nil {
 		d.parentID = under.ID
 	}
-	return d
+	m.draft = d
+	m.editor = m.form(d)
+	return m, m.editor.Init()
 }
 
 // blank is the draft a dump would have filled in, unfilled.

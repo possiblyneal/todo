@@ -70,12 +70,17 @@ var weekdayNames = map[string]time.Weekday{
 
 var weekdayText = [...]string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
 
+// A month has a first through a fourth of every weekday and a last of every
+// weekday, and it is not allowed a fifth: a fifth is in some months and not
+// others, so "every 3 months on the fifth fri" is a rule that can produce
+// nothing at all and no window Next could pick would tell that from a rule
+// that has merely run out. The last one is what a person meant anyway.
 var ordinals = map[string]int{
-	"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "last": Last,
+	"first": 1, "second": 2, "third": 3, "fourth": 4, "last": Last,
 }
 
 var ordinalText = map[int]string{
-	1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth", Last: "last",
+	1: "first", 2: "second", 3: "third", 4: "fourth", Last: "last",
 }
 
 const dateLayout = time.DateOnly
@@ -372,9 +377,8 @@ func (r Rule) walk(to time.Time) []time.Time {
 			if date.After(to) {
 				break
 			}
-			// A fifth Tuesday is in some months and not others, and a
-			// counted date in the anchor's own month can already be behind
-			// it. Both come back as a month this rule does not land in.
+			// A counted date in the anchor's own month can already be
+			// behind it, which is a month this rule does not land in.
 			if !date.IsZero() && !date.Before(anchor) {
 				dates = append(dates, date)
 			}
@@ -404,8 +408,10 @@ func firstOf(date time.Time) time.Time {
 
 // nth is the counted date inside the month first opens: the nth given weekday,
 // the last one when the count is Last, or the month's last day when no weekday
-// was named. It is the zero date when the month has no such weekday, which a
-// fifth of one often does not.
+// was named. Parse counts no higher than a fourth, which every month has, but
+// Nth is an exported field a rule can be built with in Go, so a count the
+// month cannot reach comes back as the zero date rather than as a date in the
+// month after it.
 func nth(first time.Time, count int, weekdays []time.Weekday) time.Time {
 	last := first.AddDate(0, 1, -1)
 	if len(weekdays) == 0 {

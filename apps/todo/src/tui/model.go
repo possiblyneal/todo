@@ -149,9 +149,9 @@ func (m *Model) refresh() error {
 	tasks, err := m.store.Tasks(store.Query{
 		List:             m.list,
 		Sort:             m.sort,
-		IncludeSnoozed:   m.snoozed,
-		IncludeCompleted: m.done,
-		IncludeDeclined:  m.declined,
+		IncludeSnoozed:   m.shown(snoozedState),
+		IncludeCompleted: m.shown(doneState),
+		IncludeDeclined:  m.shown(declinedState),
 	})
 	if err != nil {
 		return err
@@ -335,13 +335,8 @@ func (m Model) sorted() Model {
 // those Tasks to what is already in view rather than replacing it, so several
 // can be on at once and the view widens as they are.
 func (m Model) showing(state string) Model {
-	switch state {
-	case snoozedState:
-		m.snoozed = !m.snoozed
-	case doneState:
-		m.done = !m.done
-	case declinedState:
-		m.declined = !m.declined
+	if shown := m.state(state); shown != nil {
+		*shown = !*shown
 	}
 	m.err = m.refresh()
 	return m
@@ -350,15 +345,20 @@ func (m Model) showing(state string) Model {
 // shown says whether a state's Tasks are in view, which is what draws the tick
 // beside it.
 func (m Model) shown(state string) bool {
-	switch state {
-	case snoozedState:
-		return m.snoozed
-	case doneState:
-		return m.done
-	case declinedState:
-		return m.declined
-	}
-	return false
+	shown := m.state(state)
+	return shown != nil && *shown
+}
+
+// state is the one place a state's name and its boolean are tied together, so
+// the sidebar, the tick and the read cannot come to disagree about which is
+// which. The pointer is into the Model the method was called on, which is the
+// copy showing returns, so a toggle through it is the toggle that is kept.
+func (m *Model) state(name string) *bool {
+	return map[string]*bool{
+		snoozedState:  &m.snoozed,
+		doneState:     &m.done,
+		declinedState: &m.declined,
+	}[name]
 }
 
 // listing opens or closes the List dropdown, which is what "l" does.
@@ -386,11 +386,9 @@ func (m Model) click(msg tea.MouseClickMsg) (Model, tea.Cmd) {
 	}
 	// A footer key is its verb's hit box, so the click runs what the key
 	// runs rather than a second copy of it.
-	for _, group := range [][]verb{taskVerbs, viewVerbs} {
-		for _, v := range group {
-			if in(m.zones, "key:"+v.key, msg) {
-				return m.do(v.key)
-			}
+	for _, v := range allVerbs {
+		if in(m.zones, "key:"+v.key, msg) {
+			return m.do(v.key)
 		}
 	}
 	if m.dropdown {
