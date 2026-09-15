@@ -2,7 +2,9 @@
 
 `todo` is a task tracker with two kinds of consumer: a person at a keyboard, and agents that add, edit, and delete while nobody is watching. Both reach the same store through the same calls; neither gets a weaker or a stronger contract than the other. `CONTEXT.md` holds the language that keeps those two from meaning different things by the same word, and `docs/features.md` records the operator's wish list verbatim as source material rather than as a specification.
 
-The repository holds **one deployable**. Three bounded contexts — Tracking, Scheduling, Change History — collapse into a single Go binary with three modes: bare `todo` opens the TUI, `todo <verb>` acts and exits, and `todo serve` serves the same TUI over SSH on the LAN. The store is SQLite embedded as a library, so it is not a deployable of its own. `docs/adrs/0001-ship-todo-as-one-go-binary.md` records why, including the three triggers that re-open the language choice.
+The repository holds **one deployable** today. Three bounded contexts — Tracking, Scheduling, Change History — collapse into a single Go binary with three modes: bare `todo` opens the TUI, `todo <verb>` acts and exits, and `todo serve` serves the same TUI over SSH on the LAN. The store is SQLite embedded as a library, so it is not a deployable of its own.
+
+That is being replaced. `docs/adrs/0003-replace-the-tui-with-a-browser-client.md` supersedes ADR 0001: the person's surface becomes a TypeScript browser client in `apps/web` over a LAN-only JSON API served by the same Go binary, and the TUI and `todo serve` are deleted once it does everything they did. `docs/plans/browser-client.md` is the order that work lands in, and the TUI's contracts below stay binding until its stage 4 removes them.
 
 The root manifest is `go.work`, and it is what makes the module under `apps/todo/` visible to every check. A `go.mod` there with no `go.work` above it is an orphan `scripts/doctor` fails on rather than passing over, so a new module gets a `use` line in the same commit that creates it.
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The repository's single deployable: one Go binary with three modes. Bare `todo` opens the TUI, `todo <verb>` acts and exits, and `todo serve` serves the same TUI over SSH on the LAN. Three bounded contexts — Tracking, Scheduling, Change History — live in this one artifact. `docs/adrs/0001-ship-todo-as-one-go-binary.md` records why, including the three triggers that re-open the language choice.
+The repository's single deployable: one Go binary with three modes. Bare `todo` opens the TUI, `todo <verb>` acts and exits, and `todo serve` serves the same TUI over SSH on the LAN. Three bounded contexts — Tracking, Scheduling, Change History — live in this one artifact. `docs/adrs/0001-ship-todo-as-one-go-binary.md` records why; it is superseded by `docs/adrs/0003-replace-the-tui-with-a-browser-client.md`, which replaces the TUI and `todo serve` with a browser client over a JSON API this binary serves. Everything about the store survives that change untouched. Until `docs/plans/browser-client.md` reaches its stage 4 the TUI and serve contracts below are binding, because the TUI stays the working surface until the browser is one.
 
 ## Ownership
 
