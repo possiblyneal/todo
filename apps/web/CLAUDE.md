@@ -114,7 +114,10 @@ History.
   poll's tag down as a revision; the detail and activity screens fetch their
   own read again when it changes, which is exactly when something was written.
   A second poll of their own would be a second clock disagreeing with the
-  first.
+  first. A store whose write-ahead log cannot be stat'd carries no ETag at all,
+  and then these two screens read once and never again while the list stays
+  live. That is the one state where they are behind, and it is the same state
+  the API describes as not knowing whether anything changed.
 - **A verb is offered whatever state the Task is in.** Which of the four the
   store refuses is the store's to say, and it says it in a sentence. A screen
   that greyed out the wrong one would be a second copy of a rule that already
@@ -136,6 +139,9 @@ History.
   in between cannot appear twice. The button is there while the route filled
   the page it asked for, which is the only thing that says there may be more:
   what is drawn is smaller, since the Lease bookkeeping comes out client-side.
+  The route's own cap is the client's third copy of something, in `state.ts`:
+  nothing on the wire says where the route stops, and a button that asked past
+  it would offer more and then produce none.
 - **A verb that landed goes back to the list.** Three of the four take the Task
   out of the read the poll asks for, so the screen would be drawing a Task the
   next read does not describe. The list is where what happened is said, which

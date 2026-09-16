@@ -101,12 +101,20 @@ export async function fetchTaskHistory(id: string): Promise<Entry[]> {
 }
 
 /**
+ * The most entries `GET /api/history` will answer, whatever is asked for. It is
+ * `api.historyLimit`, and this is the client's copy of it: nothing on the wire
+ * says where the route stops, so asking past it would be a screen offering more
+ * and then not producing any. Raising it there means raising it here.
+ */
+export const HISTORY_CAP = 1000
+
+/**
  * The same rows across every Task, newest first and a page at a time. The page
  * is generous because the screen drops the Lease bookkeeping out of it, and a
  * page counted before that happens is mostly plumbing.
  */
 export async function fetchHistory(limit = 200): Promise<Entry[]> {
-  return await read(`/api/history?limit=${limit}`)
+  return await read(`/api/history?limit=${Math.min(limit, HISTORY_CAP)}`)
 }
 
 async function read(path: string): Promise<Entry[]> {

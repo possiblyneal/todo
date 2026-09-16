@@ -5,7 +5,7 @@
 // reached without opening the Task first. There is no hover and no right
 // click to hang them off, so holding is what a phone has.
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { sentence } from './api'
 import type { Task } from './state'
@@ -35,6 +35,11 @@ export function Row({
   const from = useRef({ x: 0, y: 0 })
 
   const stop = () => clearTimeout(timer.current)
+
+  // A row goes when the next poll no longer names its Task, which a verb from
+  // this very row is one way to cause. A press still counting down then has
+  // nothing left to open.
+  useEffect(() => () => clearTimeout(timer.current), [])
 
   const press = (event: React.PointerEvent) => {
     held.current = false

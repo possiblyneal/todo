@@ -11,7 +11,7 @@ import { useState } from 'react'
 import { isAgent, isWrite } from './log'
 import { Log } from './Log'
 import { useRead } from './read'
-import { fetchHistory, type Entry, type Task } from './state'
+import { fetchHistory, HISTORY_CAP, type Entry, type Task } from './state'
 
 /** The first page, and what each tap on Show more adds to it. */
 const PAGE = 200
@@ -48,8 +48,10 @@ export function Activity({
 
   // A full page is the only thing that says there may be more. The count is of
   // what the route answered rather than of what is drawn, because the filters
-  // above take rows out of a page that was already read.
-  const more = entries.length === limit
+  // above take rows out of a page that was already read. At the route's cap
+  // there is no more to ask for, so the button goes rather than asking again
+  // for the same thousand rows.
+  const more = entries.length === limit && limit < HISTORY_CAP
 
   return (
     <div className="detail">
