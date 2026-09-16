@@ -122,7 +122,11 @@ func runServe(args []string, stderr io.Writer) int {
 // trigger is what covers changing that.
 func runAPI(args []string, stderr io.Writer) int {
 	fs := flags("api", stderr)
-	o := api.Options{}
+	// Every write through the listener is attributed to whoever started it,
+	// because there is no authentication and so nobody to name per request.
+	// It is the same Actor the verbs resolve, so a person at the terminal and
+	// the same person in the browser are one Actor in the Change History.
+	o := api.Options{Actor: actor()}
 	fs.StringVar(&o.Addr, "addr", ":8080", "address to listen on")
 	fs.StringVar(&o.Web, "web", "", "directory of compiled client files to serve beside the json")
 	if err := fs.Parse(args); err != nil {
