@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -273,5 +274,124 @@ func TestEditRefusesAnEmptyTitleAsTheMistakeItIs(t *testing.T) {
 	}
 	if got := only(t, s).Title; got != "Paint the shed" {
 		t.Errorf("the store holds %q, want the title untouched", got)
+	}
+}
+
+// The four lifecycle verbs are one route, and the write each makes is the one
+// the verb of the same name makes at a terminal: guarded, under the Lease over
+// the Task's tree, which is what write.Lifecycle is.
+func TestLifecycleVerbsMakeTheWriteTheVerbMakes(t *testing.T) {
+	s := openTemp(t)
+	for _, act := range []struct {
+		verb string
+		mark string
+	}{
+		{"complete", "done"},
+		{"decline", "declined"},
+		{"delete", "deleted"},
+	} {
+		id, err := s.AddTask("tester", store.Attributes{Title: store.Set("Paint the fence")})
+		if err != nil {
+			t.Fatalf("AddTask: %v", err)
+		}
+		w := do(t, s, http.MethodPost, "/api/tasks/"+id+"/"+act.verb, "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("POST %s answered %d: %s", act.verb, w.Code, w.Body.String())
+		}
+		tasks, err := s.Tasks(store.Query{IncludeCompleted: true, IncludeDeclined: true, IncludeDeleted: true})
+		if err != nil {
+			t.Fatalf("Tasks: %v", err)
+		}
+		var marks []string
+		for _, task := range tasks {
+			if task.ID == id {
+				marks = task.Marks()
+			}
+		}
+		if !slices.Contains(marks, act.mark) {
+			t.Errorf("after %s the task's marks are %v, want %q among them", act.verb, marks, act.mark)
+		}
+	}
+}
+
+// A verb a Task does not do is the caller asking wrongly, and the store never
+// sees it: there is no sentence of the store's to borrow, so the route says
+// which four it could have named.
+func TestAnUnknownVerbIsRefusedBeforeTheStore(t *testing.T) {
+	s := openTemp(t)
+	id, err := s.AddTask("tester", store.Attributes{Title: store.Set("Paint the fence")})
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	before, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+
+	w := do(t, s, http.MethodPost, "/api/tasks/"+id+"/archive", "")
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("POST archive answered %d, want 400: %s", w.Code, w.Body.String())
+	}
+	if sentence := said(t, w)["error"]; !strings.Contains(sentence, "complete") {
+		t.Errorf("the refusal reads %q, want the four verbs named in it", sentence)
+	}
+	after, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+	if before != after {
+		t.Errorf("a verb nobody recognises appended %d entries", after-before)
+	}
+}
+
+// A Subtask's parent is the Task in the path, and the write is the one
+// POST /api/tasks makes with a parent: the same store call, under the parent's
+// Lease, so a Subtask written here and one written by `todo add -parent` are
+// the same entry.
+func TestSubtasksAreWrittenUnderTheTaskInThePath(t *testing.T) {
+	s := openTemp(t)
+	parent, err := s.AddTask("tester", store.Attributes{Title: store.Set("Paint the fence")})
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+
+	w := do(t, s, http.MethodPost, "/api/tasks/"+parent+"/subtasks", `{"title": "Buy the paint"}`)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("POST subtasks answered %d, want 201: %s", w.Code, w.Body.String())
+	}
+	child := said(t, w)["id"]
+
+	tasks, err := s.Tasks(store.Query{})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	for _, task := range tasks {
+		if task.ID != child {
+			continue
+		}
+		if task.Parent != parent {
+			t.Errorf("the subtask's parent is %q, want %q", task.Parent, parent)
+		}
+		if task.Depth != 2 {
+			t.Errorf("the subtask's depth is %d, want 2", task.Depth)
+		}
+		return
+	}
+	t.Errorf("the subtask %q is not in the store", child)
+}
+
+// The path says which Task this goes under, so a body saying it again is the
+// caller asking wrongly rather than one of the two quietly losing.
+func TestSubtasksRefuseABodyNamingAnotherParent(t *testing.T) {
+	s := openTemp(t)
+	parent, err := s.AddTask("tester", store.Attributes{Title: store.Set("Paint the fence")})
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+
+	w := do(t, s, http.MethodPost, "/api/tasks/"+parent+"/subtasks",
+		`{"title": "Buy the paint", "parent": "somewhere-else"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("POST subtasks with a parent answered %d, want 400: %s", w.Code, w.Body.String())
 	}
 }

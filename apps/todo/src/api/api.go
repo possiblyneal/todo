@@ -49,6 +49,36 @@ func Handler(s *store.Store, o Options) http.Handler {
 	mux.HandleFunc("PATCH /api/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
 		editTask(s, o.Actor, w, r)
 	})
+	mux.HandleFunc("POST /api/tasks/{id}/subtasks", func(w http.ResponseWriter, r *http.Request) {
+		addSubtask(s, o.Actor, w, r)
+	})
+	// The four lifecycle verbs, by name in the path. A literal segment beats a
+	// wildcard one in this mux, so the route above is what serves `subtasks`
+	// and this one never sees it.
+	mux.HandleFunc("POST /api/tasks/{id}/{verb}", func(w http.ResponseWriter, r *http.Request) {
+		lifecycleTask(s, o.Actor, w, r)
+	})
+	mux.HandleFunc("GET /api/tasks/{id}/history", func(w http.ResponseWriter, r *http.Request) {
+		taskHistory(s, w, r)
+	})
+	mux.HandleFunc("GET /api/history", func(w http.ResponseWriter, r *http.Request) {
+		history(s, w, r)
+	})
+	// A List and a Tag are the same three writes against different aggregates,
+	// so the routes are registered from one table and differ only in the pair
+	// of store calls they are handed.
+	for path, of := range map[string]func(*store.Store) kind{"lists": lists, "tags": tags} {
+		k := of(s)
+		mux.HandleFunc("POST /api/"+path, func(w http.ResponseWriter, r *http.Request) {
+			addCollection(k, o.Actor, w, r)
+		})
+		mux.HandleFunc("PATCH /api/"+path+"/{id}", func(w http.ResponseWriter, r *http.Request) {
+			describeCollection(k, o.Actor, w, r)
+		})
+		mux.HandleFunc("DELETE /api/"+path+"/{id}", func(w http.ResponseWriter, r *http.Request) {
+			dropCollection(k, o.Actor, w, r)
+		})
+	}
 	mux.HandleFunc("POST /api/capture", func(w http.ResponseWriter, r *http.Request) {
 		capture(s, broker, w, r)
 	})
