@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { Box } from './Box'
 import { fetchState, type State } from './state'
 
 // The write-ahead log was polled once a second by the TUI; this is the same
@@ -58,6 +59,14 @@ export function App() {
   // out of range should not have its list taken away while it walks back.
   return (
     <>
+      {/*
+        The box is above the list rather than behind a tap, because a dump is
+        the most frequent thing anybody does here and nothing should be stacked
+        in front of it. The Lists and Tags it offers on the add sheet are the
+        ones the last read named; before the first one there are none to offer
+        and the sheet shows none.
+      */}
+      <Box lists={state?.lists ?? []} tags={state?.tags ?? []} />
       {error && <p className="message">{error}</p>}
       {!state && !error && <p className="message">Reading the list…</p>}
       {state && state.tasks.length === 0 && (

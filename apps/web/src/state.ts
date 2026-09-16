@@ -2,6 +2,8 @@
 // it. They mirror src/api/state.go rather than store.Task: the API decides what
 // a Task looks like on the wire, and this is the other side of that decision.
 
+import { refused } from './api'
+
 export type Collection = {
   id: string
   name: string
@@ -68,19 +70,9 @@ export async function fetchState(
 
   if (response.status === 304) return null
 
-  if (!response.ok) {
-    // The API's error body is the sentence the CLI would have printed, so it
-    // is shown as it is rather than restated in the client's own words.
-    const body: unknown = await response.json().catch(() => null)
-    const sentence =
-      body &&
-      typeof body === 'object' &&
-      'error' in body &&
-      typeof body.error === 'string'
-        ? body.error
-        : `the API answered ${response.status}`
-    throw new Error(sentence)
-  }
+  // The API's error body is the sentence the CLI would have printed, so it is
+  // shown as it is rather than restated in the client's own words.
+  if (!response.ok) throw await refused(response)
 
   return {
     etag: response.headers.get('ETag'),

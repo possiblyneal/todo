@@ -1,0 +1,95 @@
+// The box is the front door. A Task said the way somebody thinks of it, one
+// tap from the list with nothing stacked in front of it, and the question
+// under the same thumb: a dump and a question are both "say a sentence about
+// the list".
+//
+// Neither call writes. Handing a dump over opens the add sheet filled in, and
+// submitting that sheet is the only thing that writes; a question is answered
+// as prose over the Tasks in view and appends nothing.
+
+import { useState } from 'react'
+
+import { Sheet } from './Sheet'
+import type { Collection } from './state'
+import { ask, capture, type TaskBody } from './write'
+
+export function Box({
+  lists,
+  tags,
+}: {
+  lists: Collection[]
+  tags: Collection[]
+}) {
+  const [text, setText] = useState('')
+  const [working, setWorking] = useState<'' | 'reading' | 'asking'>('')
+  const [error, setError] = useState<string | null>(null)
+  const [answer, setAnswer] = useState<string | null>(null)
+  const [draft, setDraft] = useState<TaskBody | null>(null)
+
+  // The Broker holds nothing between calls, so each of these is one turn and
+  // the whole of it. Both take minutes at worst, which is why the box says
+  // which one it is waiting on rather than only that it is busy.
+  const hand = async (what: 'reading' | 'asking') => {
+    const said = text.trim()
+    if (said === '' || working !== '') return
+    setWorking(what)
+    setError(null)
+    setAnswer(null)
+    try {
+      if (what === 'reading') setDraft(await capture(said))
+      else setAnswer(await ask(said))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setWorking('')
+    }
+  }
+
+  if (draft) {
+    return (
+      <Sheet
+        draft={draft}
+        lists={lists}
+        tags={tags}
+        // The dump is done with once the Task is written. Backing out of the
+        // sheet keeps it, because somebody who changed their mind about the
+        // Task has not changed their mind about having typed the sentence.
+        onWritten={() => {
+          setDraft(null)
+          setText('')
+        }}
+        onCancel={() => setDraft(null)}
+      />
+    )
+  }
+
+  return (
+    <div className="box">
+      <textarea
+        className="dump"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        placeholder="Say the task, or ask about the list"
+        rows={2}
+      />
+      <div className="buttons">
+        <button
+          type="button"
+          onClick={() => void hand('reading')}
+          disabled={working !== '' || text.trim() === ''}
+        >
+          {working === 'reading' ? 'Reading…' : 'Add'}
+        </button>
+        <button
+          type="button"
+          onClick={() => void hand('asking')}
+          disabled={working !== '' || text.trim() === ''}
+        >
+          {working === 'asking' ? 'Asking…' : 'Ask'}
+        </button>
+      </div>
+      {error && <p className="message">{error}</p>}
+      {answer && <p className="answer">{answer}</p>}
+    </div>
+  )
+}
