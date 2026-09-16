@@ -13,6 +13,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
@@ -30,6 +33,15 @@ func Handler(s *store.Store, web string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, r *http.Request) {
 		state(s, w, r)
+	})
+	// A route under /api/ that this package does not serve is a usage error in
+	// the same envelope every other one arrives in. It is registered whether or
+	// not the client is served here: with the files under it the fallback below
+	// would otherwise hand back index.html at 200 for the client to fail to
+	// parse as JSON, and without them a bad route would answer this in one
+	// posture and Go's own plain-text 404 in the other.
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		fail(w, usage{fmt.Errorf("%s %s is not a route", r.Method, r.URL.Path)})
 	})
 	if web != "" {
 		mux.Handle("/", client(web))
@@ -52,9 +64,14 @@ func ListenAndServe(s *store.Store, o Options, stderr io.Writer) error {
 // only it knows about has to reach it rather than 404.
 func client(dir string) http.Handler {
 	files := http.FileServer(http.Dir(dir))
+	index := filepath.Join(dir, "index.html")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := http.Dir(dir).Open(r.URL.Path); err != nil {
-			http.ServeFile(w, r, dir+"/index.html")
+		// Stat rather than open: the answer wanted is whether the file is
+		// there, and an opened one would have to be closed on a path that
+		// hands the serving to somebody who opens it again anyway.
+		named := filepath.Join(dir, filepath.FromSlash(path.Clean("/"+r.URL.Path)))
+		if info, err := os.Stat(named); err != nil || info.IsDir() {
+			http.ServeFile(w, r, index)
 			return
 		}
 		files.ServeHTTP(w, r)
@@ -75,15 +92,22 @@ func write(w http.ResponseWriter, status int, body any) {
 // The body is the sentence the CLI would have printed.
 func fail(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
+	var asked usage
 	switch {
 	case errors.Is(err, store.ErrRefused), errors.Is(err, store.ErrHeld):
 		status = http.StatusConflict
-	case errors.Is(err, errUsage):
+	case errors.As(err, &asked):
 		status = http.StatusBadRequest
 	}
 	write(w, status, map[string]string{"error": err.Error()})
 }
 
-// errUsage marks an error the caller can fix by asking differently, which is
-// exit status 2 at a terminal and 400 here.
-var errUsage = errors.New("usage")
+// usage marks an error the caller can fix by asking differently, which is exit
+// status 2 at a terminal and 400 here. It adds no words of its own: the body
+// is the sentence the CLI would have printed and nothing more, so a person
+// reading the browser and a person reading the terminal are told the same
+// thing about the same mistake.
+type usage struct{ err error }
+
+func (u usage) Error() string { return u.err.Error() }
+func (u usage) Unwrap() error { return u.err }

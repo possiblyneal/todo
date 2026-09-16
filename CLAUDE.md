@@ -18,7 +18,7 @@ Those three are first-class, and a surface that reaches them in fewer taps than 
 
 There is a root manifest per toolchain, and each is what makes its nested package visible to every check: `go.work` for the module under `apps/todo/`, and `package.json` naming `apps/web` as an npm workspace. A nested manifest with no root one above it is an orphan `scripts/doctor` fails on rather than passing over, so a new package gets its root entry in the same commit that creates it.
 
-The node checks dispatch off the root `package.json`'s scripts — `lint`, `format:check`, `format`, `typecheck`, `test`, `build` — each delegating to `apps/web`. A missing script reports `unavailable`, which fails the gate the same way a failure does, so renaming one here is renaming a check.
+The node checks dispatch off the root `package.json`'s scripts — `lint`, `format:check`, `format`, `typecheck`, `test`, `build` — each delegating to `apps/web`. A missing script reports `unavailable`, which fails the gate the same way a failure does, so renaming one here is renaming a check. `dev` is the seventh script and the one no check reads: it is there so the client's dev server starts from the root the other six run from.
 
 ## Commands
 

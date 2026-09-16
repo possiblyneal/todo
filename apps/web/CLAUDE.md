@@ -34,6 +34,14 @@ Stage 1 of the plan is what is here: the list, read-only, over `GET /api/state`.
 - **A 304 is nothing to redraw, not an empty state.** `fetchState` returns
   `null` for one and the view keeps what it has; the ETag is handed back on the
   next poll, which is the TUI's once-a-second write-ahead-log poll over HTTP.
+- **One poll at a time.** The next is scheduled once the one before it has
+  settled rather than on an interval, so two are never in flight together: the
+  slower of an overlapping pair draws its older list over the newer one and
+  leaves a stale ETag to be answered `304` against.
+- **A failed poll takes nothing off the screen.** The error is drawn over the
+  list it interrupted, because a read that failed says nothing about the Tasks
+  already drawn, and a phone that walked out of range gets them back when it
+  walks back rather than losing them on the way out.
 - **An API error is shown in the API's own words.** The body's sentence is the
   one the CLI would have printed, so it is drawn rather than restated.
 - **Touch targets no smaller than 44px, one thumb, no hover.**

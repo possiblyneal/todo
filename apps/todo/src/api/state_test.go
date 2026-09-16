@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -201,5 +202,100 @@ func TestStateWritesAnEmptyListAsAList(t *testing.T) {
 	}
 	if len(state.Tasks) != 1 || state.Tasks[0].Marks == nil {
 		t.Errorf("Marks = %v, want empty rather than nil", state.Tasks[0].Marks)
+	}
+}
+
+// The store keeps the only list of sorts there is, so the sentence a bad one
+// gets is the store's own, word for word, rather than a second phrasing this
+// package keeps beside it.
+func TestStateRefusesASortInTheStoresOwnWords(t *testing.T) {
+	s := openTemp(t)
+	w := get(t, s, "/api/state?sort=nope", nil)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+
+	_, err := s.Tasks(store.Query{Sort: "nope"})
+	if err == nil {
+		t.Fatal("the store took a sort it does not have")
+	}
+	var body map[string]string
+	if decodeErr := json.Unmarshal(w.Body.Bytes(), &body); decodeErr != nil {
+		t.Fatalf("decode: %v", decodeErr)
+	}
+	if body["error"] != err.Error() {
+		t.Errorf("body = %q, want the store's own %q", body["error"], err.Error())
+	}
+}
+
+// An If-None-Match is read the way RFC 9110 writes one: several tags to a
+// line, and a weak one still matching. A client whose tags arrive joined by a
+// proxy would otherwise re-read the whole list on every poll.
+func TestStateReads304FromEveryShapeOfIfNoneMatch(t *testing.T) {
+	s := openTemp(t)
+	add(t, s, "Water the plants")
+	tag := get(t, s, "/api/state", nil).Header().Get("ETag")
+	if tag == "" {
+		t.Fatal("no ETag on a store that has been written to")
+	}
+
+	for _, sent := range []string{tag, `"other", ` + tag, "W/" + tag, "*"} {
+		w := get(t, s, "/api/state", http.Header{"If-None-Match": {sent}})
+		if w.Code != http.StatusNotModified {
+			t.Errorf("If-None-Match: %s = %d, want 304", sent, w.Code)
+		}
+	}
+
+	w := get(t, s, "/api/state", http.Header{"If-None-Match": {`"nothing like it"`}})
+	if w.Code != http.StatusOK {
+		t.Errorf("a tag naming another representation = %d, want 200", w.Code)
+	}
+}
+
+// A route this package does not serve is a usage error with a sentence in it,
+// even with the client's files being served underneath. The fallback answers any
+// path it is given, so an /api/ typo would otherwise be index.html at 200 and
+// the client would fail parsing HTML as JSON instead of saying what happened.
+func TestAnAPIRouteThatIsNotOneIsNotTheClient(t *testing.T) {
+	s := openTemp(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<title>todo</title>"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	serve := func(method, target string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		Handler(s, dir).ServeHTTP(w, httptest.NewRequest(method, target, nil))
+		return w
+	}
+
+	for _, r := range []struct{ method, target string }{
+		{http.MethodGet, "/api/stat"},
+		{http.MethodPost, "/api/state"},
+		{http.MethodGet, "/api/tasks/nope"},
+	} {
+		w := serve(r.method, r.target)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s %s = %d, want 400 rather than the client", r.method, r.target, w.Code)
+		}
+		if strings.Contains(w.Body.String(), "<title>") {
+			t.Errorf("%s %s was answered with the client's index.html", r.method, r.target)
+		}
+	}
+
+	// A path the client routes in the browser still reaches the client.
+	if w := serve(http.MethodGet, "/activity"); w.Code != http.StatusOK {
+		t.Errorf("/activity = %d, want the client at 200", w.Code)
+	}
+
+	// Serving the JSON alone says the same thing about the same bad route, so
+	// a client on its own dev server is not told something different from one
+	// reading the files this process serves.
+	alone := get(t, s, "/api/typo", nil)
+	if alone.Code != http.StatusBadRequest {
+		t.Errorf("/api/typo with no client served = %d, want 400", alone.Code)
+	}
+	if !strings.Contains(alone.Body.String(), "is not a route") {
+		t.Errorf("body = %s, want a sentence saying so", alone.Body.String())
 	}
 }

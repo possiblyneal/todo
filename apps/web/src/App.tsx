@@ -33,35 +33,54 @@ export function App() {
       }
     }
 
-    void poll()
-    const timer = setInterval(() => void poll(), POLL_MS)
+    // Each poll is scheduled once the one before it has settled rather than
+    // on a fixed interval, so two can never be in flight together. Overlapping
+    // reads come back in whatever order they come back in, and the slower one
+    // would draw its older list over the newer one and leave a stale ETag
+    // behind to be answered 304 against.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const tick = async () => {
+      await poll()
+      if (!controller.signal.aborted) {
+        timer = setTimeout(() => void tick(), POLL_MS)
+      }
+    }
+
+    void tick()
     return () => {
       controller.abort()
-      clearInterval(timer)
+      clearTimeout(timer)
     }
   }, [])
 
-  if (error) return <p className="message">{error}</p>
-  if (!state) return <p className="message">Reading the list…</p>
-  if (state.tasks.length === 0)
-    return <p className="message">Nothing here yet.</p>
-
+  // An error sits over the list rather than replacing it. A poll that failed
+  // says nothing about the Tasks already on the screen, and a phone that walked
+  // out of range should not have its list taken away while it walks back.
   return (
-    <ul className="list">
-      {state.tasks.map((task) => (
-        <li
-          key={task.id}
-          className="row"
-          // Depth is 1 for a top-level Task, so the indent is what it has
-          // beyond the top rather than the depth itself.
-          style={{ paddingLeft: `${1 + (task.depth - 1) * 1.25}rem` }}
-        >
-          <span>{task.title}</span>
-          {task.marks.length > 0 && (
-            <span className="marks">{task.marks.join(' · ')}</span>
-          )}
-        </li>
-      ))}
-    </ul>
+    <>
+      {error && <p className="message">{error}</p>}
+      {!state && !error && <p className="message">Reading the list…</p>}
+      {state && state.tasks.length === 0 && (
+        <p className="message">Nothing here yet.</p>
+      )}
+      {state && state.tasks.length > 0 && (
+        <ul className="list">
+          {state.tasks.map((task) => (
+            <li
+              key={task.id}
+              className="row"
+              // Depth is 1 for a top-level Task, so the indent is what it has
+              // beyond the top rather than the depth itself.
+              style={{ paddingLeft: `${1 + (task.depth - 1) * 1.25}rem` }}
+            >
+              <span>{task.title}</span>
+              {task.marks.length > 0 && (
+                <span className="marks">{task.marks.join(' · ')}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   )
 }

@@ -3,9 +3,9 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
@@ -16,11 +16,7 @@ import (
 //
 // It is a read, so nothing is attributed and no Lease is taken.
 func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
-	q, err := query(r)
-	if err != nil {
-		fail(w, err)
-		return
-	}
+	q := query(r)
 
 	// The ETag is the write-ahead log's token hashed with the query that
 	// produced the response. The token alone is store-global while this
@@ -30,11 +26,12 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 	// An empty token means the log could not be stat'd rather than that
 	// nothing has changed, so there is nothing to compare and the response
 	// carries no ETag at all.
+	tag := ""
 	if token := s.WALToken(); token != "" {
 		sum := sha256.Sum256([]byte(token + "\x00" + r.URL.RawQuery))
-		tag := `"` + hex.EncodeToString(sum[:]) + `"`
-		w.Header().Set("ETag", tag)
-		if slices.Contains(r.Header.Values("If-None-Match"), tag) {
+		tag = `"` + hex.EncodeToString(sum[:]) + `"`
+		if matches(r.Header.Values("If-None-Match"), tag) {
+			w.Header().Set("ETag", tag)
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
@@ -42,6 +39,13 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 
 	tasks, err := s.Tasks(q)
 	if err != nil {
+		// The store holds the only list of sorts there is, so it is the store
+		// that turns an unknown one away and the store's sentence that says
+		// so. Reaching that refusal means the caller asked wrongly, which is
+		// 400 here and exit status 2 at a terminal; anything else went wrong.
+		if q.Sort != "" && !slices.Contains(store.Sorts, q.Sort) {
+			err = usage{err}
+		}
 		fail(w, err)
 		return
 	}
@@ -73,28 +77,45 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 	for _, g := range tags {
 		out.Tags = append(out.Tags, collection{ID: g.ID, Name: g.Name, Color: g.Color, Count: g.Count})
 	}
+
+	// The ETag goes on the response that was actually sent. Setting it before
+	// the reads would put a tag on an error body too, and a client handing
+	// that one back would be answered 304 for a screen it never received.
+	if tag != "" {
+		w.Header().Set("ETag", tag)
+	}
 	write(w, http.StatusOK, out)
 }
 
+// matches reads If-None-Match the way RFC 9110 writes it: several tags to one
+// header line separated by commas, a weak tag marked `W/`, and `*` for any
+// representation at all. Comparison is weak, which is what a GET of an
+// unchanged response wants; only a range request needs the strong kind.
+func matches(values []string, tag string) bool {
+	for _, value := range values {
+		for _, one := range strings.Split(value, ",") {
+			one = strings.TrimSpace(one)
+			if one == "*" || strings.TrimPrefix(one, "W/") == tag {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // query reads a Query out of the request, on the same four narrowings and the
-// same names `todo list` takes them under. An unknown sort is a usage error
-// here because it is one there: the store's set is the only set.
-func query(r *http.Request) (store.Query, error) {
+// same names `todo list` takes them under. An unknown sort is not refused
+// here: the store keeps the list of sorts, so the store is what refuses one.
+func query(r *http.Request) store.Query {
 	all := r.URL.Query().Get("all") == "true"
-	q := store.Query{
+	return store.Query{
 		IncludeCompleted: all,
 		IncludeDeclined:  all,
 		IncludeSnoozed:   all,
 		IncludeDeleted:   all,
 		List:             r.URL.Query().Get("list"),
+		Sort:             store.Sort(r.URL.Query().Get("sort")),
 	}
-	if sort := r.URL.Query().Get("sort"); sort != "" {
-		if !slices.Contains(store.Sorts, store.Sort(sort)) {
-			return q, fmt.Errorf("%w: sort is one of %v, not %q", errUsage, store.SortNames(), sort)
-		}
-		q.Sort = store.Sort(sort)
-	}
-	return q, nil
 }
 
 type stateBody struct {
@@ -162,12 +183,12 @@ func newTask(t store.Task) task {
 		Description:     t.Description,
 		Why:             t.Why,
 		Color:           t.Color,
-		CreatedAt:       stamp(t.CreatedAt),
-		Deadline:        stamp(t.Deadline),
-		SnoozedUntil:    stamp(t.SnoozedUntil),
-		CompletedAt:     stamp(t.CompletedAt),
-		DeclinedAt:      stamp(t.DeclinedAt),
-		DeletedAt:       stamp(t.DeletedAt),
+		CreatedAt:       rfc3339(t.CreatedAt),
+		Deadline:        rfc3339(t.Deadline),
+		SnoozedUntil:    rfc3339(t.SnoozedUntil),
+		CompletedAt:     rfc3339(t.CompletedAt),
+		DeclinedAt:      rfc3339(t.DeclinedAt),
+		DeletedAt:       rfc3339(t.DeletedAt),
 		EstimateSeconds: int64(t.Estimate / time.Second),
 		Priority:        string(t.Priority),
 		Impact:          string(t.Impact),
@@ -189,9 +210,9 @@ func marks(t store.Task) []string {
 	return []string{}
 }
 
-// stamp writes a time as RFC 3339, and a zero time as nothing at all: a Task
+// rfc3339 writes a time as RFC 3339, and a zero time as nothing at all: a Task
 // with no deadline has no deadline rather than one in year one.
-func stamp(t time.Time) string {
+func rfc3339(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}

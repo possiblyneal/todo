@@ -36,7 +36,7 @@ test('a read returns the tree and the tag it came with', async () => {
       200,
       {
         tasks: [
-          { id: 't1', depth: 0, title: 'Ship it', createdAt: '', marks: empty },
+          { id: 't1', depth: 1, title: 'Ship it', createdAt: '', marks: empty },
         ],
         lists: empty,
         tags: empty,
