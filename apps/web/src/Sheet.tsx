@@ -33,6 +33,11 @@ export function Sheet({
   onCancel: () => void
 }) {
   const [body, setBody] = useState<TaskBody>(draft)
+  // What the Task carried when this opened, kept rather than read again. The
+  // draft prop is recomputed from every poll, so a membership another Actor
+  // changed while the sheet was open would move the baseline under it and an
+  // untick would come out as no change at all.
+  const [opened] = useState<TaskBody>(draft)
   const [error, setError] = useState<string | null>(null)
   const [writing, setWriting] = useState(false)
 
@@ -58,7 +63,7 @@ export function Sheet({
       // The memberships are the difference between what the Task carried when
       // this opened and what is ticked now, because ticking and unticking are
       // different fields on the wire.
-      await onSubmit({ ...body, ...memberships(draft, body) })
+      await onSubmit({ ...body, ...memberships(opened, body) })
     } catch (caught) {
       // The API's sentence is the one the CLI would have printed, and a value
       // it could not read is still in the field it came back in, so whoever

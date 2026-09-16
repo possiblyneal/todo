@@ -33,3 +33,12 @@ export async function send<T>(
   if (!response.ok) throw await refused(response)
   return (await response.json()) as T
 }
+
+/**
+ * Whatever was thrown, as the sentence to put on the screen. Everything this
+ * client throws is an Error carrying the API's own words; the other branch is
+ * for what a browser throws when the request never got that far.
+ */
+export function sentence(caught: unknown): string {
+  return caught instanceof Error ? caught.message : String(caught)
+}

@@ -76,11 +76,15 @@ export async function addSubtask(
 }
 
 /**
- * The rest of a Task's life: complete, decline, reopen, delete. The four are
- * one route and the API holds the list, so a verb this sends that a Task does
- * not do comes back refused in the API's own words rather than being checked
- * twice.
+ * The four, and the client's one copy of which four there are. No route
+ * answers the question, so this is the list every screen that draws them reads
+ * rather than each keeping its own. A fifth added to `write.Lifecycle` is a
+ * button missing here until it is added, never a sentence drawn wrongly: one
+ * this sends that the API does not serve comes back refused in its own words.
  */
+export const VERBS = ['complete', 'decline', 'reopen', 'delete']
+
+/** The rest of a Task's life, by the verb in the path. */
 export async function lifecycle(id: string, verb: string): Promise<void> {
   await send<{ id: string }>(
     'POST',
@@ -114,9 +118,10 @@ export function draftOf(task: Task): TaskBody {
 /**
  * A duration the API can read back, and the shortest of them: the wire carries
  * seconds because JavaScript has no duration, and `90m` is what somebody typed
- * in the first place.
+ * in the first place. It is what the detail screen draws too, so an estimate
+ * reads the same on the screen that shows it and in the field that edits it.
  */
-function estimate(seconds?: number): string | undefined {
+export function estimate(seconds?: number): string | undefined {
   if (!seconds) return undefined
   if (seconds % 3600 === 0) return `${seconds / 3600}h`
   if (seconds % 60 === 0) return `${seconds / 60}m`

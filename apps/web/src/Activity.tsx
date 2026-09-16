@@ -6,11 +6,17 @@
 // nothing. The filter narrows and never hides, so the screen opens unfiltered
 // and an Agent that named itself with no slash is in that view.
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { isAgent, isWrite } from './log'
 import { Log } from './Log'
+import { useRead } from './read'
 import { fetchHistory, type Entry, type Task } from './state'
+
+/** The first page, and what each tap on Show more adds to it. */
+const PAGE = 200
+
+const NONE: Entry[] = []
 
 export function Activity({
   tasks,
@@ -22,24 +28,16 @@ export function Activity({
   revision: string | null
   onBack: () => void
 }) {
-  const [entries, setEntries] = useState<Entry[]>([])
-  const [error, setError] = useState<string | null>(null)
   const [agentsOnly, setAgentsOnly] = useState(false)
-
-  useEffect(() => {
-    let live = true
-    fetchHistory()
-      .then((read) => {
-        if (live) setEntries(read)
-      })
-      .catch((caught: unknown) => {
-        if (live)
-          setError(caught instanceof Error ? caught.message : String(caught))
-      })
-    return () => {
-      live = false
-    }
-  }, [revision])
+  // How far back this screen is asking. The route answers the newest first, so
+  // a bigger number is the same rows with older ones under them: reaching
+  // further back is one read rather than a second one stitched onto the first,
+  // which is what keeps a write that landed in between from being drawn twice.
+  const [limit, setLimit] = useState(PAGE)
+  const { value: entries, error } = useRead(() => fetchHistory(limit), NONE, [
+    revision,
+    limit,
+  ])
 
   // The Lease bookkeeping goes first and always: it brackets every guarded
   // write under the writer's own Actor, so leaving it in would make the screen
@@ -47,6 +45,11 @@ export function Activity({
   const shown = entries
     .filter(isWrite)
     .filter((entry) => !agentsOnly || isAgent(entry.actor))
+
+  // A full page is the only thing that says there may be more. The count is of
+  // what the route answered rather than of what is drawn, because the filters
+  // above take rows out of a page that was already read.
+  const more = entries.length === limit
 
   return (
     <div className="detail">
@@ -66,6 +69,13 @@ export function Activity({
           tasks.find((task) => task.id === subject)?.title ?? subject
         }
       />
+      {more && (
+        <div className="buttons">
+          <button type="button" onClick={() => setLimit(limit + PAGE)}>
+            Show more
+          </button>
+        </div>
+      )}
     </div>
   )
 }

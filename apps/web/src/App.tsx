@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 
 import { Activity } from './Activity'
 import { Box } from './Box'
+import { sentence } from './api'
 import { Detail } from './Detail'
+import { Row } from './Row'
 import { fetchState, type State } from './state'
 
 // The write-ahead log was polled once a second by the TUI; this is the same
@@ -46,7 +48,7 @@ export function App() {
         // next poll asks for the whole thing rather than risking a 304 against
         // a screen that failed to draw.
         etag = null
-        setError(caught instanceof Error ? caught.message : String(caught))
+        setError(sentence(caught))
       }
     }
 
@@ -102,6 +104,10 @@ export function App() {
   if (open && state) {
     return (
       <Detail
+        // Keyed on the Task, so opening a Subtask from here starts a screen of
+        // its own rather than reusing this one: the history, the error and the
+        // open sheet all belong to the Task they were about.
+        key={open.id}
         task={open}
         subtasks={state.tasks.filter((task) => task.parent === open.id)}
         lists={state.lists}
@@ -131,21 +137,11 @@ export function App() {
       {state && state.tasks.length > 0 && (
         <ul className="list">
           {state.tasks.map((task) => (
-            <li key={task.id}>
-              <button
-                type="button"
-                className="row"
-                // Depth is 1 for a top-level Task, so the indent is what it
-                // has beyond the top rather than the depth itself.
-                style={{ paddingLeft: `${1 + (task.depth - 1) * 1.25}rem` }}
-                onClick={() => setScreen({ name: 'task', id: task.id })}
-              >
-                <span>{task.title}</span>
-                {task.marks.length > 0 && (
-                  <span className="marks">{task.marks.join(' · ')}</span>
-                )}
-              </button>
-            </li>
+            <Row
+              key={task.id}
+              task={task}
+              onOpen={(id) => setScreen({ name: 'task', id })}
+            />
           ))}
         </ul>
       )}

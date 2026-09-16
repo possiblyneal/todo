@@ -7,7 +7,7 @@ import (
 )
 
 // kind is which of the two collections a route acts on. A List and a Tag are
-// the same four writes against different aggregates, so the routes are written
+// the same three writes against different aggregates, so the routes are written
 // once and handed the pair of calls they act through, the way `todo lists` and
 // `todo tags` are one verb given two sets of calls.
 type kind struct {

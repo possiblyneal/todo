@@ -4,9 +4,11 @@
 // Nothing here is worked out that the read already did: the marks are drawn as
 // they arrived and the history is drawn as the API answered it.
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
+import { sentence } from './api'
 import { Log } from './Log'
+import { useRead } from './read'
 import { Sheet } from './Sheet'
 import {
   fetchTaskHistory,
@@ -18,12 +20,13 @@ import {
   addSubtask,
   draftOf,
   editTask,
+  estimate,
   lifecycle,
+  VERBS,
   type TaskBody,
 } from './write'
 
-/** The four the API holds the list of. This names them to put them on buttons. */
-const VERBS = ['complete', 'decline', 'reopen', 'delete']
+const NONE: Entry[] = []
 
 export function Detail({
   task,
@@ -48,33 +51,30 @@ export function Detail({
   onOpen: (id: string) => void
   onBack: () => void
 }) {
-  const [entries, setEntries] = useState<Entry[]>([])
-  const [error, setError] = useState<string | null>(null)
   const [sheet, setSheet] = useState<'' | 'edit' | 'subtask'>('')
   const [working, setWorking] = useState(false)
-
-  useEffect(() => {
-    let live = true
-    fetchTaskHistory(task.id)
-      .then((read) => {
-        if (live) setEntries(read)
-      })
-      .catch((caught: unknown) => {
-        if (live) setError(sentence(caught))
-      })
-    return () => {
-      live = false
-    }
-  }, [task.id, revision])
+  // What a verb was told, kept apart from what the read was told: a refusal is
+  // about the write somebody just made and stays on the screen until they make
+  // another, where a failed read is over as soon as one comes back.
+  const [refused, setRefused] = useState<string | null>(null)
+  const { value: entries, error: unread } = useRead(
+    () => fetchTaskHistory(task.id),
+    NONE,
+    [task.id, revision],
+  )
 
   const act = async (verb: string) => {
     setWorking(true)
-    setError(null)
+    setRefused(null)
     try {
       await lifecycle(task.id, verb)
+      // The verb landed, so this screen is drawing a Task the next read
+      // describes differently, and three of the four take it out of the list
+      // the poll asks for altogether. The list is where it says what happened
+      // rather than this screen redrawing itself from what it still holds.
+      onBack()
     } catch (caught) {
-      setError(sentence(caught))
-    } finally {
+      setRefused(sentence(caught))
       setWorking(false)
     }
   }
@@ -114,13 +114,13 @@ export function Detail({
       {task.marks.length > 0 && (
         <p className="marks">{task.marks.join(' · ')}</p>
       )}
-      {error && <p className="message">{error}</p>}
+      {(refused ?? unread) && <p className="message">{refused ?? unread}</p>}
 
       <dl className="carried">
         <Carried name="Description" value={task.description} />
         <Carried name="Why" value={task.why} />
         <Carried name="Deadline" value={task.deadline} />
-        <Carried name="Estimate" value={draftOf(task).estimate} />
+        <Carried name="Estimate" value={estimate(task.estimateSeconds)} />
         <Carried name="Priority" value={task.priority} />
         <Carried name="Impact" value={task.impact} />
         <Carried name="Color" value={task.color} />
@@ -203,8 +203,4 @@ function named(ids: string[] | undefined, all: Collection[]): string {
   return (ids ?? [])
     .map((id) => all.find((one) => one.id === id)?.name ?? id)
     .join(', ')
-}
-
-function sentence(caught: unknown): string {
-  return caught instanceof Error ? caught.message : String(caught)
 }

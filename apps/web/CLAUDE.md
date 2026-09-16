@@ -21,10 +21,13 @@ History.
 - `src/state.ts` — the wire shapes and the one call that reads them. It mirrors
   `apps/todo/src/api/state.go`, which is the side that decides them.
 - `src/write.ts` — the wire shapes the write and Broker routes take, and the
-  calls that reach them. It mirrors `apps/todo/src/api/tasks.go` and
-  `apps/todo/src/api/broker.go`. It also turns a Task read back into the body
+  calls that reach them, and the client's one copy of the four lifecycle verbs.
+  It mirrors `apps/todo/src/api/tasks.go` and `apps/todo/src/api/broker.go`. It also turns a Task read back into the body
   that edits it, and takes the difference between the memberships a sheet
   opened on and the ones ticked when it was submitted.
+- `src/read.ts` — the one read a screen makes for itself, and the guard around
+  it: what came back, what went wrong, and the dropping of an answer that
+  arrives after the screen has moved on.
 - `src/log.ts` — what a Change History entry says, worked out without
   recognising anything by name: the Actor split on the first slash, and which
   kinds are the Lease bookkeeping rather than activity.
@@ -33,6 +36,8 @@ History.
 - `src/Sheet.tsx` — the sheet: a Task open for correction, whether the Broker
   just read it or it already exists. It makes no write of its own; whoever
   opens it says what submitting it does.
+- `src/Row.tsx` — one row of the list: the tap that opens the Task and the
+  press held that puts the four verbs under it.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
   Subtasks, the four lifecycle verbs, and its history.
 - `src/Activity.tsx` — the activity screen: the Change History across every
@@ -113,7 +118,36 @@ History.
 - **A verb is offered whatever state the Task is in.** Which of the four the
   store refuses is the store's to say, and it says it in a sentence. A screen
   that greyed out the wrong one would be a second copy of a rule that already
-  exists.
+  exists. Reopen is the one nobody can reach yet: the poll asks for the open
+  Tasks, so an ended one is not in the list to be tapped. It becomes reachable
+  with the state filters the plan gives the list, and it is on the screen in
+  the meantime rather than removed and put back.
+- **The four verbs are the second thing the client keeps a copy of.**
+  `write.VERBS` names them because no route answers what they are, and both the
+  row and the detail screen read that one list. A fifth added to
+  `write.Lifecycle` has to be added here too, and until it is, the button is
+  missing rather than a wrong sentence being drawn.
+- **A press held on a row is what hover and a right click would have been.**
+  Half a second, cancelled by a thumb that travels, and the click the browser
+  sends afterwards is swallowed so one press does one thing. The refusal is
+  drawn under the row it is about, because the row is where it was asked for.
+- **The activity screen reaches further back by asking for more, not by
+  stitching.** Show more raises the limit and re-reads, so a write that landed
+  in between cannot appear twice. The button is there while the route filled
+  the page it asked for, which is the only thing that says there may be more:
+  what is drawn is smaller, since the Lease bookkeeping comes out client-side.
+- **A verb that landed goes back to the list.** Three of the four take the Task
+  out of the read the poll asks for, so the screen would be drawing a Task the
+  next read does not describe. The list is where what happened is said, which
+  is the same rule as a write redrawing on the poll rather than on itself.
+- **A screen belongs to the Task it was opened on.** `Detail` is keyed on the
+  id, so opening a Subtask from inside one starts a screen of its own: a log,
+  an error and an open sheet are about one Task, and carrying them across would
+  draw one Task's refusal over another's title.
+- **The sheet diffs against what the Task carried when it opened.** The draft
+  it is handed is recomputed from every poll, so the baseline is kept once at
+  mount; diffing against a moving one would let a membership another Actor
+  changed turn an untick into no change at all.
 - **Lease bookkeeping is the one kind the client names.** `log.ts` lists
   `lease_taken`, `lease_released` and `lease_broken`, because the activity
   screen is two thirds plumbing without dropping them. Everything else about an
