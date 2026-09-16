@@ -293,46 +293,36 @@ func repeatTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	id, who := fs.Arg(0), actor()
 	rule := strings.Join(fs.Args()[1:], " ")
 
-	// One date, one mark. Each is a write to the task's tree and takes the
-	// Lease covering it.
-	for _, act := range []struct {
-		flag string
+	// One date, one mark. Each is a guarded write to the task's tree, which is
+	// write.Mark's shape rather than a second copy of it here.
+	for _, asked := range []struct {
+		mark string
 		date string
-		do   func(on time.Time) error
-	}{
-		{"tick", *tick, func(on time.Time) error { return s.TickOccurrence(who, id, on) }},
-		{"skip", *skip, func(on time.Time) error { return s.SkipOccurrence(who, id, on) }},
-		{"detach", *detach, func(on time.Time) error {
-			detached, err := s.DetachOccurrence(who, id, on)
-			if err == nil {
-				fmt.Fprintln(stdout, detached)
-			}
-			return err
-		}},
-	} {
-		if act.date == "" {
+	}{{"tick", *tick}, {"skip", *skip}, {"detach", *detach}} {
+		if asked.date == "" {
 			continue
 		}
-		on, err := time.ParseInLocation(time.DateOnly, act.date, time.UTC)
+		on, err := time.ParseInLocation(time.DateOnly, asked.date, time.UTC)
 		if err != nil {
-			fmt.Fprintf(stderr, "todo repeat: cannot read %q as a date: want 2006-01-02\n", act.date)
+			fmt.Fprintf(stderr, "todo repeat: cannot read %q as a date: want 2006-01-02\n", asked.date)
 			return 2
 		}
-		return refuse(stderr, "repeat", s.WithLease(who, id, store.WriteTTL, func() error {
-			return act.do(on)
-		}))
+		act, _ := write.Mark(asked.mark)
+		written, err := act(s, who, id, on)
+		// Detaching answers the id of the Task the date became, and that id is
+		// the only thing naming it afterwards.
+		if err == nil && written != "" {
+			fmt.Fprintln(stdout, written)
+		}
+		return refuse(stderr, "repeat", err)
 	}
 
 	switch {
 	case *off:
-		return refuse(stderr, "repeat", s.WithLease(who, id, store.WriteTTL, func() error {
-			return s.Unrepeat(who, id)
-		}))
+		return refuse(stderr, "repeat", write.Unrepeat(s, who, id))
 	case rule != "":
-		return refuse(stderr, "repeat", s.WithLease(who, id, store.WriteTTL, func() error {
-			_, err := s.Repeat(who, id, rule)
-			return err
-		}))
+		_, err := write.Repeat(s, who, id, rule)
+		return refuse(stderr, "repeat", err)
 	}
 	return showRepeat(s, id, *count, stdout, stderr)
 }

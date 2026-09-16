@@ -181,3 +181,96 @@ func TestAskWritesNothingAndRefusesAnEmptyQuestion(t *testing.T) {
 		t.Errorf("the log holds %d entries, want only the task that was added", len(entries))
 	}
 }
+
+// A breakdown is a read like the other two Broker routes: the proposals come
+// back in the shape a Subtask is written in, and nothing is durable until the
+// client posts the ones somebody ticked.
+func TestBreakdownProposesInTheShapeTheSubtaskRouteTakes(t *testing.T) {
+	s := openTemp(t)
+	w := do(t, s, http.MethodPost, "/api/tasks", `{"title": "Redo the bathroom", "why": "the tiles are cracked"}`)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("POST answered %d: %s", w.Code, w.Body.String())
+	}
+	id := said(t, w)["id"]
+	told := broker(t, `{"proposals":[
+		{"title":"Strip the tiles","estimate":"3h","priority":"high"},
+		{"title":"Strip the tiles","estimate":"not a duration"}]}`)
+
+	before, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+	w = do(t, s, http.MethodPost, "/api/breakdown", `{"task": "`+id+`"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("the api answered %d, want 200 (%s)", w.Code, w.Body.String())
+	}
+	var out stepBody
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v (%s)", err, w.Body.String())
+	}
+	// Two proposals saying the same thing are two proposals. Only the order
+	// tells them apart, which is why approval is by position and why nothing
+	// here folds them together.
+	if len(out.Proposals) != 2 {
+		t.Fatalf("it proposed %d, want both of them", len(out.Proposals))
+	}
+	// As the Broker said it, not parsed: a duration this program cannot read
+	// belongs in the field for somebody to correct, the same rule capture's
+	// answer follows.
+	if got := out.Proposals[1].Estimate; got == nil || *got != "not a duration" {
+		t.Errorf("the estimate came back as %v, want the broker's own words", got)
+	}
+	// The Task goes over as a Brief: what it says, and no id.
+	if !strings.Contains(*told, "the tiles are cracked") {
+		t.Errorf("the broker was not shown the task's why: %s", *told)
+	}
+	if strings.Contains(*told, id) {
+		t.Errorf("the task's id crossed the wire: %s", *told)
+	}
+	after, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+	if after != before {
+		t.Errorf("a breakdown appended %d entries, want none until a proposal is approved", after-before)
+	}
+}
+
+// The other half of a turn: the Broker asks rather than proposes, and what was
+// answered goes back with the next one because it holds nothing between calls.
+func TestBreakdownCarriesEverythingAlreadyAnswered(t *testing.T) {
+	s := openTemp(t)
+	w := do(t, s, http.MethodPost, "/api/tasks", `{"title": "Redo the bathroom"}`)
+	id := said(t, w)["id"]
+	told := broker(t, `{"questions":["how big is it?"]}`)
+
+	w = do(t, s, http.MethodPost, "/api/breakdown",
+		`{"task": "`+id+`", "answers": [{"question": "what is the budget?", "answer": "two thousand"}]}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("the api answered %d, want 200 (%s)", w.Code, w.Body.String())
+	}
+	if !strings.Contains(*told, "two thousand") {
+		t.Errorf("what was already answered did not go back: %s", *told)
+	}
+	var out stepBody
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v (%s)", err, w.Body.String())
+	}
+	if len(out.Questions) != 1 || len(out.Proposals) != 0 {
+		t.Errorf("the turn came back %+v, want the question and no proposals", out)
+	}
+}
+
+// A Task the list does not name is the caller asking about one that is not
+// there, and the Broker is never reached.
+func TestBreakdownOfATaskNobodyHasIsAUsageError(t *testing.T) {
+	s := openTemp(t)
+	broker(t, `{"proposals":[{"title":"Strip the tiles"}]}`)
+
+	for _, body := range []string{`{"task": "nothing by that id"}`, `{"task": "  "}`} {
+		if w := do(t, s, http.MethodPost, "/api/breakdown", body); w.Code != http.StatusBadRequest {
+			t.Errorf("%s answered %d, want 400 (%s)", body, w.Code, w.Body.String())
+		}
+	}
+}

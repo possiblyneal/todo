@@ -58,6 +58,22 @@ func Handler(s *store.Store, o Options) http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/{verb}", func(w http.ResponseWriter, r *http.Request) {
 		lifecycleTask(s, o.Actor, w, r)
 	})
+	// Scheduling: the rule as one value, and the three marks against one date.
+	// The rule's three methods sit under the same path because a Series is one
+	// thing a Task either has or does not, and the marks are a segment deeper
+	// because they are about a date rather than about the rule.
+	mux.HandleFunc("GET /api/tasks/{id}/series", func(w http.ResponseWriter, r *http.Request) {
+		series(s, w, r)
+	})
+	mux.HandleFunc("PUT /api/tasks/{id}/series", func(w http.ResponseWriter, r *http.Request) {
+		repeatSeries(s, o.Actor, w, r)
+	})
+	mux.HandleFunc("DELETE /api/tasks/{id}/series", func(w http.ResponseWriter, r *http.Request) {
+		unrepeatSeries(s, o.Actor, w, r)
+	})
+	mux.HandleFunc("POST /api/tasks/{id}/series/{mark}", func(w http.ResponseWriter, r *http.Request) {
+		markOccurrence(s, o.Actor, w, r)
+	})
 	mux.HandleFunc("GET /api/tasks/{id}/history", func(w http.ResponseWriter, r *http.Request) {
 		taskHistory(s, w, r)
 	})
@@ -84,6 +100,9 @@ func Handler(s *store.Store, o Options) http.Handler {
 	})
 	mux.HandleFunc("POST /api/ask", func(w http.ResponseWriter, r *http.Request) {
 		ask(s, broker, w, r)
+	})
+	mux.HandleFunc("POST /api/breakdown", func(w http.ResponseWriter, r *http.Request) {
+		breakdown(s, broker, w, r)
 	})
 	// A route under /api/ that this package does not serve is a usage error in
 	// the same envelope every other one arrives in. It is registered whether or
