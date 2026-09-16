@@ -9,9 +9,10 @@ that same process serves beside the JSON, so there is no second process and no
 CORS. `docs/adrs/0003-replace-the-tui-with-a-browser-client.md` records why the
 surface moved off the terminal.
 
-Stages 1 to 3 of the plan are what is here: the list over `GET /api/state`, the
+Stages 1 to 4 of the plan are what is here: the list over `GET /api/state`, the
 box that hands a dump to the Broker and opens the add sheet filled in, the
-detail screen a tap on a Task opens, and the activity screen over the Change
+detail screen a tap on a Task opens, the Series screen and its three marks, the
+breakdown that proposes Subtasks, and the activity screen over the Change
 History.
 
 ## Ownership
@@ -21,10 +22,11 @@ History.
 - `src/state.ts` — the wire shapes and the one call that reads them. It mirrors
   `apps/todo/src/api/state.go`, which is the side that decides them.
 - `src/write.ts` — the wire shapes the write and Broker routes take, and the
-  calls that reach them, and the client's one copy of the four lifecycle verbs.
-  It mirrors `apps/todo/src/api/tasks.go` and `apps/todo/src/api/broker.go`. It also turns a Task read back into the body
-  that edits it, and takes the difference between the memberships a sheet
-  opened on and the ones ticked when it was submitted.
+  calls that reach them, and the client's one copy of the four lifecycle verbs
+  and the three Occurrence marks. It mirrors `apps/todo/src/api/tasks.go`,
+  `apps/todo/src/api/series.go` and `apps/todo/src/api/broker.go`. It also turns
+  a Task read back into the body that edits it, and takes the difference between
+  the memberships a sheet opened on and the ones ticked when it was submitted.
 - `src/read.ts` — the one read a screen makes for itself, and the guard around
   it: what came back, what went wrong, and the dropping of an answer that
   arrives after the screen has moved on.
@@ -38,8 +40,13 @@ History.
   opens it says what submitting it does.
 - `src/Row.tsx` — one row of the list: the tap that opens the Task and the
   press held that puts the four verbs under it.
+- `src/Series.tsx` — the Series screen: the rule, the dates it produces next,
+  and the three marks against one of them. It works out no date of its own.
+- `src/Breakdown.tsx` — the breakdown screen: the turn with the Broker, the
+  questions it still has, and the proposals ticked by position.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
-  Subtasks, the four lifecycle verbs, and its history.
+  Subtasks, its Series, its breakdown, the four lifecycle verbs, and its
+  history.
 - `src/Activity.tsx` — the activity screen: the Change History across every
   Task, with the filter for Actors that name a harness and a model.
 - `src/Log.tsx` — the entries drawn as who, what and when. Both screens draw
@@ -111,8 +118,8 @@ History.
   is ticked now, because ticking and unticking are different fields on the wire
   and an untick that sent nothing would leave the membership on.
 - **The other screens re-read on the ETag, not on a clock.** `App` hands the
-  poll's tag down as a revision; the detail and activity screens fetch their
-  own read again when it changes, which is exactly when something was written.
+  poll's tag down as a revision; the detail, Series and activity screens fetch
+  their own read again when it changes, which is exactly when something was written.
   A second poll of their own would be a second clock disagreeing with the
   first. A store whose write-ahead log cannot be stat'd carries no ETag at all,
   and then these two screens read once and never again while the list stays
@@ -163,6 +170,37 @@ History.
 - **The activity filter narrows and never hides.** The screen opens unfiltered
   and the filter is a toggle, so an Agent that named itself with no slash, one
   run with no `TODO_ACTOR`, is in the view it opens on.
+- **The Series is set as one value and the screen keeps no draft of it.** The
+  rule is typed whole, for the reason a deadline is: a control offering the
+  rules it could build would offer fewer than the parser accepts. The field
+  starts empty against the rule drawn beside it rather than seeded from a read
+  that moves under it on every poll, so `Replace` is a rule stated in full and
+  never half of two. Stopping is its own button, because `DELETE` is what takes
+  a rule off and an empty field is a refusal.
+- **The three marks are the client's fourth copy of something.**
+  `write.MARKS` names tick, skip and detach because no route answers what they
+  are, the same as `write.VERBS`. All three are offered on every date; which of
+  them the store refuses on a date already marked is the store's to say, and it
+  says it in a sentence.
+- **A detached date is followed, because nothing else afterwards names it.** The
+  mark answers the id of the Task the date became and the screen opens it. Tick
+  and skip answer the Task they were against, which is the screen already open,
+  and nothing moves.
+- **The breakdown holds its own conversation and writes nothing until it is
+  approved.** Every turn carries everything already asked and answered, because
+  the Broker keeps nothing between calls. Approving is one `addSubtask` per
+  ticked proposal: there is no Lease over a browser's think time, so a tree that
+  moved while the proposals were being read is what an add sheet left open
+  already risks.
+- **Proposals are ticked by position and never by title.** Two can come back
+  saying the same thing and only the order tells them apart, so `approved` holds
+  indices; everything starts ticked and unticking one is how it is declined,
+  which is what the TUI's approval form does. A breakdown backed out of leaves
+  nothing behind, the same gate the sheet is for a dump.
+- **What the Broker proposed is drawn unparsed.** A proposal arrives in the same
+  body the sheet submits and is written as it came, so an estimate this side
+  cannot read is the API's to refuse in its own words rather than this screen's
+  to drop.
 - **Touch targets no smaller than 44px, one thumb, no hover.**
 
 ## Work Guidance

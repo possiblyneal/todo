@@ -148,3 +148,77 @@ export function memberships(before: TaskBody, after: TaskBody): TaskBody {
     dropTags: missing(on(before, 'addTags'), on(after, 'addTags')),
   }
 }
+
+/**
+ * The rule a Task repeats on, set or replaced. A Series is one value edited as
+ * one thing, which is why this sends the whole rule rather than part of one.
+ * A rule the parser cannot read comes back refused in the parser's own words,
+ * with what was typed still in the field.
+ */
+export async function repeat(id: string, rule: string): Promise<void> {
+  await send<{ id: string }>(
+    'PUT',
+    `/api/tasks/${encodeURIComponent(id)}/series`,
+    { rule },
+  )
+}
+
+/**
+ * The Task stops repeating. It erases nothing despite the method: the Series
+ * and every mark on its dates stay in the record.
+ */
+export async function unrepeat(id: string): Promise<void> {
+  await send<{ id: string }>(
+    'DELETE',
+    `/api/tasks/${encodeURIComponent(id)}/series`,
+    {},
+  )
+}
+
+/**
+ * The three, and the client's copy of which three there are, for the same
+ * reason `VERBS` is one: no route answers the question. A fourth added to
+ * `write.Mark` is a button missing here until it is added, never a sentence
+ * drawn wrongly.
+ */
+export const MARKS = ['tick', 'skip', 'detach']
+
+/**
+ * One date ticked, skipped or lifted out, and the id that names what happened:
+ * detaching answers the Task the date became, and the other two answer the
+ * Task the mark was against.
+ */
+export async function mark(
+  id: string,
+  which: string,
+  on: string,
+): Promise<string> {
+  const written = await send<{ id: string }>(
+    'POST',
+    `/api/tasks/${encodeURIComponent(id)}/series/${which}`,
+    { on },
+  )
+  return written.id
+}
+
+/** One question the Broker asked and the answer it was given back. */
+export type QA = { question: string; answer: string }
+
+/**
+ * One turn coming back: what the Broker still needs to know, or what it
+ * proposes. The two are alternatives.
+ */
+export type Step = {
+  questions?: string[]
+  proposals: TaskBody[]
+}
+
+/**
+ * One turn of a breakdown. It writes nothing and holds no Lease: the Broker
+ * keeps nothing between calls, so every turn carries everything already
+ * answered, and an approved proposal is written afterwards by `addSubtask`
+ * like any other Subtask.
+ */
+export function breakdown(task: string, answers: QA[]): Promise<Step> {
+  return send<Step>('POST', '/api/breakdown', { task, answers })
+}

@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest'
 
-import { fetchState } from './state'
+import { fetchSeries, fetchState } from './state'
 
 const empty: string[] = []
 
@@ -72,4 +72,42 @@ test('an error with no sentence in it still says what happened', async () => {
   )
 
   await expect(fetchState(null)).rejects.toThrow('the API answered 500')
+})
+
+test('a task that does not repeat is not an error', async () => {
+  vi.stubGlobal(
+    'fetch',
+    answering(200, { repeats: false, occurrences: [] }, {}),
+  )
+
+  const series = await fetchSeries('task_abc')
+
+  expect(series.repeats).toBe(false)
+  expect(series.occurrences).toEqual([])
+})
+
+test('a series is the rule and the dates it produces', async () => {
+  vi.stubGlobal(
+    'fetch',
+    answering(
+      200,
+      {
+        repeats: true,
+        rule: 'every week on mon,thu from 2026-09-16',
+        occurrences: [
+          { date: '2026-09-17', state: 'ticked' },
+          { date: '2026-09-21' },
+        ],
+      },
+      {},
+    ),
+  )
+
+  const series = await fetchSeries('task_abc')
+
+  // The store's own word for what was done to a date, drawn as it arrived: a
+  // date nobody has touched carries none.
+  expect(series.occurrences[0]?.state).toBe('ticked')
+  expect(series.occurrences[1]?.state).toBeUndefined()
+  expect(series.rule).toBe('every week on mon,thu from 2026-09-16')
 })
