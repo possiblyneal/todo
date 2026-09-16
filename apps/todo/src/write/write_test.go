@@ -148,7 +148,7 @@ func TestEditChangesAttributesAndMembershipTogether(t *testing.T) {
 	}
 
 	before := count(kinds(t, s), store.KindLeaseReleased)
-	if err := Edit(s, "alice", id, store.Attributes{Why: ptr("the fence is peeling")}, true,
+	if err := Edit(s, "alice", id, &store.Attributes{Why: ptr("the fence is peeling")},
 		Membership{IntoLists: []string{list}}); err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
@@ -166,12 +166,12 @@ func TestEditChangesAttributesAndMembershipTogether(t *testing.T) {
 // two are told apart by presence rather than by the value, so a surface can
 // clear a title without meaning to leave it alone.
 func TestGivenTellsAbsentApartFromEmpty(t *testing.T) {
-	a, given, err := Given{Why: ptr("")}.Attributes()
+	a, err := Given{Why: ptr("")}.Attributes()
 	if err != nil {
 		t.Fatalf("Attributes: %v", err)
 	}
-	if !given {
-		t.Error("a field given empty reads as nothing given")
+	if a == nil {
+		t.Fatal("a field given empty reads as nothing given")
 	}
 	if a.Why == nil || *a.Why != "" {
 		t.Errorf("Why = %v, want a pointer to the empty string", a.Why)
@@ -180,8 +180,8 @@ func TestGivenTellsAbsentApartFromEmpty(t *testing.T) {
 		t.Errorf("Title = %v, want nothing at all", a.Title)
 	}
 
-	if _, given, err := (Given{}).Attributes(); err != nil || given {
-		t.Errorf("nothing given reads as given = %v, err = %v", given, err)
+	if a, err := (Given{}).Attributes(); err != nil || a != nil {
+		t.Errorf("nothing given reads as %v, err = %v", a, err)
 	}
 }
 
@@ -192,7 +192,7 @@ func TestGivenRefusesAValueItCannotRead(t *testing.T) {
 		"estimate": {Estimate: ptr("a couple of hours")},
 		"snooze":   {Snooze: ptr("a bit")},
 	} {
-		if _, _, err := g.Attributes(); err == nil {
+		if _, err := g.Attributes(); err == nil {
 			t.Errorf("%s took a value it cannot read", name)
 		}
 	}
@@ -200,7 +200,7 @@ func TestGivenRefusesAValueItCannotRead(t *testing.T) {
 
 func TestGivenReadsADateTheWayBothSurfacesType(t *testing.T) {
 	for _, v := range []string{"2026-03-04", "2026-03-04 09:30", "2026-03-04T09:30:00Z"} {
-		a, _, err := Given{Deadline: &v}.Attributes()
+		a, err := Given{Deadline: &v}.Attributes()
 		if err != nil {
 			t.Fatalf("%q: %v", v, err)
 		}
@@ -244,5 +244,27 @@ func TestNamedInMatchesByNameAndAppendsOnce(t *testing.T) {
 	got := NamedIn([]string{"home", " HOME ", "Errands", "Work"}, have)
 	if len(got) != 2 || got[0] != "l1" || got[1] != "l2" {
 		t.Errorf("got = %v, want [l1 l2]: matched case-insensitively, once each, unknown dropped", got)
+	}
+}
+
+func TestFromCaptureReadsAnEstimateTheBrokerPaddedWithSpace(t *testing.T) {
+	// The Broker writes prose, not a flag value, so the space around a
+	// duration is the Broker's rather than something the person typed.
+	a, err := FromCapture(ai.Capture{Title: "Paint the fence", Estimate: " 90m "})
+	if err != nil {
+		t.Fatalf("FromCapture: %v", err)
+	}
+	if a.Estimate == nil || *a.Estimate != 90*time.Minute {
+		t.Errorf("estimate = %v, want 90m", a.Estimate)
+	}
+}
+
+func TestGivenReportsTheFirstBadValueInFlagOrder(t *testing.T) {
+	// A flag set visits what was typed in the order the names sort in, so
+	// two bad values report the earlier name, and both surfaces say so.
+	g := Given{Deadline: ptr("next tuesday"), Priority: ptr("urgent")}
+	_, err := g.Attributes()
+	if err == nil || !strings.Contains(err.Error(), "next tuesday") {
+		t.Errorf("err = %v, want the deadline's sentence", err)
 	}
 }

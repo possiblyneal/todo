@@ -63,13 +63,12 @@ func Add(s *store.Store, actor, parent string, a store.Attributes, m Membership)
 // covers the whole edit, because the attributes and every List and Tag it
 // joins or leaves are one visit to the tree.
 //
-// attributes says whether a is a change at all: nothing given is a membership
-// edit, and calling EditTask with an empty Attributes would append an entry
-// saying a person changed nothing.
-func Edit(s *store.Store, actor, id string, a store.Attributes, attributes bool, m Membership) error {
+// A nil a is a membership edit and nothing else: calling EditTask with an
+// empty Attributes would append an entry saying a person changed nothing.
+func Edit(s *store.Store, actor, id string, a *store.Attributes, m Membership) error {
 	return s.WithLease(actor, id, store.WriteTTL, func() error {
-		if attributes {
-			if err := s.EditTask(actor, id, a); err != nil {
+		if a != nil {
+			if err := s.EditTask(actor, id, *a); err != nil {
 				return err
 			}
 		}

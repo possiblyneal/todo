@@ -40,7 +40,7 @@ func (v *ids) Set(s string) error {
 // its attribute alone; a flag given empty clears it. The reading itself is
 // write.Given's, so a date typed at a terminal and one sent by the client mean
 // the same day.
-func attributeFlags(fs *flag.FlagSet) func() (store.Attributes, bool, error) {
+func attributeFlags(fs *flag.FlagSet) func() (*store.Attributes, error) {
 	var (
 		title       = fs.String("title", "", "the task's title")
 		description = fs.String("description", "", "what the task is")
@@ -55,7 +55,7 @@ func attributeFlags(fs *flag.FlagSet) func() (store.Attributes, bool, error) {
 	)
 	fs.Var(pairs, "field", "a key=value pair, repeatable")
 
-	return func() (store.Attributes, bool, error) {
+	return func() (*store.Attributes, error) {
 		var given write.Given
 		fs.Visit(func(f *flag.Flag) {
 			// Only the flags registered here count as an attribute: a
@@ -95,10 +95,14 @@ func addTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	a, _, err := read()
+	given, err := read()
 	if err != nil {
 		fmt.Fprintf(stderr, "todo add: %v\n", err)
 		return 2
+	}
+	var a store.Attributes
+	if given != nil {
+		a = *given
 	}
 	if title := strings.TrimSpace(strings.Join(fs.Args(), " ")); title != "" {
 		a.Title = &title
@@ -175,7 +179,7 @@ func editTask(s *store.Store, args []string, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "todo edit: name one task by id")
 		return 2
 	}
-	a, attributes, err := read()
+	a, err := read()
 	if err != nil {
 		fmt.Fprintf(stderr, "todo edit: %v\n", err)
 		return 2
@@ -185,7 +189,7 @@ func editTask(s *store.Store, args []string, stderr io.Writer) int {
 	// One Lease covers the whole edit: the attributes and every List and Tag
 	// it joins or leaves are one visit to the tree, and write.Edit is what
 	// holds that shape for both surfaces.
-	return refuse(stderr, "edit", write.Edit(s, who, id, a, attributes, write.Membership{
+	return refuse(stderr, "edit", write.Edit(s, who, id, a, write.Membership{
 		IntoLists:  into,
 		OutOfLists: outOf,
 		AddTags:    carry,

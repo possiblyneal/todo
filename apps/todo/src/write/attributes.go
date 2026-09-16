@@ -28,15 +28,18 @@ type Given struct {
 	Fields      map[string]string
 }
 
-// Attributes reads Given into what the store takes. The bool says whether
-// anything was given at all: nothing given is not an edit, and calling
-// EditTask with an empty Attributes would append an entry saying somebody
-// changed nothing.
-func (g Given) Attributes() (store.Attributes, bool, error) {
+// Attributes reads Given into what the store takes, or nil when nothing was
+// given at all: nothing given is not an edit, and calling EditTask with an
+// empty Attributes would append an entry saying somebody changed nothing.
+//
+// The ones that can be read wrongly are read in the order the flags carrying
+// them sort in, because that is the order a flag set visits them in and so the
+// order the first of two bad values has always been the one reported.
+func (g Given) Attributes() (*store.Attributes, error) {
 	var a store.Attributes
 	given := false
 
-	text := []struct {
+	for _, t := range []struct {
 		from *string
 		to   **string
 	}{
@@ -44,61 +47,63 @@ func (g Given) Attributes() (store.Attributes, bool, error) {
 		{g.Description, &a.Description},
 		{g.Why, &a.Why},
 		{g.Color, &a.Color},
-	}
-	for _, t := range text {
+	} {
 		if t.from != nil {
 			*t.to = t.from
 			given = true
 		}
 	}
 
+	if g.Deadline != nil {
+		when, err := Deadline(*g.Deadline)
+		if err != nil {
+			return nil, err
+		}
+		a.Deadline = &when
+		given = true
+	}
+	if g.Estimate != nil {
+		d, err := Estimate(*g.Estimate)
+		if err != nil {
+			return nil, err
+		}
+		a.Estimate = &d
+		given = true
+	}
 	for _, l := range []struct {
 		from *string
 		to   **store.Level
 	}{
-		{g.Priority, &a.Priority},
 		{g.Impact, &a.Impact},
+		{g.Priority, &a.Priority},
 	} {
 		if l.from == nil {
 			continue
 		}
 		level, err := store.ParseLevel(*l.from)
 		if err != nil {
-			return store.Attributes{}, false, err
+			return nil, err
 		}
 		*l.to = &level
-		given = true
-	}
-
-	if g.Deadline != nil {
-		when, err := Deadline(*g.Deadline)
-		if err != nil {
-			return store.Attributes{}, false, err
-		}
-		a.Deadline = &when
 		given = true
 	}
 	if g.Snooze != nil {
 		until, err := Snooze(*g.Snooze)
 		if err != nil {
-			return store.Attributes{}, false, err
+			return nil, err
 		}
 		a.SnoozedUntil = &until
 		given = true
 	}
-	if g.Estimate != nil {
-		d, err := Estimate(*g.Estimate)
-		if err != nil {
-			return store.Attributes{}, false, err
-		}
-		a.Estimate = &d
-		given = true
-	}
+
 	if len(g.Fields) > 0 {
 		a.Fields = g.Fields
 		given = true
 	}
-	return a, given, nil
+	if !given {
+		return nil, nil
+	}
+	return &a, nil
 }
 
 // Deadline reads a due date. An empty string is the zero time, which clears.
@@ -134,9 +139,12 @@ func Snooze(v string) (time.Time, error) {
 }
 
 // Estimate reads how long a Task will take. An empty string is no duration,
-// which clears.
+// which clears. Surrounding space is not part of a duration, and the Broker
+// writes its answer as prose rather than as a flag value, so " 90m " is 90m
+// here rather than a duration this cannot read and FromCapture drops.
 func Estimate(v string) (time.Duration, error) {
-	if strings.TrimSpace(v) == "" {
+	v = strings.TrimSpace(v)
+	if v == "" {
 		return 0, nil
 	}
 	d, err := time.ParseDuration(v)
