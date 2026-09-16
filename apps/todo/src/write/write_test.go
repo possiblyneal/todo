@@ -353,3 +353,57 @@ func TestBriefsSayWhatATaskSaysAndNoIdAtAll(t *testing.T) {
 		t.Errorf("a task with no deadline or estimate reads %+v, want both left out", got[1])
 	}
 }
+
+func TestGivenTrimsATitleSoBothSurfacesStoreTheSameOne(t *testing.T) {
+	a, err := Given{Title: ptr("  Paint the shed  ")}.Attributes()
+	if err != nil {
+		t.Fatalf("Attributes: %v", err)
+	}
+	if *a.Title != "Paint the shed" {
+		t.Errorf("title %q, want the space around it gone", *a.Title)
+	}
+
+	// A Title of nothing but space is the empty Title the store refuses,
+	// rather than a Task titled with spaces on one surface and refused on the
+	// other.
+	a, err = Given{Title: ptr("   ")}.Attributes()
+	if err != nil {
+		t.Fatalf("Attributes: %v", err)
+	}
+	if *a.Title != "" {
+		t.Errorf("title %q, want the empty title", *a.Title)
+	}
+}
+
+func TestAsSaidCarriesEveryAnswerAndReadsNoneOfThem(t *testing.T) {
+	g := AsSaid(ai.Capture{
+		Title:    "Paint the shed",
+		Why:      "",
+		Deadline: "next Friday",
+		Estimate: "a couple of hours",
+		Priority: "urgent",
+	})
+	for _, said := range []struct {
+		name string
+		got  *string
+		want string
+	}{
+		{"title", g.Title, "Paint the shed"},
+		{"deadline", g.Deadline, "next Friday"},
+		{"estimate", g.Estimate, "a couple of hours"},
+		{"priority", g.Priority, "urgent"},
+	} {
+		if said.got == nil {
+			t.Errorf("%s absent, want %q kept for somebody to correct", said.name, said.want)
+			continue
+		}
+		if *said.got != said.want {
+			t.Errorf("%s %q, want %q as the Broker wrote it", said.name, *said.got, said.want)
+		}
+	}
+	// An attribute it wrote nothing for is absent rather than empty, because
+	// empty clears and the Broker cleared nothing.
+	if g.Why != nil {
+		t.Errorf("why %q, want absent", *g.Why)
+	}
+}

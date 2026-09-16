@@ -48,26 +48,9 @@ func capture(s *store.Store, c *ai.Client, w http.ResponseWriter, r *http.Reques
 
 	// The Lists and Tags it chose are answered by id rather than by the names
 	// it chose them under, because an id is what the write takes and matching
-	// a name back to one is this side's job either way.
-	filed := dump.Filed(read)
-	out := taskBody{IntoLists: filed.IntoLists, AddTags: filed.AddTags}
-	for _, said := range []struct {
-		value string
-		to    **string
-	}{
-		{read.Title, &out.Title},
-		{read.Description, &out.Description},
-		{read.Why, &out.Why},
-		{read.Deadline, &out.Deadline},
-		{read.Estimate, &out.Estimate},
-		{read.Priority, &out.Priority},
-		{read.Impact, &out.Impact},
-	} {
-		if said.value != "" {
-			*said.to = &said.value
-		}
-	}
-	send(w, http.StatusOK, out)
+	// a name back to one is this side's job either way. Which of its answers
+	// is which attribute is write.AsSaid's, the same as it is FromCapture's.
+	send(w, http.StatusOK, saying(write.AsSaid(read), dump.Filed(read)))
 }
 
 // ask is POST /api/ask: a question about the Tasks in view, answered as prose.

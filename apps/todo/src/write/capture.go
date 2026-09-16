@@ -86,6 +86,36 @@ func Briefs(tasks []store.Task) []ai.Brief {
 	return out
 }
 
+// AsSaid is what the Broker read, unparsed: every attribute it wrote something
+// for, as the words it wrote. It is the other half of FromCapture and sits
+// beside it so that which of the Broker's answers is which attribute is
+// written once.
+//
+// Nothing is read here and nothing is dropped, which is the difference. A
+// surface with a person at it puts these in the fields they came back in and
+// lets them correct a value this program cannot read; FromCapture drops that
+// value, because `todo capture` has nobody left to ask.
+func AsSaid(read ai.Capture) Given {
+	g := Given{}
+	for _, said := range []struct {
+		value string
+		to    **string
+	}{
+		{read.Title, &g.Title},
+		{read.Description, &g.Description},
+		{read.Why, &g.Why},
+		{read.Deadline, &g.Deadline},
+		{read.Estimate, &g.Estimate},
+		{read.Priority, &g.Priority},
+		{read.Impact, &g.Impact},
+	} {
+		if said.value != "" {
+			*said.to = &said.value
+		}
+	}
+	return g
+}
+
 // FromCapture turns what the Broker read out of a dump into the attributes a
 // Task is written with. A value written in a way this program cannot read is
 // dropped rather than refused, the same rule an approved proposal is written

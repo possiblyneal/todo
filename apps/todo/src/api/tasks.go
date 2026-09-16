@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 	"github.com/possiblyneal/todo/apps/todo/src/write"
@@ -36,8 +35,8 @@ type taskBody struct {
 	Snooze      *string           `json:"snooze,omitempty"`
 	Fields      map[string]string `json:"fields,omitempty"`
 
-	// Parent makes the new Task a Subtask of that one, and is nothing to a
-	// PATCH: a Task is not moved by editing it.
+	// Parent makes the new Task a Subtask of that one. A PATCH naming one is
+	// refused: a Task is not moved by editing it.
 	Parent string `json:"parent,omitempty"`
 
 	// The memberships, by id, named the way write.Membership names them.
@@ -59,6 +58,26 @@ func (b taskBody) given() write.Given {
 		Impact:      b.Impact,
 		Snooze:      b.Snooze,
 		Fields:      b.Fields,
+	}
+}
+
+// saying is the other direction: what POST /api/capture answers with. The two
+// are the same ten attributes because the body the client submits is the body
+// it was given, corrected.
+func saying(g write.Given, m write.Membership) taskBody {
+	return taskBody{
+		Title:       g.Title,
+		Description: g.Description,
+		Why:         g.Why,
+		Color:       g.Color,
+		Deadline:    g.Deadline,
+		Estimate:    g.Estimate,
+		Priority:    g.Priority,
+		Impact:      g.Impact,
+		Snooze:      g.Snooze,
+		Fields:      g.Fields,
+		IntoLists:   m.IntoLists,
+		AddTags:     m.AddTags,
 	}
 }
 
@@ -92,7 +111,12 @@ func addTask(s *store.Store, actor string, w http.ResponseWriter, r *http.Reques
 	if given != nil {
 		a = *given
 	}
-	if a.Title == nil || strings.TrimSpace(*a.Title) == "" {
+	// The store refuses an empty Title too, and this says so in the same
+	// sentence one status earlier: a Task with no title is the caller asking
+	// wrongly rather than the store refusing, which is what `todo add` says
+	// with exit status 2 about the same mistake. The trimming that decides
+	// whether a Title is empty is write.Given's, not this route's.
+	if a.Title == nil || *a.Title == "" {
 		fail(w, usage{errors.New("a task needs a title")})
 		return
 	}
@@ -119,11 +143,29 @@ func editTask(s *store.Store, actor string, w http.ResponseWriter, r *http.Reque
 		fail(w, usage{err})
 		return
 	}
+	// A Task is not moved by editing it, so a body naming a parent is refused
+	// rather than answered 200 with the parent quietly ignored. That is the
+	// same answer decode gives a field this package does not know: a client
+	// told its write went through is entitled to assume the whole of it did.
+	if in.Parent != "" {
+		fail(w, usage{errors.New("a task is not moved by editing it: leave out parent")})
+		return
+	}
 	a, err := in.given().Attributes()
 	if err != nil {
 		fail(w, usage{err})
 		return
 	}
+	// A Title sent empty is a Task with no title, which the store refuses and
+	// which is the caller asking wrongly rather than anything going wrong
+	// here. Saying so at 400 is the same mapping addTask makes one attribute
+	// earlier; without it the store's plain error falls through to 500 for a
+	// sentence a person can act on.
+	if a != nil && a.Title != nil && *a.Title == "" {
+		fail(w, usage{errors.New("a task needs a title")})
+		return
+	}
+
 	id := r.PathValue("id")
 	if err := write.Edit(s, actor, id, a, in.membership()); err != nil {
 		fail(w, err)

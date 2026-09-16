@@ -183,7 +183,14 @@ function Level({
   )
 }
 
-/** The Lists or Tags the Task is filed under, ticked by id. */
+/**
+ * The Lists or Tags the Task is filed under, ticked by id.
+ *
+ * An id the draft carries that the client cannot name is shown anyway, under
+ * the id itself. That happens in the window before the first poll lands, and
+ * the alternative is a membership submitted without ever being on the screen,
+ * which is not what the sheet being the gate means.
+ */
 function Ticks({
   name,
   all,
@@ -195,11 +202,16 @@ function Ticks({
   on: string[]
   onToggle: (id: string) => void
 }) {
-  if (all.length === 0) return null
+  const named = new Set(all.map((one) => one.id))
+  const shown = [
+    ...all,
+    ...on.filter((id) => !named.has(id)).map((id) => ({ id, name: id })),
+  ]
+  if (shown.length === 0) return null
   return (
     <fieldset className="field">
       <legend>{name}</legend>
-      {all.map((one) => (
+      {shown.map((one) => (
         <label key={one.id} className="tick">
           <input
             type="checkbox"

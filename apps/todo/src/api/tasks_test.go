@@ -219,3 +219,59 @@ func TestEditClearsWhatIsSentEmptyAndLeavesWhatIsNotSent(t *testing.T) {
 		t.Errorf("title reads %q, want an attribute nobody sent left alone", task.Title)
 	}
 }
+
+func TestAddStoresTheTitleTheVerbWouldHaveStored(t *testing.T) {
+	// `todo add   Paint the shed  ` stores "Paint the shed", so a sent title
+	// padded the same way stores the same Task rather than one titled with
+	// the padding still on it.
+	s := openTemp(t)
+	w := do(t, s, http.MethodPost, "/api/tasks", `{"title": "  Paint the shed  "}`)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("the api answered %d, want 201 (%s)", w.Code, w.Body.String())
+	}
+	if got := only(t, s).Title; got != "Paint the shed" {
+		t.Errorf("the store holds %q, want the space around it gone", got)
+	}
+}
+
+func TestEditRefusesToMoveATaskRatherThanIgnoringTheParent(t *testing.T) {
+	// A known field dropped in silence is the thing DisallowUnknownFields is
+	// there to prevent, so a PATCH naming a parent is refused rather than
+	// answered 200 with the Task left where it was.
+	s := openTemp(t)
+	id, err := s.AddTask("tester", store.Attributes{Title: ptr("Paint the shed")})
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	other, err := s.AddTask("tester", store.Attributes{Title: ptr("Do the garden")})
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+
+	w := do(t, s, http.MethodPatch, "/api/tasks/"+id, `{"parent": "`+other+`"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("the api answered %d, want 400 (%s)", w.Code, w.Body.String())
+	}
+	if !strings.Contains(said(t, w)["error"], "parent") {
+		t.Errorf("the api said %q, want the sentence naming what to leave out", said(t, w)["error"])
+	}
+}
+
+func TestEditRefusesAnEmptyTitleAsTheMistakeItIs(t *testing.T) {
+	// A Task with no title is not one, and saying so is the caller's mistake
+	// to fix rather than a failure here, which is 400 and not 500.
+	s := openTemp(t)
+	id, err := s.AddTask("tester", store.Attributes{Title: ptr("Paint the shed")})
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	for _, body := range []string{`{"title": ""}`, `{"title": "   "}`} {
+		w := do(t, s, http.MethodPatch, "/api/tasks/"+id, body)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s answered %d, want 400 (%s)", body, w.Code, w.Body.String())
+		}
+	}
+	if got := only(t, s).Title; got != "Paint the shed" {
+		t.Errorf("the store holds %q, want the title untouched", got)
+	}
+}

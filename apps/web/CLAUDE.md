@@ -29,6 +29,9 @@ sheet filled in.
 - `src/App.tsx` — the box above the list. It draws what the read returned and
   works nothing out for itself.
 - `src/main.tsx` — the mount, and nothing else.
+- `src/index.css` — the whole of the styling. There is no component-level
+  stylesheet and no CSS-in-JS, so the 44px rule below is checkable by reading
+  one file.
 - `index.html`, `vite.config.ts`, `tsconfig.json`, `eslint.config.js` — the
   build. The dev server proxies `/api` so development has the one origin
   production has.
@@ -63,6 +66,21 @@ sheet filled in.
   a fourth, because a control that can hold only what it can parse would blank
   the Broker's answer before anybody saw it. What the API cannot read it says
   so about, in its own words, with the value still in the field.
+- **A question is asked about the Tasks the read asked for.** `POST /api/ask`
+  narrows by the same query string `GET /api/state` does, so whatever narrows
+  the list narrows the question with it. Nothing narrows either today; a filter
+  added to the poll goes on the question in the same change, or the box starts
+  answering about a list nobody is looking at.
+- **The three level names are the one thing the client keeps a copy of.**
+  `Sheet.tsx` names them because `GET /api/state` does not carry them; a fourth
+  added to `store.Levels` has to be added here too. Nothing is lost in the
+  meantime: a level the client does not recognise is offered as an extra option
+  rather than blanked, so the copy going stale costs a missing choice and never
+  a dropped answer.
+- **A membership in the draft is on the screen before it is written.** An id
+  the client cannot yet put a name to, which is the window before the first
+  poll lands, is ticked under the id itself rather than hidden, because a
+  membership nobody could untick is a write the sheet did not gate.
 - **A dump survives backing out of the sheet.** Somebody who changed their mind
   about the Task has not changed their mind about having typed the sentence.
 - **The list redraws on the next poll, not on the write.** A write answers with
