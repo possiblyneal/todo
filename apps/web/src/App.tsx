@@ -1,15 +1,27 @@
 import { useEffect, useState } from 'react'
 
+import { Activity } from './Activity'
 import { Box } from './Box'
+import { Detail } from './Detail'
 import { fetchState, type State } from './state'
 
 // The write-ahead log was polled once a second by the TUI; this is the same
 // poll over HTTP, and the ETag is what keeps it to a 304 while nothing writes.
 const POLL_MS = 1000
 
+/**
+ * Which of the three screens is open. There is no router: the client is three
+ * screens and a box, and a screen is what is on the phone rather than an
+ * address, so a dependency for it would be a decision and not a convenience.
+ */
+type Screen =
+  { name: 'list' } | { name: 'task'; id: string } | { name: 'agents' }
+
 export function App() {
   const [state, setState] = useState<State | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [etag, setEtag] = useState<string | null>(null)
+  const [screen, setScreen] = useState<Screen>({ name: 'list' })
 
   useEffect(() => {
     const controller = new AbortController()
@@ -22,6 +34,10 @@ export function App() {
         if (snapshot) {
           etag = snapshot.etag
           setState(snapshot.state)
+          // The tag is the revision the other screens fetch their own reads
+          // again on: it changes exactly when something was written, which is
+          // what keeps them current without a second clock.
+          setEtag(snapshot.etag)
         }
         setError(null)
       } catch (caught) {
@@ -57,6 +73,46 @@ export function App() {
   // An error sits over the list rather than replacing it. A poll that failed
   // says nothing about the Tasks already on the screen, and a phone that walked
   // out of range should not have its list taken away while it walks back.
+  const open = screen.name === 'task' ? find(state, screen.id) : undefined
+
+  if (screen.name === 'agents') {
+    return (
+      <Activity
+        tasks={state?.tasks ?? []}
+        revision={etag}
+        onBack={() => setScreen({ name: 'list' })}
+      />
+    )
+  }
+
+  // A Task the read no longer names is a Task that went away while it was
+  // open, which is what deleting one from another surface looks like from
+  // here. The list is what is left, rather than a screen about nothing.
+  if (screen.name === 'task' && state && !open) {
+    return (
+      <>
+        <p className="message">That task is not in the list any more.</p>
+        <button type="button" onClick={() => setScreen({ name: 'list' })}>
+          Back
+        </button>
+      </>
+    )
+  }
+
+  if (open && state) {
+    return (
+      <Detail
+        task={open}
+        subtasks={state.tasks.filter((task) => task.parent === open.id)}
+        lists={state.lists}
+        tags={state.tags}
+        revision={etag}
+        onOpen={(id) => setScreen({ name: 'task', id })}
+        onBack={() => setScreen({ name: 'list' })}
+      />
+    )
+  }
+
   return (
     <>
       {/*
@@ -75,21 +131,34 @@ export function App() {
       {state && state.tasks.length > 0 && (
         <ul className="list">
           {state.tasks.map((task) => (
-            <li
-              key={task.id}
-              className="row"
-              // Depth is 1 for a top-level Task, so the indent is what it has
-              // beyond the top rather than the depth itself.
-              style={{ paddingLeft: `${1 + (task.depth - 1) * 1.25}rem` }}
-            >
-              <span>{task.title}</span>
-              {task.marks.length > 0 && (
-                <span className="marks">{task.marks.join(' · ')}</span>
-              )}
+            <li key={task.id}>
+              <button
+                type="button"
+                className="row"
+                // Depth is 1 for a top-level Task, so the indent is what it
+                // has beyond the top rather than the depth itself.
+                style={{ paddingLeft: `${1 + (task.depth - 1) * 1.25}rem` }}
+                onClick={() => setScreen({ name: 'task', id: task.id })}
+              >
+                <span>{task.title}</span>
+                {task.marks.length > 0 && (
+                  <span className="marks">{task.marks.join(' · ')}</span>
+                )}
+              </button>
             </li>
           ))}
         </ul>
       )}
+      <div className="buttons">
+        <button type="button" onClick={() => setScreen({ name: 'agents' })}>
+          Activity
+        </button>
+      </div>
     </>
   )
+}
+
+/** The Task a screen is open on, where the last read still names it. */
+function find(state: State | null, id: string) {
+  return state?.tasks.find((task) => task.id === id)
 }

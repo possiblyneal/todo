@@ -1,11 +1,15 @@
-// The add sheet: what the Broker read, filled in and open for correction.
-// Submitting it is the only thing that writes, so a dump handed over and then
-// thought better of leaves nothing behind.
+// The sheet: a Task open for correction, whether it is one the Broker just read
+// or one that already exists. Submitting it is the only thing that writes, so a
+// dump handed over and then thought better of leaves nothing behind.
+//
+// It makes no write of its own. Whoever opens it says what submitting it does,
+// which is what lets one sheet be the add form, the edit form and the subtask
+// form without holding three descriptions of the same ten attributes.
 
 import { useState } from 'react'
 
 import type { Collection } from './state'
-import { addTask, type TaskBody } from './write'
+import { memberships, type TaskBody } from './write'
 
 /** The attributes this sheet takes as text, which is every one it shows. */
 type Said = 'title' | 'description' | 'why' | 'deadline' | 'estimate'
@@ -16,13 +20,16 @@ export function Sheet({
   draft,
   lists,
   tags,
-  onWritten,
+  action,
+  onSubmit,
   onCancel,
 }: {
   draft: TaskBody
   lists: Collection[]
   tags: Collection[]
-  onWritten: () => void
+  /** The word on the button, which is what submitting it does. */
+  action: string
+  onSubmit: (body: TaskBody) => Promise<void>
   onCancel: () => void
 }) {
   const [body, setBody] = useState<TaskBody>(draft)
@@ -48,8 +55,10 @@ export function Sheet({
     setWriting(true)
     setError(null)
     try {
-      await addTask(body)
-      onWritten()
+      // The memberships are the difference between what the Task carried when
+      // this opened and what is ticked now, because ticking and unticking are
+      // different fields on the wire.
+      await onSubmit({ ...body, ...memberships(draft, body) })
     } catch (caught) {
       // The API's sentence is the one the CLI would have printed, and a value
       // it could not read is still in the field it came back in, so whoever
@@ -145,7 +154,7 @@ export function Sheet({
           Cancel
         </button>
         <button type="submit" disabled={writing}>
-          {writing ? 'Adding…' : 'Add'}
+          {writing ? '…' : action}
         </button>
       </div>
     </form>

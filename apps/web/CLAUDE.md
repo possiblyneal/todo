@@ -9,9 +9,10 @@ that same process serves beside the JSON, so there is no second process and no
 CORS. `docs/adrs/0003-replace-the-tui-with-a-browser-client.md` records why the
 surface moved off the terminal.
 
-Stages 1 and 2 of the plan are what is here: the list, read-only, over
-`GET /api/state`, and the box that hands a dump to the Broker and opens the add
-sheet filled in.
+Stages 1 to 3 of the plan are what is here: the list over `GET /api/state`, the
+box that hands a dump to the Broker and opens the add sheet filled in, the
+detail screen a tap on a Task opens, and the activity screen over the Change
+History.
 
 ## Ownership
 
@@ -21,13 +22,25 @@ sheet filled in.
   `apps/todo/src/api/state.go`, which is the side that decides them.
 - `src/write.ts` — the wire shapes the write and Broker routes take, and the
   calls that reach them. It mirrors `apps/todo/src/api/tasks.go` and
-  `apps/todo/src/api/broker.go`.
+  `apps/todo/src/api/broker.go`. It also turns a Task read back into the body
+  that edits it, and takes the difference between the memberships a sheet
+  opened on and the ones ticked when it was submitted.
+- `src/log.ts` — what a Change History entry says, worked out without
+  recognising anything by name: the Actor split on the first slash, and which
+  kinds are the Lease bookkeeping rather than activity.
 - `src/Box.tsx` — the box: a dump or a question, in the same field under the
   same thumb. Neither call writes.
-- `src/Sheet.tsx` — the add sheet: what the Broker read, open for correction.
-  Submitting it is the only thing that writes.
-- `src/App.tsx` — the box above the list. It draws what the read returned and
-  works nothing out for itself.
+- `src/Sheet.tsx` — the sheet: a Task open for correction, whether the Broker
+  just read it or it already exists. It makes no write of its own; whoever
+  opens it says what submitting it does.
+- `src/Detail.tsx` — the detail screen: everything the Task carries, its
+  Subtasks, the four lifecycle verbs, and its history.
+- `src/Activity.tsx` — the activity screen: the Change History across every
+  Task, with the filter for Actors that name a harness and a model.
+- `src/Log.tsx` — the entries drawn as who, what and when. Both screens draw
+  their log through it.
+- `src/App.tsx` — the box above the list, and which of the three screens is
+  open. It draws what the read returned and works nothing out for itself.
 - `src/main.tsx` — the mount, and nothing else.
 - `src/index.css` — the whole of the styling. There is no component-level
   stylesheet and no CSS-in-JS, so the 44px rule below is checkable by reading
@@ -86,6 +99,30 @@ sheet filled in.
 - **The list redraws on the next poll, not on the write.** A write answers with
   an id and nothing else; the poll a second later is what puts the Task on the
   screen, so there is one description of the list and it is the read's.
+- **One sheet, and whoever opens it says what submitting it does.** Adding,
+  editing and adding a Subtask are the same ten attributes, so they are one
+  component taking an `onSubmit` rather than three copies of the form. The
+  memberships it submits are the difference between what it opened on and what
+  is ticked now, because ticking and unticking are different fields on the wire
+  and an untick that sent nothing would leave the membership on.
+- **The other screens re-read on the ETag, not on a clock.** `App` hands the
+  poll's tag down as a revision; the detail and activity screens fetch their
+  own read again when it changes, which is exactly when something was written.
+  A second poll of their own would be a second clock disagreeing with the
+  first.
+- **A verb is offered whatever state the Task is in.** Which of the four the
+  store refuses is the store's to say, and it says it in a sentence. A screen
+  that greyed out the wrong one would be a second copy of a rule that already
+  exists.
+- **Lease bookkeeping is the one kind the client names.** `log.ts` lists
+  `lease_taken`, `lease_released` and `lease_broken`, because the activity
+  screen is two thirds plumbing without dropping them. Everything else about an
+  entry is drawn in the store's own words: a kind is its name with the
+  underscores taken out, so a kind added to the store appears the day it is
+  appended and this client cannot describe one wrongly.
+- **The activity filter narrows and never hides.** The screen opens unfiltered
+  and the filter is a toggle, so an Agent that named itself with no slash, one
+  run with no `TODO_ACTOR`, is in the view it opens on.
 - **Touch targets no smaller than 44px, one thumb, no hover.**
 
 ## Work Guidance

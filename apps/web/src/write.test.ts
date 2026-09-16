@@ -1,6 +1,15 @@
 import { afterEach, expect, test, vi } from 'vitest'
 
-import { addTask, ask, capture } from './write'
+import {
+  addSubtask,
+  addTask,
+  ask,
+  capture,
+  draftOf,
+  editTask,
+  lifecycle,
+  memberships,
+} from './write'
 
 // What the last call sent, which is how the body is checked: the routes take
 // JSON and a client that posted something else would still get a Response.
@@ -79,4 +88,91 @@ test('an error with no sentence in it still says what happened', async () => {
   await expect(capture('paint the fence')).rejects.toThrow(
     'the API answered 500',
   )
+})
+
+test('the sheet submits the memberships that changed, both ways', () => {
+  const before = { intoLists: ['house'], addTags: ['outdoors'] }
+  const after = { intoLists: ['garage'], addTags: ['outdoors', 'spring'] }
+
+  expect(memberships(before, after)).toEqual({
+    intoLists: ['garage'],
+    outOfLists: ['house'],
+    addTags: ['spring'],
+    dropTags: [],
+  })
+})
+
+// A sheet opened on a draft carries nothing to leave, so every tick is a join.
+test('a draft with no memberships joins whatever is ticked', () => {
+  expect(memberships({}, { intoLists: ['house'] })).toEqual({
+    intoLists: ['house'],
+    outOfLists: [],
+    addTags: [],
+    dropTags: [],
+  })
+})
+
+// The edit sheet opens on the Task as it is, and what it shows has to go back
+// as something the API reads: a deadline the way it came, a duration as one.
+test('a task reads back as the body that edits it', () => {
+  const draft = draftOf({
+    id: 'task_a',
+    depth: 1,
+    title: 'Paint the fence',
+    createdAt: '2026-09-16T10:00:00Z',
+    deadline: '2026-03-04T00:00:00Z',
+    estimateSeconds: 5400,
+    lists: ['house'],
+    tags: ['outdoors'],
+    marks: [],
+  })
+
+  expect(draft.title).toBe('Paint the fence')
+  expect(draft.deadline).toBe('2026-03-04T00:00:00Z')
+  expect(draft.estimate).toBe('90m')
+  expect(draft.intoLists).toEqual(['house'])
+  expect(draft.addTags).toEqual(['outdoors'])
+})
+
+test('a task with nothing to estimate has no estimate to send', () => {
+  const draft = draftOf({
+    id: 'task_a',
+    depth: 1,
+    title: 'Paint the fence',
+    createdAt: '2026-09-16T10:00:00Z',
+    marks: [],
+  })
+
+  expect(draft.estimate).toBeUndefined()
+  expect(draft.deadline).toBeUndefined()
+})
+
+// The four are the API's list, so this sends the verb and reads the sentence
+// back rather than keeping a second copy of which four there are.
+test('a lifecycle verb is one post to the task', async () => {
+  vi.stubGlobal('fetch', answering(200, { id: 'task_abc' }))
+
+  await lifecycle('task_abc', 'complete')
+
+  expect(sent?.url).toBe('/api/tasks/task_abc/complete')
+  expect(sent?.init?.method).toBe('POST')
+})
+
+test('a subtask is written under the task in the path', async () => {
+  vi.stubGlobal('fetch', answering(201, { id: 'task_child' }))
+
+  const id = await addSubtask('task_parent', { title: 'Buy the paint' })
+
+  expect(id).toBe('task_child')
+  expect(sent?.url).toBe('/api/tasks/task_parent/subtasks')
+  expect(body()).toEqual({ title: 'Buy the paint' })
+})
+
+test('an edit patches the task it is about', async () => {
+  vi.stubGlobal('fetch', answering(200, { id: 'task_abc' }))
+
+  await editTask('task_abc', { title: 'Paint the shed' })
+
+  expect(sent?.url).toBe('/api/tasks/task_abc')
+  expect(sent?.init?.method).toBe('PATCH')
 })

@@ -11,7 +11,7 @@ import { useState } from 'react'
 
 import { Sheet } from './Sheet'
 import type { Collection } from './state'
-import { ask, capture, type TaskBody } from './write'
+import { addTask, ask, capture, type TaskBody } from './write'
 
 export function Box({
   lists,
@@ -51,10 +51,12 @@ export function Box({
         draft={draft}
         lists={lists}
         tags={tags}
+        action="Add"
         // The dump is done with once the Task is written. Backing out of the
         // sheet keeps it, because somebody who changed their mind about the
         // Task has not changed their mind about having typed the sentence.
-        onWritten={() => {
+        onSubmit={async (body) => {
+          await addTask(body)
           setDraft(null)
           setText('')
         }}

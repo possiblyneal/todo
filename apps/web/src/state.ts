@@ -79,3 +79,39 @@ export async function fetchState(
     state: (await response.json()) as State,
   }
 }
+
+/**
+ * One appended fact, as `GET /api/history` and `GET /api/tasks/{id}/history`
+ * answer it. The Actor is verbatim: the API recognises no model by name and
+ * neither does this, which is why the splitting is `log.ts`'s and not a shape
+ * the wire carries.
+ */
+export type Entry = {
+  seq: number
+  at: string
+  actor: string
+  kind: string
+  subject: string
+  payload?: unknown
+}
+
+/** What the Change History holds about one Task, newest first. */
+export async function fetchTaskHistory(id: string): Promise<Entry[]> {
+  return await read(`/api/tasks/${encodeURIComponent(id)}/history`)
+}
+
+/**
+ * The same rows across every Task, newest first and a page at a time. The page
+ * is generous because the screen drops the Lease bookkeeping out of it, and a
+ * page counted before that happens is mostly plumbing.
+ */
+export async function fetchHistory(limit = 200): Promise<Entry[]> {
+  return await read(`/api/history?limit=${limit}`)
+}
+
+async function read(path: string): Promise<Entry[]> {
+  const response = await fetch(path)
+  if (!response.ok) throw await refused(response)
+  const body = (await response.json()) as { entries: Entry[] }
+  return body.entries
+}

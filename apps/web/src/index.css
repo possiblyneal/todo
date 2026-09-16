@@ -26,6 +26,19 @@ body {
   border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
 }
 
+/* A row is a tap that opens the Task, so it is a button: the tap target is the
+   whole row rather than the words in it, and a keyboard reaches it. */
+button.row {
+  width: 100%;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
 .marks {
   margin-left: auto;
   opacity: 0.6;
@@ -114,4 +127,79 @@ body {
 .tick input {
   width: 1.25rem;
   height: 1.25rem;
+}
+
+/* The detail and activity screens. Both are a column of a phone's width with
+   nothing beside it, which is what one thumb has room for. */
+.detail {
+  padding: 0.75rem 1rem;
+}
+
+.title {
+  font-size: 1.3rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.heading {
+  font-size: 1rem;
+  margin: 1.5rem 0 0.5rem;
+  opacity: 0.7;
+}
+
+.carried {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0.75rem 0 0;
+}
+
+.carried dt {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.carried dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.did {
+  font-variant: small-caps;
+}
+
+.about {
+  opacity: 0.8;
+}
+
+.who {
+  margin-left: auto;
+}
+
+/* The harness an Agent ran under, beside the model it was. The two halves are
+   drawn apart so the log says which agent a model was acting as. */
+.harness {
+  opacity: 0.6;
+  font-size: 0.8rem;
+}
+
+.when {
+  opacity: 0.6;
+  font-size: 0.8rem;
+  width: 100%;
 }
