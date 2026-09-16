@@ -247,24 +247,39 @@ func TestNamedInMatchesByNameAndAppendsOnce(t *testing.T) {
 	}
 }
 
-func TestFromCaptureReadsAnEstimateTheBrokerPaddedWithSpace(t *testing.T) {
+func TestFromCaptureReadsAValueTheBrokerPaddedWithSpace(t *testing.T) {
 	// The Broker writes prose, not a flag value, so the space around a
 	// duration is the Broker's rather than something the person typed.
-	a, err := FromCapture(ai.Capture{Title: "Paint the fence", Estimate: " 90m "})
+	a, err := FromCapture(ai.Capture{
+		Title:    "Paint the fence",
+		Estimate: " 90m ",
+		Deadline: " 2026-03-04 ",
+	})
 	if err != nil {
 		t.Fatalf("FromCapture: %v", err)
 	}
 	if a.Estimate == nil || *a.Estimate != 90*time.Minute {
 		t.Errorf("estimate = %v, want 90m", a.Estimate)
 	}
+	if a.Deadline == nil || a.Deadline.Year() != 2026 || a.Deadline.Month() != time.March {
+		t.Errorf("deadline = %v, want the fourth of March", a.Deadline)
+	}
 }
 
 func TestGivenReportsTheFirstBadValueInFlagOrder(t *testing.T) {
 	// A flag set visits what was typed in the order the names sort in, so
 	// two bad values report the earlier name, and both surfaces say so.
-	g := Given{Deadline: ptr("next tuesday"), Priority: ptr("urgent")}
-	_, err := g.Attributes()
-	if err == nil || !strings.Contains(err.Error(), "next tuesday") {
-		t.Errorf("err = %v, want the deadline's sentence", err)
+	for _, c := range []struct {
+		given Given
+		want  string
+	}{
+		{Given{Deadline: ptr("next tuesday"), Priority: ptr("urgent")}, "next tuesday"},
+		{Given{Impact: ptr("enormous"), Priority: ptr("urgent")}, "enormous"},
+		{Given{Estimate: ptr("a while"), Snooze: ptr("a bit")}, "a while"},
+	} {
+		_, err := c.given.Attributes()
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("err = %v, want the sentence naming %q", err, c.want)
+		}
 	}
 }

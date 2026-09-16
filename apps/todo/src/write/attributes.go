@@ -107,8 +107,12 @@ func (g Given) Attributes() (*store.Attributes, error) {
 }
 
 // Deadline reads a due date. An empty string is the zero time, which clears.
+// The space around a date is not part of it, for the same reason it is not
+// part of an estimate: the Broker writes prose, and " 2026-03-04 " is a date
+// it said rather than one this cannot read.
 func Deadline(v string) (time.Time, error) {
-	if strings.TrimSpace(v) == "" {
+	v = strings.TrimSpace(v)
+	if v == "" {
 		return time.Time{}, nil
 	}
 	for _, layout := range []string{time.DateOnly, "2006-01-02 15:04", time.RFC3339} {
