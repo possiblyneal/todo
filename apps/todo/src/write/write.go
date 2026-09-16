@@ -6,9 +6,10 @@
 // docs/plans/browser-client.md asks be moved here before src/api/ exists.
 //
 // It enforces nothing the store does not. Everything here is either the
-// sequence a write is made of or the reading of text into store.Attributes,
-// and both surfaces get the same answer from both because there is one of
-// each.
+// sequence a write is made of, the reading of text into store.Attributes, or
+// the bridge between the store and src/ai: what the Broker is shown of the
+// tracker, and what it said read back. Both surfaces get the same answer from
+// all three because there is one of each.
 package write
 
 import (

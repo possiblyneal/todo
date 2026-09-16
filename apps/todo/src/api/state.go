@@ -84,7 +84,7 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 	if tag != "" {
 		w.Header().Set("ETag", tag)
 	}
-	write(w, http.StatusOK, out)
+	send(w, http.StatusOK, out)
 }
 
 // matches reads If-None-Match the way RFC 9110 writes it: several tags to one

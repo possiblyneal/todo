@@ -5,16 +5,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/possiblyneal/todo/apps/todo/src/ai"
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 	"github.com/possiblyneal/todo/apps/todo/src/write"
 )
-
-// today is the date the broker works a "tomorrow" out against. The ai package
-// reads no clock, so every dump carries one.
-const today = "2006-01-02, Monday"
 
 // captureTask is `todo capture`: a brain dump, read by the broker, written as
 // one Task. It is the one verb that writes what the broker said, and it can be
@@ -34,28 +29,17 @@ func captureTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
-	lists, err := s.Lists()
-	if err != nil {
-		fmt.Fprintf(stderr, "todo capture: %v\n", err)
-		return 1
-	}
-	tags, err := s.Tags()
+	// What the Broker is shown, and the Lists and Tags it may file under, are
+	// gathered the one way both surfaces gather them.
+	dump, err := write.Gather(s, text)
 	if err != nil {
 		fmt.Fprintf(stderr, "todo capture: %v\n", err)
 		return 1
 	}
 
-	dump := ai.Dump{Text: text, Today: time.Now().Format(today)}
-	for _, l := range lists {
-		dump.Lists = append(dump.Lists, l.Name)
-	}
-	for _, t := range tags {
-		dump.Tags = append(dump.Tags, t.Name)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), ai.Patience)
 	defer cancel()
-	read, err := ai.New().Read(ctx, dump)
+	read, err := ai.New().Read(ctx, dump.Shown)
 	if err != nil {
 		fmt.Fprintf(stderr, "todo capture: %v\n", err)
 		return 1
@@ -79,10 +63,7 @@ func captureTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	// verb's. The id is said whether or not the filing went through: the
 	// Task is written by then, so a refusal leaves it filed under nothing,
 	// which is one `todo edit` away for whoever is told which Task it is.
-	id, err := write.Add(s, actor(), "", a, write.Membership{
-		IntoLists: write.NamedIn(read.Lists, write.ListNames(lists)),
-		AddTags:   write.NamedIn(read.Tags, write.TagNames(tags)),
-	})
+	id, err := write.Add(s, actor(), "", a, dump.Filed(read))
 	if id != "" {
 		fmt.Fprintln(stdout, id)
 	}

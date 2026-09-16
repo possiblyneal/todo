@@ -15,22 +15,45 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/possiblyneal/todo/apps/todo/src/ai"
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
 
 // Options is how the listener is configured. Web is the directory of compiled
 // client files served beside the JSON; empty serves the JSON alone, which is
 // what a client running its own dev server wants.
+//
+// Actor is who every write through this listener is attributed to. There is no
+// authentication here and so nobody to name per request: `todo api` resolves
+// its Actor once, the same way a verb resolves one, and the whole listener
+// writes as that. A browser on the LAN is the person who started it.
 type Options struct {
-	Addr string
-	Web  string
+	Addr  string
+	Web   string
+	Actor string
 }
 
 // Handler is every route, and it is what a test exercises without a listener.
-func Handler(s *store.Store, web string) http.Handler {
+func Handler(s *store.Store, o Options) http.Handler {
+	// One client for the process, so the question of which model the broker is
+	// serving is asked once rather than once a request.
+	broker := ai.New()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, r *http.Request) {
 		state(s, w, r)
+	})
+	mux.HandleFunc("POST /api/tasks", func(w http.ResponseWriter, r *http.Request) {
+		addTask(s, o.Actor, w, r)
+	})
+	mux.HandleFunc("PATCH /api/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		editTask(s, o.Actor, w, r)
+	})
+	mux.HandleFunc("POST /api/capture", func(w http.ResponseWriter, r *http.Request) {
+		capture(s, broker, w, r)
+	})
+	mux.HandleFunc("POST /api/ask", func(w http.ResponseWriter, r *http.Request) {
+		ask(s, broker, w, r)
 	})
 	// A route under /api/ that this package does not serve is a usage error in
 	// the same envelope every other one arrives in. It is registered whether or
@@ -41,8 +64,8 @@ func Handler(s *store.Store, web string) http.Handler {
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		fail(w, usage{fmt.Errorf("%s %s is not a route", r.Method, r.URL.Path)})
 	})
-	if web != "" {
-		mux.Handle("/", client(web))
+	if o.Web != "" {
+		mux.Handle("/", client(o.Web))
 	}
 	return mux
 }
@@ -53,7 +76,7 @@ func Handler(s *store.Store, web string) http.Handler {
 // re-check trigger covers.
 func ListenAndServe(s *store.Store, o Options, stderr io.Writer) error {
 	fmt.Fprintf(stderr, "todo api: listening on %s\n", o.Addr)
-	srv := &http.Server{Addr: o.Addr, Handler: Handler(s, o.Web)}
+	srv := &http.Server{Addr: o.Addr, Handler: Handler(s, o)}
 	return srv.ListenAndServe()
 }
 
@@ -84,10 +107,10 @@ func client(dir string) http.Handler {
 	})
 }
 
-// write sends one JSON body. An encoding failure after the status is written
+// send writes one JSON body. An encoding failure after the status is written
 // cannot be reported to the client, so it is logged nowhere and dropped: the
 // response is already short by then and the client's next poll replaces it.
-func write(w http.ResponseWriter, status int, body any) {
+func send(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
@@ -105,7 +128,7 @@ func fail(w http.ResponseWriter, err error) {
 	case errors.As(err, &asked):
 		status = http.StatusBadRequest
 	}
-	write(w, status, map[string]string{"error": err.Error()})
+	send(w, status, map[string]string{"error": err.Error()})
 }
 
 // usage marks an error the caller can fix by asking differently, which is exit

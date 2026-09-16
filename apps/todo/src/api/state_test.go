@@ -42,11 +42,11 @@ func get(t *testing.T, s *store.Store, target string, header http.Header) *httpt
 		}
 	}
 	w := httptest.NewRecorder()
-	Handler(s, "").ServeHTTP(w, r)
+	Handler(s, Options{}).ServeHTTP(w, r)
 	return w
 }
 
-func decode(t *testing.T, w *httptest.ResponseRecorder) stateBody {
+func decodeState(t *testing.T, w *httptest.ResponseRecorder) stateBody {
 	t.Helper()
 	var body stateBody
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -75,7 +75,7 @@ func TestStateReturnsTheTreeAndItsCollections(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
-	body := decode(t, w)
+	body := decodeState(t, w)
 
 	if len(body.Tasks) != 2 {
 		t.Fatalf("tasks = %d, want 2", len(body.Tasks))
@@ -105,7 +105,7 @@ func TestStateSaysWhatAReadWorkedOut(t *testing.T) {
 	// A completed Task is out of the everyday view, so it takes all=true to
 	// see it at all, and it arrives carrying the mark rather than a field the
 	// client would have to work the mark out from.
-	body := decode(t, get(t, s, "/api/state?all=true", nil))
+	body := decodeState(t, get(t, s, "/api/state?all=true", nil))
 	if len(body.Tasks) != 1 {
 		t.Fatalf("tasks = %d, want 1", len(body.Tasks))
 	}
@@ -196,7 +196,7 @@ func TestStateWritesAnEmptyListAsAList(t *testing.T) {
 		t.Errorf("the response carries a null: %s", body)
 	}
 
-	state := decode(t, w)
+	state := decodeState(t, w)
 	if state.Lists == nil || state.Tags == nil {
 		t.Errorf("Lists = %v, Tags = %v, want both empty rather than nil", state.Lists, state.Tags)
 	}
@@ -265,7 +265,7 @@ func TestAnAPIRouteThatIsNotOneIsNotTheClient(t *testing.T) {
 
 	serve := func(method, target string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
-		Handler(s, dir).ServeHTTP(w, httptest.NewRequest(method, target, nil))
+		Handler(s, Options{Web: dir}).ServeHTTP(w, httptest.NewRequest(method, target, nil))
 		return w
 	}
 

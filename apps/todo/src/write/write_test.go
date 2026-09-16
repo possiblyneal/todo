@@ -283,3 +283,127 @@ func TestGivenReportsTheFirstBadValueInFlagOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestGatherShowsTheBrokerTodayAndWhatItMayFileUnder(t *testing.T) {
+	s := openTemp(t)
+	list, err := s.AddList("alice", "House", "blue")
+	if err != nil {
+		t.Fatalf("AddList: %v", err)
+	}
+	tag, err := s.AddTag("alice", "outdoors", "green")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+
+	d, err := Gather(s, "paint the fence before march")
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	if d.Shown.Text != "paint the fence before march" {
+		t.Errorf("the dump says %q, want the words that were typed", d.Shown.Text)
+	}
+	// The weekday is in it because "Friday" in a dump is a date only where
+	// the Broker is told which day today is.
+	if d.Shown.Today != time.Now().Format(dumpDate) {
+		t.Errorf("today reads %q, want %q", d.Shown.Today, time.Now().Format(dumpDate))
+	}
+	if len(d.Shown.Lists) != 1 || d.Shown.Lists[0] != "House" {
+		t.Errorf("it may file under %v, want the lists by name", d.Shown.Lists)
+	}
+	if len(d.Shown.Tags) != 1 || d.Shown.Tags[0] != "outdoors" {
+		t.Errorf("it may carry %v, want the tags by name", d.Shown.Tags)
+	}
+
+	// A name it chose comes back as the id the write takes, ignoring case,
+	// and a name nobody offered is dropped.
+	m := d.Filed(ai.Capture{Lists: []string{"house", "Shed"}, Tags: []string{"OUTDOORS"}})
+	if len(m.IntoLists) != 1 || m.IntoLists[0] != list {
+		t.Errorf("it would be filed in %v, want %q alone", m.IntoLists, list)
+	}
+	if len(m.AddTags) != 1 || m.AddTags[0] != tag {
+		t.Errorf("it would carry %v, want %q alone", m.AddTags, tag)
+	}
+}
+
+func TestBriefsSayWhatATaskSaysAndNoIdAtAll(t *testing.T) {
+	when := time.Date(2026, 3, 4, 9, 30, 0, 0, time.UTC)
+	got := Briefs([]store.Task{{
+		ID:       "task_whatever",
+		Title:    "Paint the fence",
+		Why:      "it is peeling",
+		Deadline: when,
+		Estimate: 90 * time.Minute,
+		Priority: store.LevelHigh,
+	}, {
+		ID:    "task_other",
+		Title: "Buy paint",
+	}})
+
+	if len(got) != 2 {
+		t.Fatalf("Briefs returned %d, want one per task", len(got))
+	}
+	if got[0].Deadline != when.Local().Format(time.DateOnly) {
+		t.Errorf("the deadline reads %q, want the day it falls on", got[0].Deadline)
+	}
+	if got[0].Estimate != "1h30m0s" {
+		t.Errorf("the estimate reads %q, want a duration the broker can read", got[0].Estimate)
+	}
+	// A Task with neither is shown neither rather than shown a zero one.
+	if got[1].Deadline != "" || got[1].Estimate != "" {
+		t.Errorf("a task with no deadline or estimate reads %+v, want both left out", got[1])
+	}
+}
+
+func TestGivenTrimsATitleSoBothSurfacesStoreTheSameOne(t *testing.T) {
+	a, err := Given{Title: ptr("  Paint the shed  ")}.Attributes()
+	if err != nil {
+		t.Fatalf("Attributes: %v", err)
+	}
+	if *a.Title != "Paint the shed" {
+		t.Errorf("title %q, want the space around it gone", *a.Title)
+	}
+
+	// A Title of nothing but space is the empty Title the store refuses,
+	// rather than a Task titled with spaces on one surface and refused on the
+	// other.
+	a, err = Given{Title: ptr("   ")}.Attributes()
+	if err != nil {
+		t.Fatalf("Attributes: %v", err)
+	}
+	if *a.Title != "" {
+		t.Errorf("title %q, want the empty title", *a.Title)
+	}
+}
+
+func TestAsSaidCarriesEveryAnswerAndReadsNoneOfThem(t *testing.T) {
+	g := AsSaid(ai.Capture{
+		Title:    "Paint the shed",
+		Why:      "",
+		Deadline: "next Friday",
+		Estimate: "a couple of hours",
+		Priority: "urgent",
+	})
+	for _, said := range []struct {
+		name string
+		got  *string
+		want string
+	}{
+		{"title", g.Title, "Paint the shed"},
+		{"deadline", g.Deadline, "next Friday"},
+		{"estimate", g.Estimate, "a couple of hours"},
+		{"priority", g.Priority, "urgent"},
+	} {
+		if said.got == nil {
+			t.Errorf("%s absent, want %q kept for somebody to correct", said.name, said.want)
+			continue
+		}
+		if *said.got != said.want {
+			t.Errorf("%s %q, want %q as the Broker wrote it", said.name, *said.got, said.want)
+		}
+	}
+	// An attribute it wrote nothing for is absent rather than empty, because
+	// empty clears and the Broker cleared nothing.
+	if g.Why != nil {
+		t.Errorf("why %q, want absent", *g.Why)
+	}
+}

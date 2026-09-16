@@ -36,3 +36,82 @@ body {
   padding: 1rem;
   opacity: 0.7;
 }
+
+/* The box: the front door, so it is above the list and not behind a tap. */
+.box {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.dump {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0.5rem;
+  font: inherit;
+  resize: vertical;
+}
+
+.buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.buttons button {
+  flex: 1;
+  min-height: 44px;
+  font: inherit;
+}
+
+.answer {
+  margin: 0.75rem 0 0;
+  white-space: pre-wrap;
+}
+
+/* The add sheet: what the broker read, open for correction. */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.field > span,
+.field > legend {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  padding: 0;
+}
+
+.field input,
+.field select,
+.field textarea {
+  min-height: 44px;
+  padding: 0.5rem;
+  font: inherit;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.tick {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+
+.tick input {
+  width: 1.25rem;
+  height: 1.25rem;
+}

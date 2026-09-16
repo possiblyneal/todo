@@ -39,6 +39,16 @@ func (g Given) Attributes() (*store.Attributes, error) {
 	var a store.Attributes
 	given := false
 
+	// A Title is trimmed because the space around it is not part of it, the
+	// same reason the space around a date is not part of the date. It is
+	// trimmed here rather than at either surface so that a typed
+	// `-title "  "` and a sent `"title": "  "` are the one empty Title the
+	// store refuses, rather than one refusal and one Task titled with spaces.
+	if g.Title != nil {
+		title := strings.TrimSpace(*g.Title)
+		g.Title = &title
+	}
+
 	for _, t := range []struct {
 		from *string
 		to   **string
