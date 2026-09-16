@@ -210,16 +210,14 @@ func lifecycle(s *store.Store, verb string, args []string, stderr io.Writer) int
 	}
 	id := fs.Arg(0)
 
-	act := map[string]func(string, string) error{
-		"complete": s.CompleteTask,
-		"decline":  s.DeclineTask,
-		"reopen":   s.ReopenTask,
-		"delete":   s.DeleteTask,
-	}[verb]
-
-	return refuse(stderr, verb, s.WithLease(actor(), id, store.WriteTTL, func() error {
-		return act(actor(), id)
-	}))
+	// Which verb makes which write, and the Lease around it, is write's: this
+	// mode and the API name the same four rather than each keeping a list.
+	act, ok := write.Lifecycle(verb)
+	if !ok {
+		fmt.Fprintf(stderr, "todo %s: not something a task does\n", verb)
+		return 2
+	}
+	return refuse(stderr, verb, act(s, actor(), id))
 }
 
 // attachTask is `todo attach`: the pointers a Task holds. Bare with an id it

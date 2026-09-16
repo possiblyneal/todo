@@ -2,6 +2,7 @@ package store
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -115,5 +116,74 @@ func TestDSNTakesTheWriteLockUpFront(t *testing.T) {
 	dsn := dsn("/tmp/todo.db")
 	if !strings.Contains(dsn, "_txlock=immediate") {
 		t.Errorf("dsn = %q, want it to carry _txlock=immediate", dsn)
+	}
+}
+
+// The detail screen reads one Task's history, so the narrowing has to be the
+// subject an entry was appended against rather than anything folded: a second
+// Task's entries are not this one's, whatever else they touch.
+func TestHistoryOfNarrowsToOneSubject(t *testing.T) {
+	s := openTemp(t)
+	mine, err := s.AddTask("alice", Attributes{Title: Set("Buy milk")})
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if _, err := s.AddTask("alice", Attributes{Title: Set("Buy bread")}); err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	err = s.WithLease("alice", mine, WriteTTL, func() error { return s.CompleteTask("alice", mine) })
+	if err != nil {
+		t.Fatalf("CompleteTask: %v", err)
+	}
+
+	entries, err := s.HistoryOf(mine)
+	if err != nil {
+		t.Fatalf("HistoryOf: %v", err)
+	}
+	var kinds []string
+	for _, e := range entries {
+		if e.Subject != mine {
+			t.Errorf("HistoryOf(%q) returned an entry about %q", mine, e.Subject)
+		}
+		kinds = append(kinds, e.Kind)
+	}
+	// The Lease bookkeeping is here too. HistoryOf narrows and drops nothing:
+	// which kinds are worth drawing is the screen's question.
+	want := []string{KindTaskAdded, KindLeaseTaken, KindTaskCompleted, KindLeaseReleased}
+	if !slices.Equal(kinds, want) {
+		t.Errorf("HistoryOf kinds = %v, want %v", kinds, want)
+	}
+}
+
+// The activity screen wants the newest writes and not the whole log, which is
+// the other direction and a page of it.
+func TestLatestHistoryIsNewestFirstAndBounded(t *testing.T) {
+	s := openTemp(t)
+	for _, title := range []string{"first", "second", "third"} {
+		if _, err := s.AddTask("alice", Attributes{Title: Set(title)}); err != nil {
+			t.Fatalf("AddTask: %v", err)
+		}
+	}
+
+	entries, err := s.LatestHistory(2)
+	if err != nil {
+		t.Fatalf("LatestHistory: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("LatestHistory(2) returned %d entries, want 2", len(entries))
+	}
+	if entries[0].Seq <= entries[1].Seq {
+		t.Errorf("LatestHistory seqs = %d, %d, want newest first", entries[0].Seq, entries[1].Seq)
+	}
+
+	// Nothing said is nothing returned rather than everything there is: a
+	// caller that forgot to say how many would otherwise be handed the log
+	// this read exists to avoid decoding.
+	none, err := s.LatestHistory(0)
+	if err != nil {
+		t.Fatalf("LatestHistory(0): %v", err)
+	}
+	if len(none) != 0 {
+		t.Errorf("LatestHistory(0) returned %d entries, want none", len(none))
 	}
 }

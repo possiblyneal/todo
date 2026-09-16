@@ -1298,7 +1298,39 @@ ORDER BY d.path`, key),
 // their own work rather than keeping a stored cursor, so the sequence has to
 // stay readable as a sequence and not only as folded state.
 func (s *Store) History() ([]Entry, error) {
-	rows, err := s.db.Query(`SELECT seq, at, actor, kind, subject, payload FROM change_history ORDER BY seq`)
+	return s.entries(`SELECT seq, at, actor, kind, subject, payload FROM change_history ORDER BY seq`)
+}
+
+// HistoryOf reads what one subject's Change History holds, in the same order
+// History reads the whole of it in. The subject is the id an entry was
+// appended against: a Task's id names every entry about that Task, and a List's
+// names the entries about the List itself rather than the Tasks in it.
+//
+// It narrows and nothing else. Every entry History would return for this
+// subject is here, Lease bookkeeping included, because which kinds are worth
+// drawing is the surface's question and not the store's.
+func (s *Store) HistoryOf(subject string) ([]Entry, error) {
+	return s.entries(`SELECT seq, at, actor, kind, subject, payload FROM change_history WHERE subject = ? ORDER BY seq`, subject)
+}
+
+// LatestHistory reads the newest entries first, at most limit of them. It is
+// the read a screen over the whole log needs: History decodes every entry there
+// has ever been, which is the wrong shape for a page of the most recent ones.
+//
+// A limit of zero or less is no entries rather than all of them, so a caller
+// that forgot to say how many gets nothing rather than the whole log.
+func (s *Store) LatestHistory(limit int) ([]Entry, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	return s.entries(`SELECT seq, at, actor, kind, subject, payload FROM change_history ORDER BY seq DESC LIMIT ?`, limit)
+}
+
+// entries runs one read of the Change History and decodes what it returns. The
+// three readers above differ only in the clause they narrow and order by, so
+// the decoding is written once and cannot drift between them.
+func (s *Store) entries(query string, args ...any) ([]Entry, error) {
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read the Change History: %w", err)
 	}

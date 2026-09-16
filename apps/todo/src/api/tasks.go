@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 	"github.com/possiblyneal/todo/apps/todo/src/write"
@@ -99,6 +100,19 @@ func addTask(s *store.Store, actor string, w http.ResponseWriter, r *http.Reques
 		fail(w, usage{err})
 		return
 	}
+	written(s, actor, in, w)
+}
+
+// written is the write both POST /api/tasks and POST /api/tasks/{id}/subtasks
+// make, which is one write with and without a parent. It reads the attributes
+// itself so that the two routes cannot read a body two ways.
+//
+// The id comes back from write.Add whether or not the filing went through, and
+// it is dropped here where the filing failed: the client polls the whole state
+// a second later, so a Task written but not filed arrives on the list by itself
+// rather than needing to be named in an error body that has room only for the
+// sentence.
+func written(s *store.Store, actor string, in taskBody, w http.ResponseWriter) {
 	given, err := in.given().Attributes()
 	if err != nil {
 		// A value read wrongly is the caller's mistake to fix, which is 400
@@ -121,11 +135,6 @@ func addTask(s *store.Store, actor string, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// The id comes back from write.Add whether or not the filing went
-	// through, and it is dropped here where the filing failed: the client
-	// polls the whole state a second later, so a Task written but not filed
-	// arrives on the list by itself rather than needing to be named in an
-	// error body that has room only for the sentence.
 	id, err := write.Add(s, actor, in.Parent, a, in.membership())
 	if err != nil {
 		fail(w, err)
@@ -187,4 +196,44 @@ func decode[T any](w http.ResponseWriter, r *http.Request) (T, error) {
 		return into, fmt.Errorf("the body is not the JSON this route takes: %w", err)
 	}
 	return into, nil
+}
+
+// lifecycleTask is POST /api/tasks/{id}/{verb}: completing, declining,
+// reopening or deleting one, which is write.Lifecycle's list rather than a
+// second copy of it. None of the four takes a body, so none is read: a verb is
+// the whole of the request.
+func lifecycleTask(s *store.Store, actor string, w http.ResponseWriter, r *http.Request) {
+	verb := r.PathValue("verb")
+	act, ok := write.Lifecycle(verb)
+	if !ok {
+		// The store never sees this one, so there is no sentence of its own to
+		// use: a URL naming something a Task does not do is the caller asking
+		// wrongly, and the answer says which four it could have named.
+		fail(w, usage{fmt.Errorf("a task is not %sd: want %s", verb, strings.Join(write.LifecycleVerbs(), ", "))})
+		return
+	}
+	id := r.PathValue("id")
+	if err := act(s, actor, id); err != nil {
+		fail(w, err)
+		return
+	}
+	send(w, http.StatusOK, map[string]string{"id": id})
+}
+
+// addSubtask is POST /api/tasks/{id}/subtasks: one Task written under that one,
+// which is write.Add with a parent and so the same write POST /api/tasks makes.
+// The parent is the id in the path, and a body naming another is refused rather
+// than silently losing to it.
+func addSubtask(s *store.Store, actor string, w http.ResponseWriter, r *http.Request) {
+	in, err := decode[taskBody](w, r)
+	if err != nil {
+		fail(w, usage{err})
+		return
+	}
+	if in.Parent != "" {
+		fail(w, usage{errors.New("a subtask's parent is the task in the path: leave out parent")})
+		return
+	}
+	in.Parent = r.PathValue("id")
+	written(s, actor, in, w)
 }

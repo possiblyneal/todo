@@ -3,6 +3,7 @@
 // `apps/todo/src/api/broker.go`, which are the side that decides them.
 
 import { send } from './api'
+import type { Task } from './state'
 
 /**
  * A Task's attributes and its memberships as they are sent, and the same shape
@@ -50,4 +51,100 @@ export async function ask(question: string): Promise<string> {
 export async function addTask(body: TaskBody): Promise<string> {
   const written = await send<{ id: string }>('POST', '/api/tasks', body)
   return written.id
+}
+
+/** Changes a Task's attributes and its memberships together, as one write. */
+export async function editTask(id: string, body: TaskBody): Promise<void> {
+  await send<{ id: string }>(
+    'PATCH',
+    `/api/tasks/${encodeURIComponent(id)}`,
+    body,
+  )
+}
+
+/** Writes one Task under another, which is the same write with a parent. */
+export async function addSubtask(
+  parent: string,
+  body: TaskBody,
+): Promise<string> {
+  const written = await send<{ id: string }>(
+    'POST',
+    `/api/tasks/${encodeURIComponent(parent)}/subtasks`,
+    body,
+  )
+  return written.id
+}
+
+/**
+ * The four, and the client's one copy of which four there are. No route
+ * answers the question, so this is the list every screen that draws them reads
+ * rather than each keeping its own. A fifth added to `write.Lifecycle` is a
+ * button missing here until it is added, never a sentence drawn wrongly: one
+ * this sends that the API does not serve comes back refused in its own words.
+ */
+export const VERBS = ['complete', 'decline', 'reopen', 'delete']
+
+/** The rest of a Task's life, by the verb in the path. */
+export async function lifecycle(id: string, verb: string): Promise<void> {
+  await send<{ id: string }>(
+    'POST',
+    `/api/tasks/${encodeURIComponent(id)}/${verb}`,
+    {},
+  )
+}
+
+/**
+ * A Task read back as the body that edits it. What the sheet shows is text, so
+ * a deadline goes back the way it came -- RFC 3339, which `write.Deadline`
+ * reads -- rather than being reformatted into something this side decided on.
+ *
+ * The memberships are what the Task carries now, which is what makes unticking
+ * one mean something: see `memberships` below.
+ */
+export function draftOf(task: Task): TaskBody {
+  return {
+    title: task.title,
+    description: task.description,
+    why: task.why,
+    deadline: task.deadline,
+    estimate: estimate(task.estimateSeconds),
+    priority: task.priority,
+    impact: task.impact,
+    intoLists: task.lists ?? [],
+    addTags: task.tags ?? [],
+  }
+}
+
+/**
+ * A duration the API can read back, and the shortest of them: the wire carries
+ * seconds because JavaScript has no duration, and `90m` is what somebody typed
+ * in the first place. It is what the detail screen draws too, so an estimate
+ * reads the same on the screen that shows it and in the field that edits it.
+ */
+export function estimate(seconds?: number): string | undefined {
+  if (!seconds) return undefined
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`
+  if (seconds % 60 === 0) return `${seconds / 60}m`
+  return `${seconds}s`
+}
+
+/**
+ * The Lists and Tags one write joins and leaves, worked out from what the
+ * Task carried when the sheet opened and what is ticked on it now.
+ *
+ * Ticking and unticking are different fields on the wire, so the difference has
+ * to be taken somewhere: taking it here means a sheet opened on a Task and a
+ * sheet opened on a draft submit the same body, and an untick is a membership
+ * dropped rather than one silently left on.
+ */
+export function memberships(before: TaskBody, after: TaskBody): TaskBody {
+  const on = (body: TaskBody, name: 'intoLists' | 'addTags') => body[name] ?? []
+  const missing = (from: string[], against: string[]) =>
+    from.filter((id) => !against.includes(id))
+  return {
+    intoLists: missing(on(after, 'intoLists'), on(before, 'intoLists')),
+    outOfLists: missing(on(before, 'intoLists'), on(after, 'intoLists')),
+    addTags: missing(on(after, 'addTags'), on(before, 'addTags')),
+    dropTags: missing(on(before, 'addTags'), on(after, 'addTags')),
+  }
 }
