@@ -44,7 +44,8 @@ this plan is most likely to introduce.
   is what makes anything durable. `capture` and `ask` are the two the client is
   built around, not extras hung off the side of it.
 - `GET /api/tasks/{id}/history` — what has happened to one Task, for the detail
-  page. This is the one store addition the plan owes, below.
+  page: the `Entry` rows as they are, Actor verbatim. This is the one store
+  addition the plan owes, below.
 
 Status codes carry the CLI's four exit meanings: `200`/`201` for done, `400` for
 usage, `409` for a refusal (`store.ErrRefused`, `store.ErrHeld`), `500` for a
@@ -78,6 +79,14 @@ and its history: the entries the Change History holds for that Task, newest firs
 each one who did it, what they did and when. That last part is the reason the
 Change History is append-only made visible, and it is where an Agent's unattended
 writes show up as somebody's writes rather than as changes that merely appeared.
+
+The who is two halves. An Agent's Actor is `<harness>/<model>`, so the log says
+that Opus completed this one and Fable added that one, and which agent each was
+acting as; a person's is a bare login and draws as itself. The client splits on the
+first slash and shows the raw string when there is no slash, which is what every
+entry appended before the convention looks like. It validates nothing and it
+recognises no model by name: OmniRoute fronts an open set and the list turns over,
+so an unfamiliar model half is drawn, not judged.
 
 Touch targets no smaller than 44px, one thumb, no hover.
 

@@ -80,6 +80,8 @@ _Avoid_: Log, audit log, journal, event stream
 
 **Actor**:
 Whoever performed a write — a person or an agent. Every write is attributed; reads are not. Only the Change History knows an Actor as an identity: elsewhere it is an opaque id, so the holder of a Lease can be recognised as the same actor but never named, and never told apart by kind.
+
+An Agent names itself `<harness>/<model>` — `claude-code/claude-opus-5`, `orca/fable-5-1` — and a person is their bare login, so the slash is what says which wrote a thing and the two halves are what a history log reads. The model half is whatever served the call and is not a list anything here holds: OmniRoute fronts many providers and the set turns over. Nothing validates the shape. An Actor is a string the store writes down and reads back, one that names itself badly or not at all is still an Actor, and the day something refuses a write over its own name is the day attribution has started deciding what may be written.
 _Avoid_: User, author, owner
 
 **Agent**:
