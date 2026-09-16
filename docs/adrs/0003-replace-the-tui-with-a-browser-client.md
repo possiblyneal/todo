@@ -19,9 +19,10 @@ The person's surface is a browser. `apps/web` is a new deployable, written in
 over a JSON API served by `apps/todo`, which stays **Go**, keeps the store and the
 CLI verbs, and gains a mode that listens on HTTP on the LAN.
 
-`src/tui/` and `src/serve/` are deleted, with the Bubble Tea, Huh, Lipgloss,
-bubblezone and Wish dependencies that only they needed. `todo serve` goes with
-them. Bare `todo` no longer opens anything.
+`src/tui/` and `src/serve/` are deleted, and so are the two modes in `src/cli`
+that start them: `runTUI` reaches for Bubble Tea itself. With those gone the Bubble
+Tea, Huh, Lipgloss, bubblezone and Wish requires have no caller left and come out
+of `go.mod`. `todo serve` goes with them, and bare `todo` no longer opens anything.
 
 This covers how many `apps/<name>/` directories exist, what language each is
 written in, and which of them a person touches. It does not cover the API's route
@@ -37,12 +38,13 @@ the five-level nesting — is unmoved and unrestated.
 
 **ADR 0001's line 1 was checked and it was wrong.** It read: *"A UI or device
 constraint. Does not bind. One surface, a TUI, reached two ways. A web interface
-was raised mid-map and rejected in favour of SSH — the single decision keeping this
-line dead and TypeScript out of the repository."* The operator's phone is the
-primary client, and an SSH-served TUI is not a touch surface: it is a keyboard
-program rendered onto a screen that has no keyboard. `todo serve` answered reach
-and mistook it for interaction. The device constraint binds, so line 1 is live and
-it selects, which is what a supersede rather than an amendment is for.
+was raised mid-map and rejected in favour of SSH — the single decision keeping
+this line dead and TypeScript out of the repository. No browser executes
+anything."* The operator's phone is the primary client, and an SSH-served TUI is
+not a touch surface: it is a keyboard program rendered onto a screen that has no
+keyboard. `todo serve` answered reach and mistook it for interaction. The device
+constraint binds, so line 1 is live and it selects, which is what a supersede
+rather than an amendment is for.
 
 The other four lines were re-checked at the same time and none of them moved:
 

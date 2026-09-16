@@ -25,18 +25,28 @@ nested manifest with no root above it — the same rule `go.work` satisfies for
 ## The API
 
 `src/api/` in the Go binary, a sibling of `src/cli/`, holding routing and JSON
-encoding and no rules. Every handler is another caller of the same store call a
-verb makes; a handler that validates something the store does not is the defect
-this plan is most likely to introduce.
+encoding and no rules. Every handler reaches the store the way a verb does,
+which is more than the bare call: a lifecycle write is `s.WithLease(actor, id,
+store.WriteTTL, ...)` around it in `src/cli/verbs.go`, and a handler calling
+`s.CompleteTask` alone is refused. So the take-write-release shape moves
+somewhere both callers share before `src/api/` repeats it; repeating it is the
+second path through the rules ADR 0003 warns about. A handler that validates
+something the store does not is the other defect this plan is most likely to
+introduce.
 
-- `GET /api/state` — everything one screen needs in one response: the Tasks a
-  `store.Query` returns with their `Marks` and `Depth`, the Lists, and the Tags.
-  Carries `store.WALToken` as an `ETag`, so the client's poll is a conditional
-  request the server answers `304` to. The TUI polled the write-ahead log once a
+- `GET /api/state` — everything one screen needs in one response: the Tasks
+  `Store.Tasks` returns for a `store.Query` with their `Marks` and `Depth`, the
+  Lists, and the Tags. The `ETag` is `store.WALToken` hashed together with the
+  query that produced the response, because the token is store-global and the
+  response is not: changing a filter or a sort with no write in between would
+  otherwise be answered `304` for a different representation. An empty token means
+  the log could not be stat'd rather than that nothing changed, so it is not an
+  `ETag` and the response carries none. The TUI polled the write-ahead log once a
   second; the client does the same thing over HTTP.
 - `POST /api/tasks`, `PATCH /api/tasks/{id}`, `POST /api/tasks/{id}/{verb}` for
   the four lifecycle verbs, `POST /api/tasks/{id}/subtasks`.
-- `POST|PATCH|DELETE /api/lists/{id}` and the same for tags.
+- `POST /api/lists` to create, since `AddList` mints the id, and
+  `PATCH|DELETE /api/lists/{id}`; the same for tags.
 - `GET|PUT /api/tasks/{id}/series`, plus the Occurrence marks: tick, skip,
   detach.
 - `POST /api/capture`, `POST /api/ask`, `POST /api/breakdown` — the Broker calls.
@@ -44,8 +54,12 @@ this plan is most likely to introduce.
   is what makes anything durable. `capture` and `ask` are the two the client is
   built around, not extras hung off the side of it.
 - `GET /api/tasks/{id}/history` — what has happened to one Task, for the detail
-  page: the `Entry` rows as they are, Actor verbatim. This is the one store
-  addition the plan owes, below.
+  page: the `Entry` rows as they are, Actor verbatim. This is the first of the two
+  store additions the plan owes, below.
+- `GET /api/history` — the same rows across every Task, newest first, for the
+  activity screen. `Store.History` returns the whole log oldest first and unbounded,
+  so this route needs a page of it rather than all of it: the second store addition
+  the plan owes, below.
 
 Status codes carry the CLI's four exit meanings: `200`/`201` for done, `400` for
 usage, `409` for a refusal (`store.ErrRefused`, `store.ErrHeld`), `500` for a
@@ -57,7 +71,7 @@ re-check trigger is about.
 
 ## The client
 
-Two screens and a box, which is what a phone has room for.
+Three screens and a box, which is what a phone has room for.
 
 **The box is the front door.** A Dump typed one-handed is the most frequent thing
 anybody does here, so it is one tap from the list and nothing is stacked in front
@@ -80,13 +94,26 @@ each one who did it, what they did and when. That last part is the reason the
 Change History is append-only made visible, and it is where an Agent's unattended
 writes show up as somebody's writes rather than as changes that merely appeared.
 
-The who is two halves. An Agent's Actor is `<harness>/<model>`, so the log says
-that Opus completed this one and Fable added that one, and which agent each was
-acting as; a person's is a bare login and draws as itself. The client splits on the
-first slash and shows the raw string when there is no slash, which is what every
-entry appended before the convention looks like. It validates nothing and it
-recognises no model by name: OmniRoute fronts an open set and the list turns over,
-so an unfamiliar model half is drawn, not judged.
+The who is two halves, on the terms `CONTEXT.md` sets out under **Actor**. The
+client splits on the first slash so the log says that Opus completed this one and
+Fable added that one, and which agent each was acting as, and it draws the raw
+string whenever there is no slash. It recognises no model by name and judges
+nothing it does not recognise.
+
+**The activity screen is what agents did.** The Change History across every Task,
+newest first, each entry drawn as who, what and when, with a filter for the writes
+whose Actor has a slash in it. Agents add and complete Tasks while nobody is
+watching, and this is the screen that makes a week of that visible without opening
+one Task at a time to find it. It is a read of rows that already exist: it takes no
+Lease, appends nothing, and shows entries whatever their Actor looks like. Lease
+bookkeeping is not activity: `lease_taken`, `lease_released` and `lease_broken`
+bracket every guarded write under the writer's own Actor, so the screen drops those
+kinds or it is two thirds plumbing. The
+filter narrows and never hides: the screen opens unfiltered, and an Agent that
+named itself with no slash — one run with no `TODO_ACTOR`, or anything appended
+before the convention existed — is in that view. `CONTEXT.md` makes such an Actor
+legal, so a screen that only ever showed slashes would be the one place a badly
+named Agent disappears.
 
 Touch targets no smaller than 44px, one thumb, no hover.
 
@@ -102,8 +129,9 @@ Each stage is a branch and a pull request of its own.
    later because it cannot land before the write path exists, not because it is
    secondary; it is the thing the client is for, and a stage that shipped the
    writes without it would be shipping the wrong half first.
-3. **The rest of the writes and the detail screen**: lifecycle, subtasks, lists
-   and tags, `GET /api/tasks/{id}/history`, and the history log it draws.
+3. **The rest of the writes, the detail screen and the activity screen**:
+   lifecycle, subtasks, lists and tags, `GET /api/tasks/{id}/history` and the
+   history log it draws, `GET /api/history` and the activity screen over it.
 4. **Scheduling and the breakdown**: the Series screen, its four marks, and
    `POST /api/breakdown` with approval by position.
 5. **The deletion**: `src/tui/`, `src/serve/`, `ModeTUI`, `ModeServe`, and the
@@ -117,11 +145,14 @@ everything it did, so there is no window where the tracker has no usable surface
 
 ## What this plan does not touch
 
-The store, with one named exception. No schema change, no new table, no new rule.
-If a stage here needs one beyond the exception, that is a finding worth stopping on
+The store, with two named exceptions. No schema change, no new table, no new rule.
+If a stage here needs one beyond those two, that is a finding worth stopping on
 rather than a step to take quietly.
 
-**The exception is a read.** `Store.History` returns every entry there is and
-nothing reads one Task's, so the detail screen's history log needs a read narrowed
-by subject. It appends nothing, folds nothing and enforces nothing, which is what
-keeps it inside "reads write nothing" rather than outside this plan.
+**Both exceptions are reads**, and both are the same missing shape: `Store.History`
+returns every entry there is, oldest first and unbounded, and nothing narrows it.
+The detail screen needs it narrowed by subject. The activity screen needs it newest
+first and bounded to a page, because drawing it means decoding the whole log on
+every load and `HistoryLength` is the only thing that counts today. Neither appends,
+folds or enforces anything, which is what keeps them inside "reads write nothing"
+rather than outside this plan.
