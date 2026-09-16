@@ -4,10 +4,87 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/possiblyneal/todo/apps/todo/src/ai"
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
+
+// dumpDate is the date the Broker works a "tomorrow" out against. The weekday
+// is part of it because "Friday" in a dump is a date only where the Broker is
+// told which day today is.
+const dumpDate = "2006-01-02, Monday"
+
+// Dump is one brain dump ready to be read: what the Broker is shown, and the
+// Lists and Tags whose names it chooses from. The two collections are kept
+// beside it because a name it chose is matched back to an id afterwards, and
+// asking the store for them twice would be asking the same question twice.
+type Dump struct {
+	Shown ai.Dump
+	Lists []store.List
+	Tags  []store.Tag
+}
+
+// Gather builds one. Today's date comes from here rather than from src/ai,
+// which reads no clock, and the Lists and Tags are offered by name because an
+// id means nothing to the Broker.
+func Gather(s *store.Store, text string) (Dump, error) {
+	lists, err := s.Lists()
+	if err != nil {
+		return Dump{}, err
+	}
+	tags, err := s.Tags()
+	if err != nil {
+		return Dump{}, err
+	}
+
+	d := Dump{
+		Shown: ai.Dump{Text: text, Today: time.Now().Format(dumpDate)},
+		Lists: lists,
+		Tags:  tags,
+	}
+	for _, l := range lists {
+		d.Shown.Lists = append(d.Shown.Lists, l.Name)
+	}
+	for _, t := range tags {
+		d.Shown.Tags = append(d.Shown.Tags, t.Name)
+	}
+	return d, nil
+}
+
+// Filed is the Lists and Tags the Broker chose, by id: the memberships one
+// write files the Task under. A name it invented rather than chose is dropped,
+// which is NamedIn's rule and not a second one written here.
+func (d Dump) Filed(read ai.Capture) Membership {
+	return Membership{
+		IntoLists: NamedIn(read.Lists, ListNames(d.Lists)),
+		AddTags:   NamedIn(read.Tags, TagNames(d.Tags)),
+	}
+}
+
+// Briefs is the Tasks in view as the Broker is shown them: what they say, and
+// nothing about how this program stores them. No id crosses the wire, because
+// the answer comes back as prose about the Tasks rather than about rows.
+func Briefs(tasks []store.Task) []ai.Brief {
+	out := make([]ai.Brief, 0, len(tasks))
+	for _, t := range tasks {
+		b := ai.Brief{
+			Title:       t.Title,
+			Description: t.Description,
+			Why:         t.Why,
+			Priority:    string(t.Priority),
+			Impact:      string(t.Impact),
+		}
+		if !t.Deadline.IsZero() {
+			b.Deadline = t.Deadline.Local().Format(time.DateOnly)
+		}
+		if t.Estimate > 0 {
+			b.Estimate = t.Estimate.String()
+		}
+		out = append(out, b)
+	}
+	return out
+}
 
 // FromCapture turns what the Broker read out of a dump into the attributes a
 // Task is written with. A value written in a way this program cannot read is

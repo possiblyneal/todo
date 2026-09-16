@@ -28,6 +28,12 @@ import (
 // what a test and a second machine use.
 const Broker = "http://10.10.10.13:4010/v1"
 
+// Patience is how long one turn is given. It is minutes rather than seconds
+// because the broker is a model on the LAN answering a whole question at once,
+// and somebody who has typed a dump would rather wait for it than type it
+// again. The caller holds the clock; nothing here reads one.
+const Patience = 5 * time.Minute
+
 // Client talks to the broker. The zero Model means "whichever one the broker
 // says it can chat with", asked once and kept for the run.
 type Client struct {
