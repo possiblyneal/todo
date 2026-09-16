@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
+	"github.com/possiblyneal/todo/apps/todo/src/write"
 )
 
 // fields collects repeated -field k=v flags.
@@ -36,8 +37,10 @@ func (v *ids) Set(s string) error {
 
 // attributeFlags registers every Task attribute on fs and returns a function
 // that reads back only the flags actually given. A flag nobody typed leaves
-// its attribute alone; a flag given empty clears it.
-func attributeFlags(fs *flag.FlagSet) func() (store.Attributes, bool, error) {
+// its attribute alone; a flag given empty clears it. The reading itself is
+// write.Given's, so a date typed at a terminal and one sent by the client mean
+// the same day.
+func attributeFlags(fs *flag.FlagSet) func() (*store.Attributes, error) {
 	var (
 		title       = fs.String("title", "", "the task's title")
 		description = fs.String("description", "", "what the task is")
@@ -46,120 +49,43 @@ func attributeFlags(fs *flag.FlagSet) func() (store.Attributes, bool, error) {
 		estimate    = fs.String("estimate", "", "how long it will take, as a duration such as 90m")
 		priority    = fs.String("priority", "", "low, med or high")
 		impact      = fs.String("impact", "", "low, med or high")
-		snooze      = fs.String("snooze", "", "hide it for a while: a duration, or "+snoozeLabels())
-		color       = fs.String("color", "", "one of "+colorLabels())
+		snooze      = fs.String("snooze", "", "hide it for a while: a duration, or "+write.SnoozeLabels())
+		color       = fs.String("color", "", "one of "+write.ColorLabels())
 		pairs       = fields{}
 	)
 	fs.Var(pairs, "field", "a key=value pair, repeatable")
 
-	return func() (store.Attributes, bool, error) {
-		var a store.Attributes
-		var err error
-		given := false
+	return func() (*store.Attributes, error) {
+		var given write.Given
 		fs.Visit(func(f *flag.Flag) {
-			if err != nil {
-				return
-			}
 			// Only the flags registered here count as an attribute: a
 			// verb may hang others on the same set, and edit does.
-			matched := true
 			switch f.Name {
 			case "title":
-				a.Title = title
+				given.Title = title
 			case "description":
-				a.Description = description
+				given.Description = description
 			case "why":
-				a.Why = why
+				given.Why = why
 			case "color":
-				a.Color = color
+				given.Color = color
 			case "priority":
-				var l store.Level
-				if l, err = store.ParseLevel(*priority); err == nil {
-					a.Priority = &l
-				}
+				given.Priority = priority
 			case "impact":
-				var l store.Level
-				if l, err = store.ParseLevel(*impact); err == nil {
-					a.Impact = &l
-				}
+				given.Impact = impact
 			case "deadline":
-				var when time.Time
-				if when, err = parseWhen(*deadline); err == nil {
-					a.Deadline = &when
-				}
+				given.Deadline = deadline
 			case "snooze":
-				var until time.Time
-				if until, err = parseSnooze(*snooze); err == nil {
-					a.SnoozedUntil = &until
-				}
+				given.Snooze = snooze
 			case "estimate":
-				var d time.Duration
-				if *estimate != "" {
-					if d, err = time.ParseDuration(*estimate); err != nil {
-						err = fmt.Errorf("estimate %q: %w", *estimate, err)
-					}
-				}
-				a.Estimate = &d
-			default:
-				matched = false
+				given.Estimate = estimate
 			}
-			given = given || matched
 		})
 		if len(pairs) > 0 {
-			a.Fields = pairs
+			given.Fields = pairs
 		}
-		return a, given || len(pairs) > 0, err
+		return given.Attributes()
 	}
-}
-
-// parseWhen reads a deadline. An empty string is the zero time, which clears.
-func parseWhen(v string) (time.Time, error) {
-	if strings.TrimSpace(v) == "" {
-		return time.Time{}, nil
-	}
-	for _, layout := range []string{time.DateOnly, "2006-01-02 15:04", time.RFC3339} {
-		if t, err := time.ParseInLocation(layout, v, time.Local); err == nil {
-			return t.UTC(), nil
-		}
-	}
-	return time.Time{}, fmt.Errorf("cannot read %q as a date: want 2006-01-02, 2006-01-02 15:04, or RFC 3339", v)
-}
-
-// parseSnooze reads either one of the offered defaults or a plain duration.
-func parseSnooze(v string) (time.Time, error) {
-	v = strings.TrimSpace(v)
-	if v == "" {
-		return time.Time{}, nil
-	}
-	now := time.Now()
-	for _, s := range store.SnoozeDefaults {
-		if strings.EqualFold(v, s.Label) {
-			return s.Until(now).UTC(), nil
-		}
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("cannot read %q as a snooze: want a duration, or %s", v, snoozeLabels())
-	}
-	return now.Add(d).UTC(), nil
-}
-
-// colorLabels names the offered colors, which are the only ones the store
-// takes.
-func colorLabels() string {
-	labels := make([]string, len(store.Colors))
-	for i, c := range store.Colors {
-		labels[i] = c.Name
-	}
-	return strings.Join(labels, ", ")
-}
-
-func snoozeLabels() string {
-	labels := make([]string, len(store.SnoozeDefaults))
-	for i, s := range store.SnoozeDefaults {
-		labels[i] = s.Label
-	}
-	return strings.Join(labels, ", ")
 }
 
 func addTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
@@ -169,10 +95,14 @@ func addTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	a, _, err := read()
+	given, err := read()
 	if err != nil {
 		fmt.Fprintf(stderr, "todo add: %v\n", err)
 		return 2
+	}
+	var a store.Attributes
+	if given != nil {
+		a = *given
 	}
 	if title := strings.TrimSpace(strings.Join(fs.Args(), " ")); title != "" {
 		a.Title = &title
@@ -183,25 +113,10 @@ func addTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	}
 
 	// A Subtask is written under its tree's Lease, the same one every other
-	// write to that tree needs.
-	if *parent != "" {
-		var id string
-		err := s.WithLease(actor(), *parent, store.WriteTTL, func() error {
-			var err error
-			id, err = s.AddSubtask(actor(), *parent, a)
-			return err
-		})
-		if code := refuse(stderr, "add", err); code != 0 {
-			return code
-		}
-		fmt.Fprintln(stdout, id)
-		return 0
-	}
-
-	id, err := s.AddTask(actor(), a)
-	if err != nil {
-		fmt.Fprintf(stderr, "todo add: %v\n", err)
-		return 1
+	// write to that tree needs, and write.Add is what knows that.
+	id, err := write.Add(s, actor(), *parent, a, write.Membership{})
+	if code := refuse(stderr, "add", err); code != 0 {
+		return code
 	}
 	fmt.Fprintln(stdout, id)
 	return 0
@@ -264,7 +179,7 @@ func editTask(s *store.Store, args []string, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "todo edit: name one task by id")
 		return 2
 	}
-	a, attributes, err := read()
+	a, err := read()
 	if err != nil {
 		fmt.Fprintf(stderr, "todo edit: %v\n", err)
 		return 2
@@ -272,27 +187,13 @@ func editTask(s *store.Store, args []string, stderr io.Writer) int {
 	id, who := fs.Arg(0), actor()
 
 	// One Lease covers the whole edit: the attributes and every List and Tag
-	// it joins or leaves are one visit to the tree.
-	return refuse(stderr, "edit", s.WithLease(who, id, store.WriteTTL, func() error {
-		if attributes {
-			if err := s.EditTask(who, id, a); err != nil {
-				return err
-			}
-		}
-		for _, member := range []struct {
-			ids ids
-			do  func(actor, taskID, otherID string) error
-		}{
-			{into, s.AddToList}, {outOf, s.RemoveFromList},
-			{carry, s.AttachTag}, {drop, s.DetachTag},
-		} {
-			for _, other := range member.ids {
-				if err := member.do(who, id, other); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
+	// it joins or leaves are one visit to the tree, and write.Edit is what
+	// holds that shape for both surfaces.
+	return refuse(stderr, "edit", write.Edit(s, who, id, a, write.Membership{
+		IntoLists:  into,
+		OutOfLists: outOf,
+		AddTags:    carry,
+		DropTags:   drop,
 	}))
 }
 
@@ -506,7 +407,7 @@ func collections(s *store.Store, noun string, args []string, stdout, stderr io.W
 		sub, args = args[0], args[1:]
 	}
 	fs := flags(noun, stderr)
-	color := fs.String("color", "", "one of "+colorLabels())
+	color := fs.String("color", "", "one of "+write.ColorLabels())
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}

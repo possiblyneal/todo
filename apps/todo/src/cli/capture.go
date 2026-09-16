@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/possiblyneal/todo/apps/todo/src/ai"
 	"github.com/possiblyneal/todo/apps/todo/src/store"
+	"github.com/possiblyneal/todo/apps/todo/src/write"
 )
 
 // today is the date the broker works a "tomorrow" out against. The ai package
@@ -65,7 +65,7 @@ func captureTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	if *dry {
 		writeCapture(stdout, read)
 	}
-	a, err := attributesRead(read)
+	a, err := write.FromCapture(read)
 	if err != nil {
 		fmt.Fprintf(stderr, "todo capture: %v\n", err)
 		return 1
@@ -74,62 +74,19 @@ func captureTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	id, err := s.AddTask(actor(), a)
-	if err != nil {
-		fmt.Fprintf(stderr, "todo capture: %v\n", err)
-		return 1
-	}
 	// Membership is a write to the Task, so it goes under the Task's own
-	// Lease like any other.
-	err = s.WithLease(actor(), id, store.WriteTTL, func() error {
-		for _, listID := range namedIn(read.Lists, listNames(lists)) {
-			if err := s.AddToList(actor(), id, listID); err != nil {
-				return err
-			}
-		}
-		for _, tagID := range namedIn(read.Tags, tagNames(tags)) {
-			if err := s.AttachTag(actor(), id, tagID); err != nil {
-				return err
-			}
-		}
-		return nil
+	// Lease like any other, which is write.Add's business rather than this
+	// verb's. The id is said whether or not the filing went through: the
+	// Task is written by then, so a refusal leaves it filed under nothing,
+	// which is one `todo edit` away for whoever is told which Task it is.
+	id, err := write.Add(s, actor(), "", a, write.Membership{
+		IntoLists: write.NamedIn(read.Lists, write.ListNames(lists)),
+		AddTags:   write.NamedIn(read.Tags, write.TagNames(tags)),
 	})
-	// The id is said whether or not membership went through: the Task is
-	// written by then, so a refusal leaves it filed under nothing, which is
-	// one `todo edit` away for whoever is told which Task it is.
-	fmt.Fprintln(stdout, id)
+	if id != "" {
+		fmt.Fprintln(stdout, id)
+	}
 	return refuse(stderr, "capture", err)
-}
-
-// attributesRead turns what the broker read into the attributes a Task is
-// written with. A value written in a way this program cannot read is dropped
-// rather than refused, the same rule an approved proposal is written under: a
-// person said what the work is, not how long it takes.
-func attributesRead(read ai.Capture) (store.Attributes, error) {
-	title := strings.TrimSpace(read.Title)
-	if title == "" {
-		return store.Attributes{}, fmt.Errorf("the broker read no title out of that")
-	}
-	a := store.Attributes{Title: &title}
-	if read.Description != "" {
-		a.Description = &read.Description
-	}
-	if read.Why != "" {
-		a.Why = &read.Why
-	}
-	if when, err := parseWhen(read.Deadline); err == nil && !when.IsZero() {
-		a.Deadline = &when
-	}
-	if d, err := time.ParseDuration(strings.TrimSpace(read.Estimate)); err == nil && d > 0 {
-		a.Estimate = &d
-	}
-	if l, err := store.ParseLevel(read.Priority); err == nil && l != "" {
-		a.Priority = &l
-	}
-	if l, err := store.ParseLevel(read.Impact); err == nil && l != "" {
-		a.Impact = &l
-	}
-	return a, nil
 }
 
 // writeCapture is `-dry`: what the broker made of the dump, in the same words
@@ -149,35 +106,4 @@ func writeCapture(stdout io.Writer, read ai.Capture) {
 	say("impact", read.Impact)
 	say("lists", strings.Join(read.Lists, ", "))
 	say("tags", strings.Join(read.Tags, ", "))
-}
-
-// namedIn is the ids of the Lists or Tags the broker chose by name, ignoring
-// case. A name that is not one of the offered ones is dropped: filing under a
-// List means one that exists, and creating one is a write of its own. The same
-// name said twice is one id, so a membership is appended once.
-func namedIn(chosen []string, have map[string]string) []string {
-	var out []string
-	for _, name := range chosen {
-		id, ok := have[strings.ToLower(strings.TrimSpace(name))]
-		if ok && !slices.Contains(out, id) {
-			out = append(out, id)
-		}
-	}
-	return out
-}
-
-func listNames(lists []store.List) map[string]string {
-	names := make(map[string]string, len(lists))
-	for _, l := range lists {
-		names[strings.ToLower(l.Name)] = l.ID
-	}
-	return names
-}
-
-func tagNames(tags []store.Tag) map[string]string {
-	names := make(map[string]string, len(tags))
-	for _, t := range tags {
-		names[strings.ToLower(t.Name)] = t.ID
-	}
-	return names
 }
