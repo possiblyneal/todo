@@ -299,3 +299,31 @@ func TestAnAPIRouteThatIsNotOneIsNotTheClient(t *testing.T) {
 		t.Errorf("body = %s, want a sentence saying so", alone.Body.String())
 	}
 }
+
+// A path that climbs out of the served directory reaches the client's
+// index.html, never the file it named. http.Dir refuses the name before
+// anything is opened, and this test asks client directly because ServeMux
+// cleans a path of its own accord and would never hand one like this over.
+func TestAPathThatClimbsOutOfTheServedDirectoryDoesNot(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "web")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<title>todo</title>"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "secret"), []byte("not for the browser"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	for _, target := range []string{"/../secret", "/..%2fsecret", "/web/../../secret"} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "http://todo.test", nil)
+		r.URL.Path = target
+		client(dir).ServeHTTP(w, r)
+		if strings.Contains(w.Body.String(), "not for the browser") {
+			t.Errorf("%s was served the file above the directory", target)
+		}
+	}
+}

@@ -13,8 +13,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
@@ -63,14 +61,22 @@ func ListenAndServe(s *store.Store, o Options, stderr io.Writer) error {
 // that names no file. The client routes in the browser, so a reload on a path
 // only it knows about has to reach it rather than 404.
 func client(dir string) http.Handler {
-	files := http.FileServer(http.Dir(dir))
+	root := http.Dir(dir)
+	files := http.FileServer(root)
 	index := filepath.Join(dir, "index.html")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Stat rather than open: the answer wanted is whether the file is
-		// there, and an opened one would have to be closed on a path that
-		// hands the serving to somebody who opens it again anyway.
-		named := filepath.Join(dir, filepath.FromSlash(path.Clean("/"+r.URL.Path)))
-		if info, err := os.Stat(named); err != nil || info.IsDir() {
+		// The same http.Dir decides whether the file is there and then serves
+		// it, so the two cannot disagree about which file a request names, and
+		// the one check that keeps a request inside the directory is the
+		// standard library's rather than a second one written here to match.
+		file, err := root.Open(r.URL.Path)
+		if err != nil {
+			http.ServeFile(w, r, index)
+			return
+		}
+		info, err := file.Stat()
+		_ = file.Close()
+		if err != nil || info.IsDir() {
 			http.ServeFile(w, r, index)
 			return
 		}
