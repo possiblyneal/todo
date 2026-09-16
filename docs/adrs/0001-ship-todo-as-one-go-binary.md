@@ -5,8 +5,8 @@ description: The repository holds a single deployable, `apps/todo`, written in G
 scope: [apps/todo, lang:go]
 tags: [deployable-boundary, language-choice, tui, ssh]
 generated: { by: "agent/claude-opus-5", at: "2026-09-04T20:22:14Z" }
-superseded_by:
-status: accepted
+superseded_by: docs/adrs/0003-replace-the-tui-with-a-browser-client.md
+status: superseded
 ---
 
 # Ship Todo as One Go Binary

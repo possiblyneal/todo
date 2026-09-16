@@ -4,5 +4,6 @@
 
 | # | Decision | Status |
 | --- | --- | --- |
-| [0001](0001-ship-todo-as-one-go-binary.md) | Ship Todo as One Go Binary | accepted |
+| [0001](0001-ship-todo-as-one-go-binary.md) | Ship Todo as One Go Binary | superseded by [0003](0003-replace-the-tui-with-a-browser-client.md) |
 | [0002](0002-subtask-tree-is-one-aggregate.md) | A Subtask Tree Is One Aggregate, Leased Whole | accepted |
+| [0003](0003-replace-the-tui-with-a-browser-client.md) | Replace the TUI with a Browser Client over an HTTP API | accepted |

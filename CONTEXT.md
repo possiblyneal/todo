@@ -80,6 +80,8 @@ _Avoid_: Log, audit log, journal, event stream
 
 **Actor**:
 Whoever performed a write — a person or an agent. Every write is attributed; reads are not. Only the Change History knows an Actor as an identity: elsewhere it is an opaque id, so the holder of a Lease can be recognised as the same actor but never named, and never told apart by kind.
+
+An Agent names itself `<harness>/<model>` — `claude-code/claude-opus-5`, `orca/fable-5-1` — and a person is their bare login, so inside the Change History the slash is what says which wrote a thing and the two halves are what a history log reads. Nowhere else looks at it: an Actor is still opaque everywhere the entries are not. The model half is whatever served the call and is not a list anything here holds: OmniRoute fronts many providers and the set turns over. Nothing validates the shape. An Actor is a string the store writes down and reads back, one that names itself badly or not at all is still an Actor, and the day something refuses a write over its own name is the day attribution has started deciding what may be written.
 _Avoid_: User, author, owner
 
 **Agent**:
@@ -89,7 +91,7 @@ _Avoid_: Bot, worker, daemon, service
 ### Outside the contexts
 
 **Broker**:
-The thing that infers, reached over the network and owned by none of the three contexts. It is shown Tasks and answers with questions, proposals, or one Task read out of a dump; it holds nothing between calls, is never an Actor, and never writes. A proposal becomes a Task only when a person approves it, and the write is attributed to that person.
+The thing that infers, reached over the network and owned by none of the three contexts. It is shown Tasks and answers with questions, proposals, or one Task read out of a dump; it holds nothing between calls, is never an Actor, and never writes. A proposal becomes a Task only when a person approves it, and the write is attributed to that person. A Task read out of a dump is not a proposal: it is what somebody already said they wanted, so running `todo capture` over their own words is the approval, and the write is attributed to them the same way.
 _Avoid_: The box, the agent, the AI, the model, the assistant
 
 **Dump**:
