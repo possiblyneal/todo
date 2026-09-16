@@ -1,0 +1,14 @@
+{
+  "name": "todo",
+  "private": true,
+  "workspaces": ["apps/web"],
+  "scripts": {
+    "lint": "npm run lint -w apps/web",
+    "format": "npm run format -w apps/web",
+    "format:check": "npm run format:check -w apps/web",
+    "typecheck": "npm run typecheck -w apps/web",
+    "test": "npm run test -w apps/web",
+    "build": "npm run build -w apps/web",
+    "dev": "npm run dev -w apps/web"
+  }
+}

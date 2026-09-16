@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The repository's single deployable: one Go binary with three modes. Bare `todo` opens the TUI, `todo <verb>` acts and exits, and `todo serve` serves the same TUI over SSH on the LAN. Three bounded contexts — Tracking, Scheduling, Change History — live in this one artifact. `docs/adrs/0001-ship-todo-as-one-go-binary.md` records why; it is superseded by `docs/adrs/0003-replace-the-tui-with-a-browser-client.md`, which replaces the TUI and `todo serve` with a browser client over a JSON API this binary serves. Everything about the store survives that change untouched. Until `docs/plans/browser-client.md` reaches its deletion stage the TUI and serve contracts below are binding, because the TUI stays the working surface until the browser is one.
+One Go binary with four modes. Bare `todo` opens the TUI, `todo <verb>` acts and exits, `todo serve` serves the same TUI over SSH on the LAN, and `todo api` serves the JSON `apps/web` reads and the compiled client's files beside it. Three bounded contexts — Tracking, Scheduling, Change History — live in this one artifact. `docs/adrs/0001-ship-todo-as-one-go-binary.md` records why; it is superseded by `docs/adrs/0003-replace-the-tui-with-a-browser-client.md`, which replaces the TUI and `todo serve` with a browser client over a JSON API this binary serves. Everything about the store survives that change untouched. Until `docs/plans/browser-client.md` reaches its deletion stage the TUI and serve contracts below are binding, because the TUI stays the working surface until the browser is one.
 
 ## Ownership
 
@@ -11,12 +11,18 @@ The repository's single deployable: one Go binary with three modes. Bare `todo` 
 - `src/store/` — SQLite and the whole write path. Nothing else opens a database.
 - `src/schedule/` — Scheduling's rule arithmetic: parsing a recurrence rule, writing it back, and the dates it produces. It opens no database and knows nothing about a Task.
 - `src/ai/` — the broker client: an OpenAI-compatible HTTP call out to `inference-runtime-broker`. It opens no database, holds no conversation between calls, and knows nothing about a Lease.
+- `src/api/` — `todo api`: routing, JSON encoding, and the status an error takes. It holds no rules, opens no database of its own, and serves the compiled client's files when given a directory of them.
 - `src/serve/` — `todo serve`: the SSH front door, built on `charm.land/wish/v2`. It builds a `tui.Model` per connection and owns nothing else; no rule and no store call lives here.
 - `src/tui/` — the main view, the add and edit screens, and the screens the verb keys open, built on `charm.land/bubbletea/v2` and `charm.land/huh/v2`. It writes through the same store calls the verbs use.
 
 ## Local Contracts
 
 - **A verb and the TUI make the same in-process call.** The CLI won its place by implementing the standing obligations in exactly one place; a second path through the rules would give an Agent and a person different contracts.
+- **A handler is another caller of that same call, and validates nothing the store does not.** `src/api/` encodes and routes; a rule enforced in a handler is a rule an Agent running a verb never gets. An unknown `sort` is a usage error there because `store.Sorts` refuses it here, not because the handler keeps a list.
+- **The API's status codes are the CLI's exit statuses.** `200`/`201` for done, `400` for usage, `409` for a refusal (`store.ErrRefused`, `store.ErrHeld`), `500` for a failure, with the body `{"error": "<the sentence the CLI would print>"}`. `api.fail` is the one place that mapping is written.
+- **`GET /api/state`'s ETag is `WALToken` hashed with the query.** The token is store-global and the response is not, so a client changing a filter or a sort with no write in between would otherwise be answered `304` for a different representation. An empty token means the log could not be stat'd rather than that nothing changed, so the response then carries no ETag at all.
+- **An empty collection is `[]` on the wire, never `null`.** `Tasks`, `Lists`, `Tags` and `Marks` are allocated empty, because a client that must tell `null` from `[]` before it can count is being asked a question the store never asks.
+- **`todo api` has no authentication, deliberately, and binds to the LAN.** That is `todo serve`'s posture minus the public key; changing it is what ADR 0003's first re-check trigger covers.
 - **Every connection DSN carries `_txlock=immediate`.** `database/sql` issues a deferred `BEGIN`, and the deferred path loses writes under contention. `store.dsn` holds the measurement, and `concurrency_test.go` fails if the flag goes.
 - **The Change History is append-only, enforced by trigger.** `UPDATE` and `DELETE` against it `RAISE(ABORT)`. A deletion is an appended entry, never an erasure.
 - **The fold runs inside the appending writer's transaction.** Current state and the entry producing it commit together. Nothing sweeps, nothing is awake between invocations, and no reader materializes.

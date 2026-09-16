@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/term"
 
+	"github.com/possiblyneal/todo/apps/todo/src/api"
 	"github.com/possiblyneal/todo/apps/todo/src/serve"
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 	"github.com/possiblyneal/todo/apps/todo/src/tui"
@@ -27,6 +28,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runTUI(stdout, stderr)
 	case ModeServe:
 		return runServe(args[1:], stderr)
+	case ModeAPI:
+		return runAPI(args[1:], stderr)
 	case ModeVerb:
 		return runVerb(args, stdout, stderr)
 	}
@@ -104,6 +107,37 @@ func runServe(args []string, stderr io.Writer) int {
 
 	if err := serve.ListenAndServe(s, o, stderr); err != nil {
 		fmt.Fprintf(stderr, "todo serve: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// runAPI is `todo api`: the same store over HTTP, for the browser client. It
+// opens the store the other modes open, in this one process, and serves the
+// compiled client's files beside the JSON when it is given a directory of
+// them, so there is no second process and no CORS.
+//
+// There is no authentication, deliberately: the listener is for the LAN, which
+// is `todo serve`'s posture minus the public key. ADR 0003's first re-check
+// trigger is what covers changing that.
+func runAPI(args []string, stderr io.Writer) int {
+	fs := flags("api", stderr)
+	o := api.Options{}
+	fs.StringVar(&o.Addr, "addr", ":8080", "address to listen on")
+	fs.StringVar(&o.Web, "web", "", "directory of compiled client files to serve beside the json")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	s, err := open()
+	if err != nil {
+		fmt.Fprintf(stderr, "todo api: %v\n", err)
+		return 1
+	}
+	defer func() { _ = s.Close() }()
+
+	if err := api.ListenAndServe(s, o, stderr); err != nil {
+		fmt.Fprintf(stderr, "todo api: %v\n", err)
 		return 1
 	}
 	return 0

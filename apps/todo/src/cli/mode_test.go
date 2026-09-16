@@ -10,6 +10,7 @@ func TestModeOf(t *testing.T) {
 	}{
 		{"bare todo opens the TUI", nil, ModeTUI},
 		{"serve listens on SSH", []string{"serve"}, ModeServe},
+		{"api listens on HTTP", []string{"api"}, ModeAPI},
 		{"a verb acts and exits", []string{"add", "Buy milk"}, ModeVerb},
 		{"serve with flags is still serve", []string{"serve", "--port", "2222"}, ModeServe},
 	}

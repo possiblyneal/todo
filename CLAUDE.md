@@ -2,9 +2,9 @@
 
 `todo` is a task tracker with two kinds of consumer: a person at a keyboard, and agents that add, edit, and delete while nobody is watching. Both reach the same store through the same calls; neither gets a weaker or a stronger contract than the other. `CONTEXT.md` holds the language that keeps those two from meaning different things by the same word, and `docs/features.md` records the operator's wish list verbatim as source material rather than as a specification.
 
-The repository holds **one deployable** today. Three bounded contexts — Tracking, Scheduling, Change History — collapse into a single Go binary with three modes: bare `todo` opens the TUI, `todo <verb>` acts and exits, and `todo serve` serves the same TUI over SSH on the LAN. The store is SQLite embedded as a library, so it is not a deployable of its own.
+The repository holds **two deployables**. Three bounded contexts — Tracking, Scheduling, Change History — collapse into a single Go binary, `apps/todo`, with four modes: bare `todo` opens the TUI, `todo <verb>` acts and exits, `todo serve` serves the same TUI over SSH on the LAN, and `todo api` serves the JSON the browser client reads. `apps/web` is that client, and it builds to static files `todo api` serves beside the JSON. The store is SQLite embedded as a library, so it is not a deployable of its own.
 
-That is being replaced. `docs/adrs/0003-replace-the-tui-with-a-browser-client.md` supersedes ADR 0001: the person's surface becomes a TypeScript browser client in `apps/web` over a LAN-only JSON API served by the same Go binary, and the TUI and `todo serve` are deleted once it does everything they did. `docs/plans/browser-client.md` is the order that work lands in, and the TUI and serve contracts in `apps/todo/CLAUDE.md` stay binding until its deletion stage removes them.
+The second one is arriving. `docs/adrs/0003-replace-the-tui-with-a-browser-client.md` supersedes ADR 0001: the person's surface becomes a TypeScript browser client in `apps/web` over a LAN-only JSON API served by the same Go binary, and the TUI and `todo serve` are deleted once it does everything they did. `docs/plans/browser-client.md` is the order that work lands in, and the TUI and serve contracts in `apps/todo/CLAUDE.md` stay binding until its deletion stage removes them.
 
 **Three things are what this tracker is for, and the rest is support for them.**
 
@@ -16,7 +16,9 @@ Those three are first-class, and a surface that reaches them in fewer taps than 
 
 **The list is the one thing the Broker does not own.** A person browses it, filters it, sorts it and searches it themselves, and opens a Task to see its detail and what has happened to it. That part is looked at rather than spoken to, and it stays that way.
 
-The root manifest is `go.work`, and it is what makes the module under `apps/todo/` visible to every check. A `go.mod` there with no `go.work` above it is an orphan `scripts/doctor` fails on rather than passing over, so a new module gets a `use` line in the same commit that creates it.
+There is a root manifest per toolchain, and each is what makes its nested package visible to every check: `go.work` for the module under `apps/todo/`, and `package.json` naming `apps/web` as an npm workspace. A nested manifest with no root one above it is an orphan `scripts/doctor` fails on rather than passing over, so a new package gets its root entry in the same commit that creates it.
+
+The node checks dispatch off the root `package.json`'s scripts — `lint`, `format:check`, `format`, `typecheck`, `test`, `build` — each delegating to `apps/web`. A missing script reports `unavailable`, which fails the gate the same way a failure does, so renaming one here is renaming a check.
 
 ## Commands
 
@@ -52,6 +54,7 @@ Orca, on this machine. See `docs/agents/session-launcher.md`.
 ## Child Index
 
 - `scripts/CLAUDE.md` — the language-capabilities interface, the result states, the test harness, and what adding a language or check requires
-- `apps/todo/CLAUDE.md` — the single deployable: its package layout, the store's enforced rules, and what each mode owns
+- `apps/todo/CLAUDE.md` — the Go deployable: its package layout, the store's enforced rules, and what each mode owns
+- `apps/web/CLAUDE.md` — the browser client: what it draws, what it refuses to work out for itself, and the npm scripts the checks dispatch on
 
 `docs/` owns a `CLAUDE.md` once it holds enough to need a local contract.
