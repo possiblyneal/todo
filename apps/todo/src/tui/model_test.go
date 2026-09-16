@@ -104,8 +104,8 @@ func press(m Model, key string) Model {
 		msg = tea.KeyPressMsg{Code: tea.KeyEnter}
 	case "esc":
 		msg = tea.KeyPressMsg{Code: tea.KeyEscape}
-	case "L":
-		msg = tea.KeyPressMsg{Code: 'l', Text: "L", Mod: tea.ModShift}
+	case "ctrl+l", "ctrl+t":
+		msg = tea.KeyPressMsg{Code: rune(key[len(key)-1]), Mod: tea.ModCtrl}
 	}
 	return send(m, msg)
 }
@@ -214,9 +214,9 @@ func TestTheMainViewWritesNothing(t *testing.T) {
 	m = press(m, "esc")
 	m = clickOn(t, m, "tag:"+urgent)
 	m = clickOn(t, m, "tag:"+urgent)
-	m = press(m, "L")
+	m = press(m, "l")
 	m = clickOn(t, m, "list:"+home)
-	m = press(m, "f")
+	m = press(m, "/")
 	m = press(m, "r")
 	m = press(m, "esc")
 	m = press(m, "/")
@@ -266,9 +266,9 @@ func TestChoosingAListNarrowsTheView(t *testing.T) {
 	m := newModel(t, s)
 	work := idOf(t, "Work", m.lists, m.tags)
 
-	m = press(m, "L")
+	m = press(m, "l")
 	if !m.dropdown {
-		t.Fatal("L did not open the List dropdown")
+		t.Fatal("l did not open the List dropdown")
 	}
 	m = clickOn(t, m, "list:"+work)
 	if m.dropdown {
@@ -278,7 +278,7 @@ func TestChoosingAListNarrowsTheView(t *testing.T) {
 		t.Errorf("the Work List showed %v, want just the invoice", got)
 	}
 
-	m = press(m, "L")
+	m = press(m, "l")
 	m = clickOn(t, m, "list:every")
 	if len(m.tasks.Items()) < 3 {
 		t.Errorf("every List showed %d Tasks, want them all back", len(m.tasks.Items()))
@@ -357,7 +357,7 @@ func TestTheSearchboxFiltersLive(t *testing.T) {
 	s := fixture(t)
 	m := newModel(t, s)
 
-	m = press(m, "f")
+	m = press(m, "/")
 	for _, key := range []string{"a", "p", "p"} {
 		m = press(m, key)
 	}

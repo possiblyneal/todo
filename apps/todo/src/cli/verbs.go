@@ -497,8 +497,8 @@ func flags(verb string, stderr io.Writer) *flag.FlagSet {
 }
 
 // collections is `todo lists` and `todo tags`, which differ only in what they
-// act on. Bare, it shows them ranked; `new`, `rename` and `recolor` are the
-// three writes, and none of them needs a Lease: a List and a Tag are
+// act on. Bare, it shows them ranked; `new`, `rename`, `recolor` and `delete`
+// are the four writes, and none of them needs a Lease: a List and a Tag are
 // aggregates of their own, not part of anybody's tree.
 func collections(s *store.Store, noun string, args []string, stdout, stderr io.Writer) int {
 	sub := ""
@@ -511,9 +511,9 @@ func collections(s *store.Store, noun string, args []string, stdout, stderr io.W
 		return 2
 	}
 
-	add, describe, show := s.AddList, s.DescribeList, listsOf(s)
+	add, describe, show, drop := s.AddList, s.DescribeList, listsOf(s), s.DeleteList
 	if noun == "tags" {
-		add, describe, show = s.AddTag, s.DescribeTag, tagsOf(s)
+		add, describe, show, drop = s.AddTag, s.DescribeTag, tagsOf(s), s.DeleteTag
 	}
 
 	switch sub {
@@ -555,8 +555,19 @@ func collections(s *store.Store, noun string, args []string, stdout, stderr io.W
 		}
 		return 0
 
+	case "delete":
+		if fs.NArg() != 1 {
+			fmt.Fprintf(stderr, "todo %s delete: name one by id\n", noun)
+			return 2
+		}
+		if err := drop(actor(), fs.Arg(0)); err != nil {
+			fmt.Fprintf(stderr, "todo %s delete: %v\n", noun, err)
+			return 1
+		}
+		return 0
+
 	default:
-		fmt.Fprintf(stderr, "todo %s: unknown form %q: want new, rename or recolor\n", noun, sub)
+		fmt.Fprintf(stderr, "todo %s: unknown form %q: want new, rename, recolor or delete\n", noun, sub)
 		return 2
 	}
 }

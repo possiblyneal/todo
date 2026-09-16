@@ -338,3 +338,126 @@ func TestNarrowingToAListLeavesNoOrphan(t *testing.T) {
 		t.Errorf("the List came back %+v, want the root then its Subtask", got)
 	}
 }
+
+// A List can be deleted, and the Tasks that were in it are not. Each one is
+// unfiled by its own entry, so a Task's history says it left the List.
+func TestDeletingAListUnfilesTheTasksAndKeepsThem(t *testing.T) {
+	s := openTemp(t)
+	home, err := s.AddList("alice", "Home", "")
+	if err != nil {
+		t.Fatalf("AddList: %v", err)
+	}
+	roof := leased(t, s, "alice", Attributes{Title: Set("Fix the roof")})
+	sink := leased(t, s, "alice", Attributes{Title: Set("Fix the sink")})
+	for _, id := range []string{roof, sink} {
+		if err := s.WithLease("alice", id, WriteTTL, func() error {
+			return s.AddToList("alice", id, home)
+		}); err != nil {
+			t.Fatalf("AddToList: %v", err)
+		}
+	}
+
+	before, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+	if err := s.DeleteList("alice", home); err != nil {
+		t.Fatalf("DeleteList: %v", err)
+	}
+	after, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+	// One unfiling per Task, then the List itself.
+	if grew := after - before; grew != 3 {
+		t.Errorf("deleting the List appended %d entries, want 3", grew)
+	}
+
+	lists, err := s.Lists()
+	if err != nil {
+		t.Fatalf("Lists: %v", err)
+	}
+	if len(lists) != 0 {
+		t.Errorf("the List is still there: %+v", lists)
+	}
+	tasks, err := s.Tasks(Query{})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("%d Tasks survived the List, want both", len(tasks))
+	}
+	for _, got := range tasks {
+		if len(got.Lists) != 0 {
+			t.Errorf("%q is still filed under %v", got.Title, got.Lists)
+		}
+	}
+}
+
+// A Tag goes the same way, and the Tasks that carried it keep everything else.
+func TestDeletingATagTakesItOffTheTasksThatCarriedIt(t *testing.T) {
+	s := openTemp(t)
+	urgent, err := s.AddTag("alice", "urgent", "")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+	slow, err := s.AddTag("alice", "slow", "")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+	roof := leased(t, s, "alice", Attributes{Title: Set("Fix the roof")})
+	if err := s.WithLease("alice", roof, WriteTTL, func() error {
+		if err := s.AttachTag("alice", roof, urgent); err != nil {
+			return err
+		}
+		return s.AttachTag("alice", roof, slow)
+	}); err != nil {
+		t.Fatalf("AttachTag: %v", err)
+	}
+
+	if err := s.DeleteTag("alice", urgent); err != nil {
+		t.Fatalf("DeleteTag: %v", err)
+	}
+	tags, err := s.Tags()
+	if err != nil {
+		t.Fatalf("Tags: %v", err)
+	}
+	if len(tags) != 1 || tags[0].ID != slow {
+		t.Errorf("the Tags read %+v, want only the one that was kept", tags)
+	}
+	tasks, err := s.Tasks(Query{})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("%d Tasks survived the Tag, want the one", len(tasks))
+	}
+	if got := tasks[0].Tags; len(got) != 1 || got[0] != slow {
+		t.Errorf("the Task carries %v, want only the Tag that was kept", got)
+	}
+}
+
+func TestDeletingSomethingThatIsNotThereIsRefused(t *testing.T) {
+	s := openTemp(t)
+	was, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+
+	if err := s.DeleteList("alice", "no-such-list"); err == nil {
+		t.Error("deleting a list that does not exist was reported as done")
+	}
+	if err := s.DeleteTag("alice", "no-such-tag"); err == nil {
+		t.Error("deleting a tag that does not exist was reported as done")
+	}
+
+	// The Change History is append-only, so an entry deleting something that
+	// never existed is one nothing can take back.
+	now, err := s.HistoryLength()
+	if err != nil {
+		t.Fatalf("HistoryLength: %v", err)
+	}
+	if now != was {
+		t.Errorf("history went from %d to %d entries, want it left alone", was, now)
+	}
+}

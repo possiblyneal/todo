@@ -32,7 +32,7 @@ func done(m Model) Model {
 // addScreen is the add form on its own: the box /add opens, left empty, which
 // is the way past the broker for a Task somebody would rather type in.
 func addScreen(m Model) Model {
-	m, cmd := m.run("/add")
+	m, cmd := m.do("a")
 	for _, msg := range run(cmd) {
 		m = send(m, msg)
 	}
@@ -51,7 +51,7 @@ func TestADumpFillsTheFormInAndWritesNothingOnItsOwn(t *testing.T) {
 	m.ai = standIn(t, dentist)
 	before := historyLength(t, s)
 
-	m, cmd := m.run("/add")
+	m, cmd := m.do("a")
 	m = send(m, cmd())
 	if m.capturing == nil {
 		t.Fatalf("the box did not open: %v", m.err)
@@ -99,7 +99,7 @@ func TestAnEmptyBoxOpensTheFormItself(t *testing.T) {
 	m := newModel(t, s)
 	m.ai = standIn(t, dentist)
 
-	m, cmd := m.run("/add")
+	m, cmd := m.do("a")
 	m = send(m, cmd())
 	m = done(m)
 
@@ -123,7 +123,7 @@ func TestADumpOntoATaskLeavesWhatItDoesNotMention(t *testing.T) {
 	m = onTask(t, m, "Fix the roof")
 	was, _ := m.selected()
 
-	m, cmd := m.run("/edit")
+	m, cmd := m.do("e")
 	m = send(m, cmd())
 	if m.capturing == nil || m.capturing.onto == nil {
 		t.Fatalf("the box did not open on the Task under the cursor: %v", m.err)
@@ -160,7 +160,7 @@ func TestEscapingTheBoxDropsWhatComesBack(t *testing.T) {
 	m := newModel(t, s)
 	m.ai = standIn(t, dentist)
 
-	m, cmd := m.run("/add")
+	m, cmd := m.do("a")
 	m = send(m, cmd())
 	asked := m.capturing
 	m = press(m, "esc")
@@ -181,7 +181,7 @@ func TestABrokerThatFailsLeavesNothingOpen(t *testing.T) {
 	m := newModel(t, s)
 	m.ai = standIn(t, "not a task at all")
 
-	m, cmd := m.run("/add")
+	m, cmd := m.do("a")
 	m = send(m, cmd())
 	m = typeIn(m, "something")
 	m = done(m)
@@ -213,7 +213,7 @@ func TestHandingADumpOverKeepsEveryCharacterOfIt(t *testing.T) {
 	t.Cleanup(srv.Close)
 	m.ai = &ai.Client{BaseURL: srv.URL + "/v1", Model: "stand-in", HTTP: srv.Client()}
 
-	m, cmd := m.run("/add")
+	m, cmd := m.do("a")
 	m = send(m, cmd())
 	m = typeIn(m, "dentist about the crown")
 	m = send(m, tea.KeyPressMsg{Code: tea.KeyLeft})
@@ -232,7 +232,7 @@ func TestANameSaidTwiceIsCarriedOnce(t *testing.T) {
 	m := newModel(t, s)
 	m.ai = standIn(t, `{"title":"Call the dentist","lists":["Home","home"],"tags":["urgent","Urgent"]}`)
 
-	m, cmd := m.run("/add")
+	m, cmd := m.do("a")
 	m = send(m, cmd())
 	m = typeIn(m, "dentist")
 	m = done(m)

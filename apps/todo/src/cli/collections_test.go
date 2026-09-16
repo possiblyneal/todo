@@ -101,3 +101,31 @@ func TestACollectionFormIsRefusedWhenItIsNotOne(t *testing.T) {
 		}
 	}
 }
+
+// A List is deleted by name, the Task that was in it stays, and the Task is
+// simply out of it.
+func TestDeletingAListKeepsTheTasksThatWereInIt(t *testing.T) {
+	storeInTemp(t)
+	t.Setenv("TODO_ACTOR", "alice")
+
+	home := newCollection(t, "lists", "Home")
+	task := added(t, "Fix the sink")
+	if code, _, errs := run(t, "edit", "-list", home, task); code != 0 {
+		t.Fatalf("todo edit exited %d: %s", code, errs)
+	}
+
+	if code, _, errs := run(t, "lists", "delete", home); code != 0 {
+		t.Fatalf("todo lists delete exited %d: %s", code, errs)
+	}
+	if _, out, _ := run(t, "lists"); strings.Contains(out, "Home") {
+		t.Errorf("the list is still there: %q", out)
+	}
+	if _, out, _ := run(t, "list"); !strings.Contains(out, "Fix the sink") {
+		t.Errorf("the task went with the list: %q", out)
+	}
+
+	// A form nobody has is a usage error, not a silent nothing.
+	if code, _, _ := run(t, "lists", "destroy", home); code != 2 {
+		t.Errorf("an unknown form exited %d, want 2", code)
+	}
+}

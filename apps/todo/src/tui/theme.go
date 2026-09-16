@@ -52,6 +52,10 @@ var (
 	// is what the eye is looking for, so it is the part that is not dim.
 	hintStyle    = dimStyle
 	hintKeyStyle = lipgloss.NewStyle().Foreground(accent)
+
+	// faintStyle is a footer key with nothing to act on: still there, so
+	// the row does not move as the cursor does, and plainly not offered.
+	faintStyle = lipgloss.NewStyle().Foreground(faint)
 )
 
 // formTheme is the palette above, handed to huh. Every form the TUI opens
