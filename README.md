@@ -21,11 +21,11 @@ _A task tracker for a person at a keyboard and for agents working while nobody i
 > The interesting constraint is not the features. It is that two very different actors write concurrently and neither can tell which kind holds the claim, so a lease covers a whole task tree rather than a single task. `docs/adrs/0002-subtask-tree-is-one-aggregate.md` states the cost of that in plain words.
 
 > [!IMPORTANT]
-> **Nothing is built yet.** This repository currently holds the decisions and the scaffolding, not the program. The sections below describe what has been settled, not what runs.
+> **There is no release yet.** The store, the verbs, the JSON API and the browser client all run from a checkout; nothing is released, so there is nothing to install. `docs/plans/browser-client.md` names packaging as the stage left.
 
 ## Shape
 
-One deployable, `apps/todo`, written in Go, with three modes:
+Two deployables. `apps/todo` is a Go binary with three modes:
 
 | Invocation | What it does |
 | --- | :--- |
@@ -33,13 +33,13 @@ One deployable, `apps/todo`, written in Go, with three modes:
 | `todo <verb>` | acts and exits — the agent path, the same in-process call a request makes |
 | `todo api` | serves the JSON and the browser client so a phone reaches it, LAN only |
 
-The store is SQLite embedded as a library, so it is not a separate process and not a separate deployable. Three bounded contexts — Tracking, Scheduling, and Change History — collapse into that one binary; `CONTEXT.md` defines the language of each, and `docs/adrs/0001-ship-todo-as-one-go-binary.md` records why one artifact rather than several, and why Go.
+`apps/web` is the second: a TypeScript browser client, built to static files `todo api` serves beside the JSON. The store is SQLite embedded as a library, so it is not a separate process and not a deployable of its own. Three bounded contexts — Tracking, Scheduling, and Change History — collapse into that one binary; `CONTEXT.md` defines the language of each, and `docs/adrs/0001-ship-todo-as-one-go-binary.md` records why one artifact rather than several, and why Go.
 
 The decisions behind all of it were worked out as a map of tickets on this repository's own issue tracker, [#1](https://github.com/possiblyneal/todo/issues/1) through [#8](https://github.com/possiblyneal/todo/issues/8), and the operator's original wish list is kept verbatim at `docs/features.md`.
 
 ## Install
 
-There is nothing to install yet. Install and run instructions arrive with the first release; until then the repository builds nothing.
+There is nothing to install yet. Install and run instructions arrive with the first release; until then `scripts/package todo` builds a binary from a checkout and `scripts/run todo` starts one.
 
 ## Contributing
 
