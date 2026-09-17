@@ -10,7 +10,8 @@ beside the JSON, so there is no second process and no CORS.
 `docs/adrs/0003-replace-the-tui-with-a-browser-client.md` records why the
 surface moved off the terminal.
 
-Stages 1 to 4 of the plan are what is here: the list over `GET /api/state`, the
+Stages 1 to 4 of the plan built everything this directory holds, stages 5 and 6
+having deleted the TUI and packaged the two without adding a screen: the list over `GET /api/state`, the
 box that hands a dump to the Broker and opens the add sheet filled in, the
 detail screen a tap on a Task opens, the Series screen and the four things it
 does to a date, the breakdown that proposes Subtasks, and the activity screen
@@ -63,6 +64,10 @@ over the Change History.
 - `index.html`, `vite.config.ts`, `tsconfig.json`, `eslint.config.js` — the
   build. The dev server proxies `/api` so development has the one origin
   production has.
+- `.unit.json` — `ships: none`, because what this unit produces is files
+  somebody places rather than a program somebody starts. `npm run build` writes
+  them to `dist/`, and on a host they are copied where `todo api -web` is
+  pointed; `apps/todo/deploy/systemd/todo-api.service` is what points it.
 
 ## Local Contracts
 
