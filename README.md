@@ -42,8 +42,8 @@ The decisions behind all of it were worked out as a map of tickets on this repos
 Nothing is released, so the two artifacts are built from a checkout and placed by hand. Build them:
 
 ```sh
-scripts/package todo   # apps/todo/dist/todo-<platform>
-npm run build          # apps/web/dist/
+scripts/package todo   # apps/todo/dist/todo-linux-amd64, todo-macos-arm64
+npm ci && npm run build # apps/web/dist/
 ```
 
 Place them, and start the service that serves both:
@@ -58,7 +58,20 @@ systemctl --user daemon-reload
 systemctl --user enable --now todo-api.service
 ```
 
-The client is then at `http://<host>:8080` on the LAN, and `todo <verb>` at the terminal reaches the same store: the unit names no `TODO_DB` and no `TODO_ACTOR`, so the service and a verb both resolve `~/.config/todo/todo.db` and the login name. Change the listen address by editing `ExecStart` in a drop-in rather than in the shipped unit.
+The client is then at `http://<host>:8080`, and `todo <verb>` at the terminal reaches the same store: the unit names no `TODO_DB` and no `TODO_ACTOR`, so the service and a verb both resolve `~/.config/todo/todo.db` and the login name.
+
+`:8080` is a wildcard bind, so the listener is reachable on every interface the host has; ADR 0003 puts it on the LAN with no authentication, and the network is what keeps it there. To narrow it, override `ExecStart` in a drop-in rather than editing the shipped unit — and clear it with a bare `ExecStart=` first. Without that line the drop-in appends, and a `Type=simple` unit with two `ExecStart=` settings is refused at load: `daemon-reload` reports a bad unit file setting and the service does not start at all.
+
+```sh
+systemctl --user edit todo-api.service
+```
+```ini
+[Service]
+ExecStart=
+ExecStart=%h/.local/bin/todo api -addr 10.0.0.2:8080 -web %h/.local/share/todo/web
+```
+
+A specific address has to exist before the bind, and a user service has no `network-online.target` to wait for, so it leans on `Restart=on-failure` to catch a boot that got there first. That budget is finite: five tries five seconds apart, so an interface later than about twenty-five seconds leaves the unit failed rather than retrying.
 
 `loginctl enable-linger $USER` is what makes a user service start at boot without a login. To run a build without installing anything, `scripts/run todo` starts one in the foreground.
 

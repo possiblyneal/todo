@@ -1,9 +1,11 @@
 [Unit]
 Description=todo api: the json and the browser client, on the lan
 Documentation=https://github.com/possiblyneal/todo
-# It binds a listener, so it waits for an address to bind.
-After=network-online.target
-Wants=network-online.target
+# Nothing to order against: `-addr :8080` is a wildcard bind, which needs no
+# address to exist yet. A drop-in naming a specific address does need one, and
+# the user manager has no network-online.target to wait on -- it is a system
+# target -- so such a drop-in wants Restart to carry it instead.
+
 # Bound the restart loop. A permanent failure -- a binary that is not there, a
 # port already taken -- should leave the unit failed and visible rather than
 # retrying until somebody notices the logs.
@@ -25,7 +27,10 @@ RestartSec=5
 # Actor of its own, and the Lease is only a Lease while both open the same file.
 
 # No authentication, per ADR 0003: the listener is for the LAN, and the network
-# is the boundary. Off-LAN reach is that record's first re-check trigger.
+# is the boundary. `:8080` is a wildcard bind, so the host's own interfaces are
+# that boundary and nothing here narrows it. Off-LAN reach -- a host that grows
+# an interface facing further than the LAN -- is that record's first re-check
+# trigger, and it arrives by topology as readily as by decision.
 
 [Install]
 WantedBy=default.target
