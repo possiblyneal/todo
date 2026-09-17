@@ -4,30 +4,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
-	"time"
-
-	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/term"
 
 	"github.com/possiblyneal/todo/apps/todo/src/api"
-	"github.com/possiblyneal/todo/apps/todo/src/serve"
 	"github.com/possiblyneal/todo/apps/todo/src/store"
-	"github.com/possiblyneal/todo/apps/todo/src/tui"
 )
 
 // Run is the whole program behind main, taking its streams as arguments so the
-// three modes are testable without a process. It returns the exit status.
+// modes are testable without a process. It returns the exit status.
 func Run(args []string, stdout, stderr io.Writer) int {
 	switch ModeOf(args) {
-	case ModeTUI:
-		return runTUI(stdout, stderr)
-	case ModeServe:
-		return runServe(args[1:], stderr)
+	case ModeUsage:
+		return usage(stderr)
 	case ModeAPI:
 		return runAPI(args[1:], stderr)
 	case ModeVerb:
@@ -36,80 +27,20 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// runTUI is the bare-invocation mode: the main view, reading the same store
-// the verbs write through.
-//
-// The TUI needs a terminal to take, so an invocation without one is a usage
-// error rather than a crash inside the renderer. That is what makes `todo`
-// safe for an Agent to run by accident.
-func runTUI(stdout, stderr io.Writer) int {
-	if !terminal(stdout) {
-		fmt.Fprintln(stderr, "todo: the tui needs a terminal; run a verb instead")
-		return 2
-	}
+// usage is bare `todo`: what the binary does and how to reach it. Opening the
+// TUI was what this used to do; the person's surface is the browser client now,
+// which `todo api` serves, so there is nothing left for a bare invocation to
+// open. It is an error rather than a help screen because nothing was asked for.
+func usage(stderr io.Writer) int {
+	fmt.Fprint(stderr, `todo: a task tracker for a person and for agents.
 
-	s, err := open()
-	if err != nil {
-		fmt.Fprintf(stderr, "todo: %v\n", err)
-		return 1
-	}
-	defer func() { _ = s.Close() }()
+  todo <verb> [flags]   act and exit
+  todo api [flags]      serve the json and the browser client on the lan
 
-	// The Tag ranking varies from one run to the next, so it is seeded from
-	// the clock rather than fixed. A test seeds it itself.
-	seed := uint64(time.Now().UnixNano())
-	m, err := tui.New(s, actor(), rand.New(rand.NewPCG(seed, seed>>32)))
-	if err != nil {
-		fmt.Fprintf(stderr, "todo: %v\n", err)
-		return 1
-	}
-	if _, err := tea.NewProgram(m, tea.WithOutput(stdout)).Run(); err != nil {
-		fmt.Fprintf(stderr, "todo: %v\n", err)
-		return 1
-	}
-	return 0
-}
-
-// terminal says whether a stream is a terminal the TUI can take.
-func terminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	return ok && term.IsTerminal(f.Fd())
-}
-
-// runServe is `todo serve`: the same TUI over SSH, for a phone on the LAN.
-// It opens the same store the other two modes open, in this one process, and
-// every session takes Leases through it like any other Actor.
-func runServe(args []string, stderr io.Writer) int {
-	home, _ := os.UserHomeDir()
-	config, err := os.UserConfigDir()
-	if err != nil {
-		fmt.Fprintf(stderr, "todo serve: %v\n", err)
-		return 1
-	}
-
-	fs := flags("serve", stderr)
-	o := serve.Options{}
-	fs.StringVar(&o.Addr, "addr", ":23234", "address to listen on")
-	fs.StringVar(&o.HostKey, "host-key", filepath.Join(config, "todo", "ssh_host_ed25519"),
-		"the server's own key, created if it is not there")
-	fs.StringVar(&o.AuthorizedKeys, "authorized-keys", filepath.Join(home, ".ssh", "authorized_keys"),
-		"the keys allowed in; a public key is the only way in")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-
-	s, err := open()
-	if err != nil {
-		fmt.Fprintf(stderr, "todo serve: %v\n", err)
-		return 1
-	}
-	defer func() { _ = s.Close() }()
-
-	if err := serve.ListenAndServe(s, o, stderr); err != nil {
-		fmt.Fprintf(stderr, "todo serve: %v\n", err)
-		return 1
-	}
-	return 0
+Verbs: add, capture, list, edit, lists, tags, attach, repeat, complete,
+decline, reopen, delete. Each takes -h for its own flags.
+`)
+	return 2
 }
 
 // runAPI is `todo api`: the same store over HTTP, for the browser client. It
@@ -117,9 +48,9 @@ func runServe(args []string, stderr io.Writer) int {
 // compiled client's files beside the JSON when it is given a directory of
 // them, so there is no second process and no CORS.
 //
-// There is no authentication, deliberately: the listener is for the LAN, which
-// is `todo serve`'s posture minus the public key. ADR 0003's first re-check
-// trigger is what covers changing that.
+// There is no authentication, deliberately: the listener is for the LAN. That
+// is the posture `todo serve` had minus the public key it wanted, and ADR
+// 0003's first re-check trigger is what covers changing it.
 func runAPI(args []string, stderr io.Writer) int {
 	fs := flags("api", stderr)
 	// Every write through the listener is attributed to whoever started it,
@@ -148,7 +79,7 @@ func runAPI(args []string, stderr io.Writer) int {
 }
 
 // runVerb is the acts-and-exits mode. It is the identical in-process call the
-// TUI makes, not a second implementation of the rules: both reach the store
+// API makes, not a second implementation of the rules: both reach the store
 // through the same package, so an Agent and a person get the same contract.
 //
 // Every verb that writes takes the Lease covering its target's tree, writes,

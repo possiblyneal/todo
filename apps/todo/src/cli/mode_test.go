@@ -8,11 +8,12 @@ func TestModeOf(t *testing.T) {
 		args []string
 		want Mode
 	}{
-		{"bare todo opens the TUI", nil, ModeTUI},
-		{"serve listens on SSH", []string{"serve"}, ModeServe},
+		{"bare todo says what it is", nil, ModeUsage},
 		{"api listens on HTTP", []string{"api"}, ModeAPI},
 		{"a verb acts and exits", []string{"add", "Buy milk"}, ModeVerb},
-		{"serve with flags is still serve", []string{"serve", "--port", "2222"}, ModeServe},
+		{"api with flags is still api", []string{"api", "--addr", ":9000"}, ModeAPI},
+		// serve is gone, so the word is an unknown verb rather than a mode.
+		{"serve is not a mode any more", []string{"serve"}, ModeVerb},
 	}
 
 	for _, c := range cases {

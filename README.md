@@ -29,9 +29,9 @@ One deployable, `apps/todo`, written in Go, with three modes:
 
 | Invocation | What it does |
 | --- | :--- |
-| `todo` | opens the TUI |
-| `todo <verb>` | acts and exits — the agent path, the same in-process call the TUI makes |
-| `todo serve` | serves the same TUI over SSH so a phone reaches it, LAN only |
+| `todo` | prints usage and exits |
+| `todo <verb>` | acts and exits — the agent path, the same in-process call a request makes |
+| `todo api` | serves the JSON and the browser client so a phone reaches it, LAN only |
 
 The store is SQLite embedded as a library, so it is not a separate process and not a separate deployable. Three bounded contexts — Tracking, Scheduling, and Change History — collapse into that one binary; `CONTEXT.md` defines the language of each, and `docs/adrs/0001-ship-todo-as-one-go-binary.md` records why one artifact rather than several, and why Go.
 
@@ -53,7 +53,6 @@ Released under the [GPL-3.0-or-later](LICENSE) license.
 
 ## Acknowledgements
 
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Wish](https://github.com/charmbracelet/wish) — the TUI and the SSH surface the language choice was reasoned from
 - [SQLite](https://sqlite.org/) — the store, embedded rather than deployed
 
 Built by [possiblyneal](https://github.com/possiblyneal).

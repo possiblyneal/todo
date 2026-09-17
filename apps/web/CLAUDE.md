@@ -3,10 +3,11 @@
 ## Purpose
 
 The person's surface: a TypeScript browser client, and the only thing a person
-looks at once `docs/plans/browser-client.md` reaches its deletion stage. It
-reads the tracker over the JSON `todo api` serves and builds to static files
-that same process serves beside the JSON, so there is no second process and no
-CORS. `docs/adrs/0003-replace-the-tui-with-a-browser-client.md` records why the
+looks at, the TUI and `todo serve` having been deleted at the stage
+`docs/plans/browser-client.md` set aside for it. It reads the tracker over the
+JSON `todo api` serves and builds to static files that same process serves
+beside the JSON, so there is no second process and no CORS.
+`docs/adrs/0003-replace-the-tui-with-a-browser-client.md` records why the
 surface moved off the terminal.
 
 Stages 1 to 4 of the plan are what is here: the list over `GET /api/state`, the
@@ -74,7 +75,7 @@ over the Change History.
   list indents by what a Task has beyond the top rather than by `depth` itself.
 - **A 304 is nothing to redraw, not an empty state.** `fetchState` returns
   `null` for one and the view keeps what it has; the ETag is handed back on the
-  next poll, which is the TUI's once-a-second write-ahead-log poll over HTTP.
+  next poll, which watches the store's write-ahead log over HTTP once a second.
 - **One poll at a time.** The next is scheduled once the one before it has
   settled rather than on an interval, so two are never in flight together: the
   slower of an overlapping pair draws its older list over the newer one and
@@ -214,17 +215,19 @@ over the Change History.
 - **Proposals are ticked by position and never by title.** Two can come back
   saying the same thing and only the order tells them apart, so `approved` holds
   indices; everything starts ticked and unticking one is how it is declined,
-  which is what the TUI's approval form does. A breakdown backed out of leaves
-  nothing behind, the same gate the sheet is for a dump. Each proposal that
+  because a turn that proposed nothing worth keeping is the rarer answer. A
+  breakdown backed out of leaves nothing behind, the same gate the sheet is for
+  a dump. Each proposal that
   lands is unticked before the next is tried, so a refusal partway through
   leaves the button offering only what did not land: nothing stops the store
   writing a Subtask that says what another one says, so a second press on the
   whole list would write the landed ones twice.
-- **Proposals win over questions when a turn carries both.** That is the order
-  `apps/todo/src/tui/breakdown.go` reads a `Step` in, and the two are
-  alternatives, so a turn carrying both is the Broker having answered oddly
-  rather than having asked something. Taking the questions first would throw
-  the proposals away and ask again for what was already proposed.
+- **Proposals win over questions when a turn carries both.**
+  `POST /api/breakdown` carries both whole and ranks neither, so the order is
+  this screen's to choose: the two are alternatives, and a turn carrying both is
+  the Broker having answered oddly rather than having asked something. Taking
+  the questions first would throw the proposals away and ask again for what was
+  already proposed.
 - **What the Broker proposed is drawn unparsed.** A proposal arrives in the same
   body the sheet submits and is written as it came, so an estimate this side
   cannot read is the API's to refuse in its own words rather than this screen's
