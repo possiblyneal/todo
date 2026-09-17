@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 
 	"github.com/possiblyneal/todo/apps/todo/src/ai"
 	"github.com/possiblyneal/todo/apps/todo/src/store"
@@ -58,6 +59,27 @@ func Handler(s *store.Store, o Options) http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/{verb}", func(w http.ResponseWriter, r *http.Request) {
 		lifecycleTask(s, o.Actor, w, r)
 	})
+	// Scheduling: the rule as one value, and the three marks against one date.
+	// The rule's three methods sit under the same path because a Series is one
+	// thing a Task either has or does not, and the marks are a segment deeper
+	// because they are about a date rather than about the rule.
+	mux.HandleFunc("GET /api/tasks/{id}/series", func(w http.ResponseWriter, r *http.Request) {
+		series(s, w, r)
+	})
+	mux.HandleFunc("PUT /api/tasks/{id}/series", func(w http.ResponseWriter, r *http.Request) {
+		repeatSeries(s, o.Actor, w, r)
+	})
+	mux.HandleFunc("DELETE /api/tasks/{id}/series", func(w http.ResponseWriter, r *http.Request) {
+		unrepeatSeries(s, o.Actor, w, r)
+	})
+	mux.HandleFunc("POST /api/tasks/{id}/series/{mark}", func(w http.ResponseWriter, r *http.Request) {
+		markOccurrence(s, o.Actor, w, r)
+	})
+	// The fourth thing done to a date, and the one that carries a Task rather
+	// than only the date: the literal segment takes precedence over {mark}.
+	mux.HandleFunc("POST /api/tasks/{id}/series/edit", func(w http.ResponseWriter, r *http.Request) {
+		detachEdited(s, o.Actor, w, r)
+	})
 	mux.HandleFunc("GET /api/tasks/{id}/history", func(w http.ResponseWriter, r *http.Request) {
 		taskHistory(s, w, r)
 	})
@@ -84,6 +106,9 @@ func Handler(s *store.Store, o Options) http.Handler {
 	})
 	mux.HandleFunc("POST /api/ask", func(w http.ResponseWriter, r *http.Request) {
 		ask(s, broker, w, r)
+	})
+	mux.HandleFunc("POST /api/breakdown", func(w http.ResponseWriter, r *http.Request) {
+		breakdown(s, broker, w, r)
 	})
 	// A route under /api/ that this package does not serve is a usage error in
 	// the same envelope every other one arrives in. It is registered whether or
@@ -159,6 +184,24 @@ func fail(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	}
 	send(w, status, map[string]string{"error": err.Error()})
+}
+
+// page reads the `limit` query parameter every route that answers a page of
+// something reads: a whole number of at least one, capped at what that route
+// will answer, and the route's own default where the caller says nothing. The
+// word is the same on every route because it is the same question, and the
+// sentence names what is being counted so the answer is about dates or entries
+// rather than about a number.
+func page(r *http.Request, of string, fallback, limit int) (int, error) {
+	asked := r.URL.Query().Get("limit")
+	if asked == "" {
+		return fallback, nil
+	}
+	n, err := strconv.Atoi(asked)
+	if err != nil || n < 1 {
+		return 0, usage{fmt.Errorf("cannot read %q as how many %s to read: want a whole number of at least 1", asked, of)}
+	}
+	return min(n, limit), nil
 }
 
 // usage marks an error the caller can fix by asking differently, which is exit

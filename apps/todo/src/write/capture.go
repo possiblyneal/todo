@@ -181,3 +181,54 @@ func TagNames(tags []store.Tag) map[string]string {
 	}
 	return names
 }
+
+// AsProposed is what the Broker proposed, unparsed, in the shape a Subtask is
+// written in. It sits beside AsSaid for the same reason AsSaid sits beside
+// FromCapture: a surface with a person at it shows them what was said and lets
+// them correct a value this program cannot read, and dropping it on the way to
+// the screen would blank an answer before anybody saw it.
+//
+// A proposal carries no deadline and no color. The Broker is asked for one
+// sitting's work, not for when it is due.
+func AsProposed(p ai.Proposal) Given {
+	g := Given{}
+	for _, said := range []struct {
+		value string
+		to    **string
+	}{
+		{p.Title, &g.Title},
+		{p.Description, &g.Description},
+		{p.Why, &g.Why},
+		{p.Estimate, &g.Estimate},
+		{p.Priority, &g.Priority},
+		{p.Impact, &g.Impact},
+	} {
+		if said.value != "" {
+			*said.to = &said.value
+		}
+	}
+	return g
+}
+
+// BriefOf is one Task as the Broker is shown it, read out of the list rather
+// than by a store call of its own: docs/plans/browser-client.md allows this
+// plan two store additions and both are spent, so a third read is a finding to
+// stop on and not a step to take quietly. Every state is included, because a
+// Task somebody is breaking down may be any of them.
+func BriefOf(s *store.Store, id string) (ai.Brief, error) {
+	tasks, err := s.Tasks(store.Query{
+		IncludeCompleted: true,
+		IncludeDeclined:  true,
+		IncludeSnoozed:   true,
+		IncludeDeleted:   true,
+	})
+	if err != nil {
+		return ai.Brief{}, err
+	}
+	for _, t := range tasks {
+		if t.ID == id {
+			return Briefs([]store.Task{t})[0], nil
+		}
+	}
+	return ai.Brief{}, fmt.Errorf("no task %s", id)
+}

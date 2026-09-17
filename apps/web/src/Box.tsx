@@ -49,6 +49,12 @@ export function Box({
     return (
       <Sheet
         draft={draft}
+        // Adding is a create, and `POST /api/tasks` files the Task under the
+        // Lists and Tags it is handed rather than a change to them. The Broker
+        // fills both in, so they are the draft as well as what is ticked: left
+        // as the baseline they would cancel out and the dump would land filed
+        // under nothing.
+        against={{}}
         lists={lists}
         tags={tags}
         action="Add"

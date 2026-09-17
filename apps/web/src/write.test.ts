@@ -4,11 +4,16 @@ import {
   addSubtask,
   addTask,
   ask,
+  breakdown,
   capture,
+  detachEdited,
   draftOf,
   editTask,
   lifecycle,
+  mark,
   memberships,
+  repeat,
+  unrepeat,
 } from './write'
 
 // What the last call sent, which is how the body is checked: the routes take
@@ -175,4 +180,70 @@ test('an edit patches the task it is about', async () => {
 
   expect(sent?.url).toBe('/api/tasks/task_abc')
   expect(sent?.init?.method).toBe('PATCH')
+})
+
+test('a rule is set as one value and stopping is its own call', async () => {
+  vi.stubGlobal('fetch', answering(200, { id: 'task_abc' }))
+
+  await repeat('task_abc', 'every week on mon,thu')
+  expect(sent?.url).toBe('/api/tasks/task_abc/series')
+  expect(sent?.init?.method).toBe('PUT')
+  expect(body()).toEqual({ rule: 'every week on mon,thu' })
+
+  await unrepeat('task_abc')
+  expect(sent?.url).toBe('/api/tasks/task_abc/series')
+  expect(sent?.init?.method).toBe('DELETE')
+})
+
+test('a mark is one date against the task, and answers what it made', async () => {
+  // Detaching answers a Task that did not exist before the request, which is
+  // how the screen knows it has somewhere new to go.
+  vi.stubGlobal('fetch', answering(201, { id: 'task_lifted' }))
+
+  const written = await mark('task_abc', 'detach', '2026-09-17')
+
+  expect(sent?.url).toBe('/api/tasks/task_abc/series/detach')
+  expect(sent?.init?.method).toBe('POST')
+  expect(body()).toEqual({ on: '2026-09-17' })
+  expect(written).toBe('task_lifted')
+})
+
+test('a breakdown turn carries everything already answered', async () => {
+  vi.stubGlobal(
+    'fetch',
+    answering(200, { proposals: [{ title: 'Sand it' }, { title: 'Sand it' }] }),
+  )
+
+  const step = await breakdown('task_abc', [
+    { question: 'How big is the fence?', answer: 'Six panels.' },
+  ])
+
+  expect(sent?.url).toBe('/api/breakdown')
+  expect(body()).toEqual({
+    task: 'task_abc',
+    answers: [{ question: 'How big is the fence?', answer: 'Six panels.' }],
+  })
+  // Two proposals saying the same thing stay two, because only the order tells
+  // them apart and approval is by position.
+  expect(step.proposals).toHaveLength(2)
+})
+
+test('lifting a date out carries the whole corrected task with the date', async () => {
+  vi.stubGlobal('fetch', answering(201, { id: 'task_lifted' }))
+
+  const written = await detachEdited('task_abc', '2026-09-17', {
+    title: 'Water the plants twice',
+    why: 'it is hot',
+  })
+
+  // Its own route rather than a fourth MARKS name, because it carries a whole
+  // Task where the three carry only the date.
+  expect(sent?.url).toBe('/api/tasks/task_abc/series/edit')
+  expect(sent?.init?.method).toBe('POST')
+  expect(body()).toEqual({
+    title: 'Water the plants twice',
+    why: 'it is hot',
+    on: '2026-09-17',
+  })
+  expect(written).toBe('task_lifted')
 })

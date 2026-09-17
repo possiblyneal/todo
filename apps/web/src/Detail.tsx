@@ -1,5 +1,6 @@
 // The detail screen: what a tap on a Task opens. Everything the Task carries,
-// its Subtasks, the four verbs that end or reopen it, and its history.
+// its Subtasks, its Series if it has one, the breakdown that proposes more
+// Subtasks, the four verbs that end or reopen it, and its history.
 //
 // Nothing here is worked out that the read already did: the marks are drawn as
 // they arrived and the history is drawn as the API answered it.
@@ -7,8 +8,10 @@
 import { useState } from 'react'
 
 import { sentence } from './api'
+import { Breakdown } from './Breakdown'
 import { Log } from './Log'
 import { useRead } from './read'
+import { Series } from './Series'
 import { Sheet } from './Sheet'
 import {
   fetchTaskHistory,
@@ -51,7 +54,12 @@ export function Detail({
   onOpen: (id: string) => void
   onBack: () => void
 }) {
-  const [sheet, setSheet] = useState<'' | 'edit' | 'subtask'>('')
+  // Which screen this one is standing in front of. The Series and the
+  // breakdown are screens rather than sections because a thumb reaching a mark
+  // should not have scrolled past everything the Task carries to get there.
+  const [open, setOpen] = useState<
+    '' | 'edit' | 'subtask' | 'series' | 'breakdown'
+  >('')
   const [working, setWorking] = useState(false)
   // What a verb was told, kept apart from what the read was told: a refusal is
   // about the write somebody just made and stays on the screen until they make
@@ -79,19 +87,40 @@ export function Detail({
     }
   }
 
-  if (sheet !== '') {
+  if (open === 'series') {
     return (
-      <Sheet
-        draft={sheet === 'edit' ? draftOf(task) : {}}
+      <Series
+        task={task}
+        // The Series screen opens the same sheet this one does, for the date
+        // being lifted out, so it needs the same two to tick memberships with.
         lists={lists}
         tags={tags}
-        action={sheet === 'edit' ? 'Save' : 'Add'}
+        revision={revision}
+        // A detached date is an ordinary Task now, and opening it is the only
+        // thing that names it: nothing else afterwards says where it went.
+        onOpen={onOpen}
+        onBack={() => setOpen('')}
+      />
+    )
+  }
+
+  if (open === 'breakdown') {
+    return <Breakdown task={task} onBack={() => setOpen('')} />
+  }
+
+  if (open !== '') {
+    return (
+      <Sheet
+        draft={open === 'edit' ? draftOf(task) : {}}
+        lists={lists}
+        tags={tags}
+        action={open === 'edit' ? 'Save' : 'Add'}
         onSubmit={async (body: TaskBody) => {
-          if (sheet === 'edit') await editTask(task.id, body)
+          if (open === 'edit') await editTask(task.id, body)
           else await addSubtask(task.id, body)
-          setSheet('')
+          setOpen('')
         }}
-        onCancel={() => setSheet('')}
+        onCancel={() => setOpen('')}
       />
     )
   }
@@ -102,11 +131,17 @@ export function Detail({
         <button type="button" onClick={onBack}>
           Back
         </button>
-        <button type="button" onClick={() => setSheet('edit')}>
+        <button type="button" onClick={() => setOpen('edit')}>
           Edit
         </button>
-        <button type="button" onClick={() => setSheet('subtask')}>
+        <button type="button" onClick={() => setOpen('subtask')}>
           Subtask
+        </button>
+        <button type="button" onClick={() => setOpen('series')}>
+          Series
+        </button>
+        <button type="button" onClick={() => setOpen('breakdown')}>
+          Break down
         </button>
       </div>
 

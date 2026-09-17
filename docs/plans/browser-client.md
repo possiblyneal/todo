@@ -47,8 +47,11 @@ introduce.
   the four lifecycle verbs, `POST /api/tasks/{id}/subtasks`.
 - `POST /api/lists` to create, since `AddList` mints the id, and
   `PATCH|DELETE /api/lists/{id}`; the same for tags.
-- `GET|PUT /api/tasks/{id}/series`, plus the Occurrence marks: tick, skip,
-  detach.
+- `GET|PUT|DELETE /api/tasks/{id}/series`, plus the Occurrence marks: tick,
+  skip, detach. `DELETE` is the route `todo repeat -off` has and no mark covers.
+  The fourth thing done to a date is `POST /api/tasks/{id}/series/edit`, the
+  TUI's `e`: it carries the corrected Task along with the date, so it is a route
+  of its own rather than a fourth name under `{mark}`.
 - `POST /api/capture`, `POST /api/ask`, `POST /api/breakdown` — the Broker calls.
   Each returns what the Broker read and writes nothing; a following ordinary write
   is what makes anything durable. `capture` and `ask` are the two the client is

@@ -222,3 +222,16 @@ button.row {
   min-height: 44px;
   font: inherit;
 }
+
+/* One date of a Series: the date, what was done to it, and the three marks.
+   It wraps rather than shrinks, because three buttons and a date across a
+   phone would otherwise take the buttons under the 44px floor. */
+.date {
+  flex-wrap: wrap;
+  padding: 0.5rem 1rem;
+}
+
+.date .buttons {
+  flex: 1 1 100%;
+  margin-top: 0;
+}

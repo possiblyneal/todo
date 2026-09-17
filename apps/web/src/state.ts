@@ -123,3 +123,33 @@ async function read(path: string): Promise<Entry[]> {
   const body = (await response.json()) as { entries: Entry[] }
   return body.entries
 }
+
+/**
+ * A Task's Series: the rule as the store wrote it back, and the dates it
+ * produces next with what anybody has done to each. `apps/todo/src/api/series.go`
+ * is the side that decides the shape.
+ *
+ * A Task that does not repeat answers `repeats: false` and no dates, which is
+ * most of them and is not an error.
+ */
+export type Series = {
+  repeats: boolean
+  rule?: string
+  occurrences: Occurrence[]
+}
+
+/** One date of a Series, and the store's own word for what was done to it. */
+export type Occurrence = {
+  date: string
+  state?: string
+}
+
+/**
+ * Reads one Task's Series. The dates are computed as they are answered, so
+ * asking again on every revision costs the log nothing.
+ */
+export async function fetchSeries(id: string): Promise<Series> {
+  const response = await fetch(`/api/tasks/${encodeURIComponent(id)}/series`)
+  if (!response.ok) throw await refused(response)
+  return (await response.json()) as Series
+}

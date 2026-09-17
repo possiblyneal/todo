@@ -99,3 +99,85 @@ type captureBody struct {
 type askBody struct {
 	Question string `json:"question"`
 }
+
+// breakdown is POST /api/breakdown: one turn of a breakdown. The Task goes to
+// the Broker with everything already answered, and back comes either what it
+// still needs to know or what it proposes. Like the other two Broker routes it
+// writes nothing and takes no Lease.
+//
+// The TUI holds a Lease over the tree for the whole interaction, because there
+// the interaction is one screen with a person sitting at it. Here there is no
+// interaction to hold one across: each turn is a request that ends, and the
+// proposals live on the client until somebody approves them. So an approved
+// proposal is written by POST /api/tasks/{id}/subtasks like any other Subtask,
+// under the Lease that write takes for itself, and a tree that moved while the
+// proposals were being read is the same thing that can happen to an add sheet
+// left open.
+//
+// Nothing here carries a position. Which proposals were approved is the
+// client's to remember, because two proposals may come back saying the same
+// thing and only the order tells them apart; what reaches this side is the
+// bodies of the ones ticked, one write each.
+func breakdown(s *store.Store, c *ai.Client, w http.ResponseWriter, r *http.Request) {
+	in, err := decode[breakdownBody](w, r)
+	if err != nil {
+		fail(w, usage{err})
+		return
+	}
+	if strings.TrimSpace(in.Task) == "" {
+		fail(w, usage{errors.New("say which task is being broken down")})
+		return
+	}
+	brief, err := write.BriefOf(s, in.Task)
+	if err != nil {
+		// A Task the list does not name is the caller asking about one that is
+		// not there, which is the same 400 an unknown route gets.
+		fail(w, usage{err})
+		return
+	}
+
+	answers := make([]ai.QA, 0, len(in.Answers))
+	for _, said := range in.Answers {
+		answers = append(answers, ai.QA{Question: said.Question, Answer: said.Answer})
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), ai.Patience)
+	defer cancel()
+	step, err := c.Breakdown(ctx, brief, answers)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	// A turn with neither half is the Broker having answered nothing usable.
+	// It is not this side failing and not the caller asking wrongly, which is
+	// what 500 means here: the same sentence the TUI ends a breakdown on.
+	if len(step.Questions) == 0 && len(step.Proposals) == 0 {
+		fail(w, errors.New("the broker had nothing to ask and nothing to propose"))
+		return
+	}
+
+	out := stepBody{Questions: step.Questions, Proposals: []taskBody{}}
+	for _, p := range step.Proposals {
+		// The same shape POST /api/capture answers in, because a proposal is
+		// corrected and submitted the way a dump read into a Task is.
+		out.Proposals = append(out.Proposals, saying(write.AsProposed(p), write.Membership{}))
+	}
+	send(w, http.StatusOK, out)
+}
+
+// breakdownBody is the Task being broken down and everything already asked and
+// answered. The Broker holds nothing between calls, so every turn carries the
+// whole conversation.
+type breakdownBody struct {
+	Task    string `json:"task"`
+	Answers []struct {
+		Question string `json:"question"`
+		Answer   string `json:"answer"`
+	} `json:"answers,omitempty"`
+}
+
+// stepBody is one turn coming back. The two halves are alternatives: the
+// Broker asks for what it still needs, or it has enough and proposes.
+type stepBody struct {
+	Questions []string   `json:"questions,omitempty"`
+	Proposals []taskBody `json:"proposals"`
+}
