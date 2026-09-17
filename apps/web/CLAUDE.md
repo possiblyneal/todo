@@ -11,9 +11,9 @@ surface moved off the terminal.
 
 Stages 1 to 4 of the plan are what is here: the list over `GET /api/state`, the
 box that hands a dump to the Broker and opens the add sheet filled in, the
-detail screen a tap on a Task opens, the Series screen and its three marks, the
-breakdown that proposes Subtasks, and the activity screen over the Change
-History.
+detail screen a tap on a Task opens, the Series screen and the four things it
+does to a date, the breakdown that proposes Subtasks, and the activity screen
+over the Change History.
 
 ## Ownership
 
@@ -23,7 +23,9 @@ History.
   `apps/todo/src/api/state.go`, which is the side that decides them.
 - `src/write.ts` — the wire shapes the write and Broker routes take, and the
   calls that reach them, and the client's one copy of the four lifecycle verbs
-  and the three Occurrence marks. It mirrors `apps/todo/src/api/tasks.go`,
+  and the three Occurrence marks, plus the fourth thing done to a date, which
+  is a call of its own because it carries a whole Task. It mirrors
+  `apps/todo/src/api/tasks.go`,
   `apps/todo/src/api/series.go` and `apps/todo/src/api/broker.go`. It also turns
   a Task read back into the body that edits it, and takes the difference between
   the memberships a sheet opened on and the ones ticked when it was submitted.
@@ -41,7 +43,7 @@ History.
 - `src/Row.tsx` — one row of the list: the tap that opens the Task and the
   press held that puts the four verbs under it.
 - `src/Series.tsx` — the Series screen: the rule, the dates it produces next,
-  and the three marks against one of them. It works out no date of its own.
+  and the four things done to one of them. It works out no date of its own.
 - `src/Breakdown.tsx` — the breakdown screen: the turn with the Broker, the
   questions it still has, and the proposals ticked by position.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
@@ -122,7 +124,7 @@ History.
   their own read again when it changes, which is exactly when something was written.
   A second poll of their own would be a second clock disagreeing with the
   first. A store whose write-ahead log cannot be stat'd carries no ETag at all,
-  and then these two screens read once and never again while the list stays
+  and then those three read once and never again while the list stays
   live. That is the one state where they are behind, and it is the same state
   the API describes as not knowing whether anything changed.
 - **A verb is offered whatever state the Task is in.** Which of the four the
@@ -182,6 +184,20 @@ History.
   are, the same as `write.VERBS`. All three are offered on every date; which of
   them the store refuses on a date already marked is the store's to say, and it
   says it in a sentence.
+- **Lifting a date out corrected is the fourth button and not a fourth mark.**
+  It opens the same sheet everything else does, on what the date would become,
+  and writes nothing until it is submitted: a date backed out of is still an
+  Occurrence, which is what makes it different from detaching and then editing
+  what came back. The draft is the Task with that date as its deadline, which
+  restates `store.Detached` and is the one thing this screen works out; the
+  store is what writes it, and one refusal leaves no half-detached date behind.
+  The sheet needs the Lists and Tags, which is why the detail screen hands them
+  down to this screen as well as opening its own.
+- **A failed first read draws no Series at all.** `useRead` holds `NONE` until
+  an answer replaces it, so drawing `NONE` under the error sentence would say
+  the Task does not repeat when all that happened is that nobody could find
+  out. The screen tells the two apart by `NONE`'s own identity rather than by a
+  second piece of state, because no answer is ever that object.
 - **A detached date is followed, because nothing else afterwards names it.** The
   mark answers the id of the Task the date became and the screen opens it. Tick
   and skip answer the Task they were against, which is the screen already open,
@@ -196,7 +212,16 @@ History.
   saying the same thing and only the order tells them apart, so `approved` holds
   indices; everything starts ticked and unticking one is how it is declined,
   which is what the TUI's approval form does. A breakdown backed out of leaves
-  nothing behind, the same gate the sheet is for a dump.
+  nothing behind, the same gate the sheet is for a dump. Each proposal that
+  lands is unticked before the next is tried, so a refusal partway through
+  leaves the button offering only what did not land: nothing stops the store
+  writing a Subtask that says what another one says, so a second press on the
+  whole list would write the landed ones twice.
+- **Proposals win over questions when a turn carries both.** That is the order
+  `apps/todo/src/tui/breakdown.go` reads a `Step` in, and the two are
+  alternatives, so a turn carrying both is the Broker having answered oddly
+  rather than having asked something. Taking the questions first would throw
+  the proposals away and ask again for what was already proposed.
 - **What the Broker proposed is drawn unparsed.** A proposal arrives in the same
   body the sheet submits and is written as it came, so an estimate this side
   cannot read is the API's to refuse in its own words rather than this screen's

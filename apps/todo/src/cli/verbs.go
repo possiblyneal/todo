@@ -270,6 +270,15 @@ func attachTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	}))
 }
 
+// markHelp is what each mark does, in this surface's words. It describes the
+// marks write.MarkNames answers rather than deciding which there are: a mark
+// missing from here still gets a flag, and only its help text is duller.
+var markHelp = map[string]string{
+	"tick":   "mark one date done",
+	"skip":   "mark one date skipped",
+	"detach": "lift one date out into an ordinary task",
+}
+
 // repeatTask is `todo repeat`: the one verb that reaches Scheduling. Bare, it
 // shows the rule and the dates it produces next; with words after the id it
 // sets the rule; and -tick, -skip and -detach act on one date.
@@ -279,9 +288,17 @@ func attachTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 func repeatTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	fs := flags("repeat", stderr)
 	off := fs.Bool("off", false, "stop the task repeating; the record of it stays")
-	tick := fs.String("tick", "", "mark one date done: 2006-01-02")
-	skip := fs.String("skip", "", "mark one date skipped: 2006-01-02")
-	detach := fs.String("detach", "", "lift one date out into an ordinary task: 2006-01-02")
+	// One flag per mark, and which marks there are is write.MarkNames' answer
+	// rather than three names retyped here. A mark added there arrives as a
+	// flag the same day, described by markHelp or by the fallback below.
+	dates := map[string]*string{}
+	for _, mark := range write.MarkNames() {
+		help, ok := markHelp[mark]
+		if !ok {
+			help = "mark one date " + mark + "ed"
+		}
+		dates[mark] = fs.String(mark, "", help+": 2006-01-02")
+	}
 	count := fs.Int("n", 5, "how many upcoming dates to show")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -294,20 +311,27 @@ func repeatTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	rule := strings.Join(fs.Args()[1:], " ")
 
 	// One date, one mark. Each is a guarded write to the task's tree, which is
-	// write.Mark's shape rather than a second copy of it here.
-	for _, asked := range []struct {
-		mark string
-		date string
-	}{{"tick", *tick}, {"skip", *skip}, {"detach", *detach}} {
-		if asked.date == "" {
+	// write.Mark's shape rather than a second copy of it here. The order is
+	// write.MarkNames' too, so the flag that wins when two are given is the
+	// same one the API would pick out of the same list.
+	for _, mark := range write.MarkNames() {
+		asked := *dates[mark]
+		if asked == "" {
 			continue
 		}
-		on, err := time.ParseInLocation(time.DateOnly, asked.date, time.UTC)
+		on, err := time.ParseInLocation(time.DateOnly, asked, time.UTC)
 		if err != nil {
-			fmt.Fprintf(stderr, "todo repeat: cannot read %q as a date: want 2006-01-02\n", asked.date)
+			fmt.Fprintf(stderr, "todo repeat: cannot read %q as a date: want 2006-01-02\n", asked)
 			return 2
 		}
-		act, _ := write.Mark(asked.mark)
+		act, ok := write.Mark(mark)
+		if !ok {
+			// Unreachable while the flags are registered from the same list,
+			// and said rather than assumed: the alternative is calling a nil
+			// function if the two ever stop being the same list.
+			fmt.Fprintf(stderr, "todo repeat: a date is not %sed\n", mark)
+			return 2
+		}
 		written, err := act(s, who, id, on)
 		// Detaching answers the id of the Task the date became, and that id is
 		// the only thing naming it afterwards.
@@ -321,8 +345,7 @@ func repeatTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	case *off:
 		return refuse(stderr, "repeat", write.Unrepeat(s, who, id))
 	case rule != "":
-		_, err := write.Repeat(s, who, id, rule)
-		return refuse(stderr, "repeat", err)
+		return refuse(stderr, "repeat", write.Repeat(s, who, id, rule))
 	}
 	return showRepeat(s, id, *count, stdout, stderr)
 }

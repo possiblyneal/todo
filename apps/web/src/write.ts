@@ -222,3 +222,24 @@ export type Step = {
 export function breakdown(task: string, answers: QA[]): Promise<Step> {
   return send<Step>('POST', '/api/breakdown', { task, answers })
 }
+
+/**
+ * One date lifted out as the Task it was corrected into, which is the fourth
+ * thing done to a date and one write rather than a detach and then an edit of
+ * what it became. It answers the Task the date became.
+ *
+ * `POST .../series/edit` is its own route rather than a fourth `MARKS` name,
+ * because it carries a whole Task where the three carry only the date.
+ */
+export async function detachEdited(
+  id: string,
+  on: string,
+  body: TaskBody,
+): Promise<string> {
+  const written = await send<{ id: string }>(
+    'POST',
+    `/api/tasks/${encodeURIComponent(id)}/series/edit`,
+    { ...body, on },
+  )
+  return written.id
+}

@@ -2,10 +2,8 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"slices"
-	"strconv"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
@@ -61,14 +59,10 @@ func taskHistory(s *store.Store, w http.ResponseWriter, r *http.Request) {
 // history is GET /api/history: the same rows across every Task, newest first
 // and bounded to a page, which is what the activity screen reads.
 func history(s *store.Store, w http.ResponseWriter, r *http.Request) {
-	limit := historyPage
-	if asked := r.URL.Query().Get("limit"); asked != "" {
-		n, err := strconv.Atoi(asked)
-		if err != nil || n < 1 {
-			fail(w, usage{fmt.Errorf("cannot read %q as how many entries to read: want a whole number of at least 1", asked)})
-			return
-		}
-		limit = min(n, historyLimit)
+	limit, err := page(r, "entries", historyPage, historyLimit)
+	if err != nil {
+		fail(w, err)
+		return
 	}
 	entries, err := s.LatestHistory(limit)
 	if err != nil {

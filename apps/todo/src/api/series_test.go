@@ -102,18 +102,19 @@ func TestATaskThatDoesNotRepeatAnswersThatItDoesNot(t *testing.T) {
 }
 
 // How many dates is the caller's, capped. Asking for more than the cap gets the
-// cap rather than a refusal, which is how GET /api/history reads its own limit.
+// cap rather than a refusal, and the word is `limit` because it is the same
+// question GET /api/history is asked: both routes read it through api.page.
 func TestTheSeriesAnswersAsManyDatesAsAsked(t *testing.T) {
 	s := openTemp(t)
 	id := repeating(t, s, "daily")
 
-	if out := repeat(t, s, "/api/tasks/"+id+"/series?n=3"); len(out.Occurrences) != 3 {
+	if out := repeat(t, s, "/api/tasks/"+id+"/series?limit=3"); len(out.Occurrences) != 3 {
 		t.Errorf("it answered %d dates, want the 3 asked for", len(out.Occurrences))
 	}
-	if out := repeat(t, s, fmt.Sprintf("/api/tasks/%s/series?n=%d", id, occurrenceLimit*2)); len(out.Occurrences) != occurrenceLimit {
+	if out := repeat(t, s, fmt.Sprintf("/api/tasks/%s/series?limit=%d", id, occurrenceLimit*2)); len(out.Occurrences) != occurrenceLimit {
 		t.Errorf("it answered %d dates, want the cap of %d", len(out.Occurrences), occurrenceLimit)
 	}
-	w := do(t, s, http.MethodGet, "/api/tasks/"+id+"/series?n=none", "")
+	w := do(t, s, http.MethodGet, "/api/tasks/"+id+"/series?limit=none", "")
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("a count that is not a number answered %d, want 400 (%s)", w.Code, w.Body.String())
 	}
@@ -175,7 +176,7 @@ func TestDeletingTheSeriesStopsTheTaskRepeating(t *testing.T) {
 func TestTheThreeMarksAgainstOneDate(t *testing.T) {
 	s := openTemp(t)
 	id := repeating(t, s, "daily")
-	dates := repeat(t, s, "/api/tasks/"+id+"/series?n=3").Occurrences
+	dates := repeat(t, s, "/api/tasks/"+id+"/series?limit=3").Occurrences
 
 	for i, mark := range []string{"tick", "skip"} {
 		w := do(t, s, http.MethodPost, "/api/tasks/"+id+"/series/"+mark, `{"on": "`+dates[i].Date+`"}`)
@@ -196,7 +197,7 @@ func TestTheThreeMarksAgainstOneDate(t *testing.T) {
 		t.Errorf("detach answered %q, want the id of the task the date became", lifted)
 	}
 
-	out := repeat(t, s, "/api/tasks/"+id+"/series?n=3")
+	out := repeat(t, s, "/api/tasks/"+id+"/series?limit=3")
 	if out.Occurrences[0].State != "ticked" || out.Occurrences[1].State != "skipped" {
 		t.Errorf("the dates came back %+v, want the two marks on them", out.Occurrences[:2])
 	}
@@ -230,5 +231,66 @@ func TestAMarkNobodyRecognisesIsAUsageError(t *testing.T) {
 	w = do(t, s, http.MethodPost, "/api/tasks/"+id+"/series/tick", `{"on": "not a date"}`)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("a date nobody can read answered %d, want 400 (%s)", w.Code, w.Body.String())
+	}
+}
+
+// The fourth thing done to a date: lifted out as the Task it was corrected
+// into, which is one write and so one new Task, and the date stops being an
+// Occurrence because the rule no longer produces it.
+func TestADateIsLiftedOutAsTheTaskItWasCorrectedInto(t *testing.T) {
+	s := openTemp(t)
+	id := repeating(t, s, "daily")
+	on := repeat(t, s, "/api/tasks/"+id+"/series").Occurrences[0].Date
+
+	w := do(t, s, http.MethodPost, "/api/tasks/"+id+"/series/edit",
+		`{"on": "`+on+`", "title": "Water the plants twice", "why": "it is hot"}`)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("it answered %d, want 201: %s", w.Code, w.Body.String())
+	}
+	lifted := said(t, w)["id"]
+	if lifted == "" || lifted == id {
+		t.Fatalf("it answered %q, want the id of the task the date became", lifted)
+	}
+
+	// The corrections went on in the same write, so the lifted Task says what
+	// it was corrected into and not what the recurring one says.
+	out := repeat(t, s, "/api/tasks/"+id+"/series")
+	for _, o := range out.Occurrences {
+		if o.Date == on {
+			t.Errorf("%s is still an occurrence, want it lifted out", on)
+		}
+	}
+}
+
+// A lifted date is an ordinary Task from the moment it exists, so it is
+// refused without a title the way POST /api/tasks is, and at the same status.
+func TestLiftingADateOutNeedsATitle(t *testing.T) {
+	s := openTemp(t)
+	id := repeating(t, s, "daily")
+	on := repeat(t, s, "/api/tasks/"+id+"/series").Occurrences[0].Date
+
+	w := do(t, s, http.MethodPost, "/api/tasks/"+id+"/series/edit", `{"on": "`+on+`"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("it answered %d, want 400: %s", w.Code, w.Body.String())
+	}
+	// And the date is untouched: nothing is written by being refused.
+	if len(repeat(t, s, "/api/tasks/"+id+"/series").Occurrences) == 0 {
+		t.Errorf("the refusal took the dates away, want them left alone")
+	}
+}
+
+// `edit` is a route and not a mark, so the three marks still reach the marks
+// and an unknown one is still turned away naming them.
+func TestEditIsNotOneOfTheThreeMarks(t *testing.T) {
+	s := openTemp(t)
+	id := repeating(t, s, "daily")
+	on := repeat(t, s, "/api/tasks/"+id+"/series").Occurrences[0].Date
+
+	if w := do(t, s, http.MethodPost, "/api/tasks/"+id+"/series/tick", `{"on": "`+on+`"}`); w.Code != http.StatusOK {
+		t.Errorf("tick answered %d, want 200: %s", w.Code, w.Body.String())
+	}
+	w := do(t, s, http.MethodPost, "/api/tasks/"+id+"/series/polish", `{"on": "`+on+`"}`)
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "detach") {
+		t.Errorf("an unknown mark answered %d (%s), want 400 naming the three", w.Code, w.Body.String())
 	}
 }

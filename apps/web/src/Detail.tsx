@@ -91,6 +91,10 @@ export function Detail({
     return (
       <Series
         task={task}
+        // The Series screen opens the same sheet this one does, for the date
+        // being lifted out, so it needs the same two to tick memberships with.
+        lists={lists}
+        tags={tags}
         revision={revision}
         // A detached date is an ordinary Task now, and opening it is the only
         // thing that names it: nothing else afterwards says where it went.

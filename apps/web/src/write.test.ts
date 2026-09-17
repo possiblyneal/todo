@@ -6,6 +6,7 @@ import {
   ask,
   breakdown,
   capture,
+  detachEdited,
   draftOf,
   editTask,
   lifecycle,
@@ -225,4 +226,24 @@ test('a breakdown turn carries everything already answered', async () => {
   // Two proposals saying the same thing stay two, because only the order tells
   // them apart and approval is by position.
   expect(step.proposals).toHaveLength(2)
+})
+
+test('lifting a date out carries the whole corrected task with the date', async () => {
+  vi.stubGlobal('fetch', answering(201, { id: 'task_lifted' }))
+
+  const written = await detachEdited('task_abc', '2026-09-17', {
+    title: 'Water the plants twice',
+    why: 'it is hot',
+  })
+
+  // Its own route rather than a fourth MARKS name, because it carries a whole
+  // Task where the three carry only the date.
+  expect(sent?.url).toBe('/api/tasks/task_abc/series/edit')
+  expect(sent?.init?.method).toBe('POST')
+  expect(body()).toEqual({
+    title: 'Water the plants twice',
+    why: 'it is hot',
+    on: '2026-09-17',
+  })
+  expect(written).toBe('task_lifted')
 })

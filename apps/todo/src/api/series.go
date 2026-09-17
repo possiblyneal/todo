@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -14,9 +13,13 @@ import (
 
 // occurrenceWindow is how far ahead GET /api/tasks/{id}/series looks. Dates
 // are computed as they are answered and nothing is stored by asking, so the
-// window is chosen to be long enough to hold the next page of any rule the
-// parser accepts and short enough that a daily rule stays cheap to walk. It is
-// `todo repeat`'s window, for the same reason.
+// window is two years because that is what `todo repeat` shows and the two
+// surfaces should not disagree about which dates are next.
+//
+// It is a window and not a page: a rule sparser than it, `every 5 years`, has
+// fewer dates in two years than a page holds, and the route answers the few it
+// produces rather than reaching further to fill the page. There is no offset,
+// so what falls outside the window is not reachable by asking differently.
 const occurrenceWindow = 2
 
 // occurrencePage is how many dates the route answers with when the caller does
@@ -52,7 +55,7 @@ type occurrence struct {
 // next. It is a read that computes rather than stores, so asking for a page of
 // dates costs nothing and changes nothing.
 func series(s *store.Store, w http.ResponseWriter, r *http.Request) {
-	count, err := page(r, occurrencePage, occurrenceLimit)
+	count, err := page(r, "dates", occurrencePage, occurrenceLimit)
 	if err != nil {
 		fail(w, err)
 		return
@@ -110,7 +113,7 @@ func repeatSeries(s *store.Store, actor string, w http.ResponseWriter, r *http.R
 		return
 	}
 	id := r.PathValue("id")
-	if _, err := write.Repeat(s, actor, id, rule); err != nil {
+	if err := write.Repeat(s, actor, id, rule); err != nil {
 		// A rule the parser cannot read is the caller asking wrongly, and the
 		// sentence is the parser's rather than one written here.
 		fail(w, usage{err})
@@ -183,16 +186,62 @@ type markBody struct {
 	On string `json:"on"`
 }
 
-// page reads a `n` query parameter the way GET /api/history reads `limit`: a
-// whole number of at least one, capped at what the route will answer.
-func page(r *http.Request, fallback, limit int) (int, error) {
-	asked := r.URL.Query().Get("n")
-	if asked == "" {
-		return fallback, nil
+// detachEdited is POST /api/tasks/{id}/series/edit: one date lifted out as the
+// Task it was corrected into. It is the fourth thing a surface does to a date
+// and the TUI's `e edit` on the Scheduling screen, which is one store call and
+// so one entry rather than a detach followed by an edit of what it became.
+//
+// It is a route of its own rather than a fourth name under {mark} because it
+// carries a whole Task where the three carry only the date, and because only
+// this one lets a surface show the corrected copy before anything is written:
+// a date the person backed out of is still an Occurrence.
+//
+// The literal segment wins over {mark}, so `POST .../series/edit` reaches here
+// and `POST .../series/tick` does not.
+func detachEdited(s *store.Store, actor string, w http.ResponseWriter, r *http.Request) {
+	in, err := decode[detachBody](w, r)
+	if err != nil {
+		fail(w, usage{err})
+		return
 	}
-	n, err := strconv.Atoi(asked)
-	if err != nil || n < 1 {
-		return 0, usage{fmt.Errorf("cannot read %q as how many dates to read: want a whole number of at least 1", asked)}
+	on, err := time.ParseInLocation(time.DateOnly, in.On, time.UTC)
+	if err != nil {
+		fail(w, usage{fmt.Errorf("cannot read %q as a date: want 2006-01-02", in.On)})
+		return
 	}
-	return min(n, limit), nil
+	given, err := in.taskBody.given().Attributes()
+	if err != nil {
+		fail(w, usage{err})
+		return
+	}
+	// The lifted copy is an ordinary Task from the moment it exists, so it
+	// needs a title for the same reason POST /api/tasks does, and saying so
+	// here is the sentence the store would refuse it with one status later.
+	if given == nil || given.Title == nil || *given.Title == "" {
+		fail(w, usage{errors.New("a task needs a title")})
+		return
+	}
+	// Nothing is moved by lifting a date out: the copy's parent is the store's
+	// to decide, the same way an edit refuses one.
+	if in.Parent != "" {
+		fail(w, usage{errors.New("a detached date's parent is the store's to set: leave out parent")})
+		return
+	}
+	id := r.PathValue("id")
+	written, err := write.DetachEdited(s, actor, id, on, *given, in.membership())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	// 201, because the id names a Task that did not exist before the request,
+	// which is what POST .../series/detach answers with too.
+	send(w, http.StatusCreated, map[string]string{"id": written})
+}
+
+// detachBody is the date being lifted out and the Task it is being lifted out
+// as. The attributes are the ten every other write takes, because the copy is
+// an ordinary Task and is corrected on the same form.
+type detachBody struct {
+	taskBody
+	On string `json:"on"`
 }

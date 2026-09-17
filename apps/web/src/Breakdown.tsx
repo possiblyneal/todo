@@ -40,14 +40,27 @@ export function Breakdown({
   const turn = (said: QA[]) => {
     breakdown(task.id, said)
       .then((step) => {
+        // Proposals win over questions, which is the order the TUI reads a
+        // Step in (`tui/breakdown.go`). The two are alternatives, so a turn
+        // carrying both is the Broker having answered oddly rather than asked
+        // a question; taking the questions first would throw the proposals
+        // away and ask again for what was already proposed.
+        if (step.proposals.length > 0) {
+          setAsking([])
+          setReplies([])
+          setProposals(step.proposals)
+          // Every proposal starts ticked and unticking one is how it is
+          // declined, which is what the TUI's approval form does: the Broker
+          // was asked for these, so approving is the default.
+          setApproved(step.proposals.map((_, at) => at))
+          setWaiting(false)
+          return
+        }
         const questions = step.questions ?? []
         setAsking(questions)
         setReplies(questions.map(() => ''))
-        // Every proposal starts ticked and unticking one is how it is
-        // declined, which is what the TUI's approval form does: the Broker was
-        // asked for these, so approving is the default and not the exception.
-        setProposals(questions.length > 0 ? null : step.proposals)
-        setApproved(step.proposals.map((_, at) => at))
+        setProposals(null)
+        setApproved([])
         setWaiting(false)
       })
       .catch((caught: unknown) => {
@@ -80,6 +93,11 @@ export function Breakdown({
   // The ticked ones, one write each, under the Lease each of those writes takes
   // for itself. A write that is refused stops the rest: what landed is on the
   // list a poll later, and saying which one stopped is the API's own sentence.
+  //
+  // Each one that lands is unticked before the next is tried, so the button
+  // afterwards offers only what did not. Pressing it again on the whole list
+  // would write the ones that already landed a second time, and the store has
+  // no reason to refuse a Subtask for saying what another one says.
   const approve = async () => {
     setWaiting(true)
     setError(null)
@@ -87,6 +105,7 @@ export function Breakdown({
       for (const [at, proposal] of (proposals ?? []).entries()) {
         if (!approved.includes(at)) continue
         await addSubtask(task.id, proposal)
+        setApproved((was) => was.filter((other) => other !== at))
       }
       onBack()
     } catch (caught) {

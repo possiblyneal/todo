@@ -12,16 +12,14 @@ import (
 // holds, and both surfaces call these rather than each wrapping the store call
 // in a Lease of its own.
 
-// Repeat gives a Task a rule, or replaces the one it has, and answers the
-// Series' id.
-func Repeat(s *store.Store, actor, id, rule string) (string, error) {
-	var series string
-	err := s.WithLease(actor, id, store.WriteTTL, func() error {
-		var err error
-		series, err = s.Repeat(actor, id, rule)
+// Repeat gives a Task a rule, or replaces the one it has. The store answers
+// the Series' id and nothing wants it: a Series is reached through the Task it
+// is on, so the Task's id is what every surface already holds.
+func Repeat(s *store.Store, actor, id, rule string) error {
+	return s.WithLease(actor, id, store.WriteTTL, func() error {
+		_, err := s.Repeat(actor, id, rule)
 		return err
 	})
-	return series, err
 }
 
 // Unrepeat takes the rule off. The Series and the marks left on its dates stay
@@ -76,6 +74,25 @@ func Mark(mark string) (func(s *store.Store, actor, id string, on time.Time) (st
 		}, true
 	}
 	return nil, false
+}
+
+// DetachEdited lifts one date out of its Series as the Task it was corrected
+// into, which is one store call and so one entry rather than a detach followed
+// by an edit of what it became. It is the fourth thing a surface does to a
+// date, and it is not in marks because it carries a whole Task with it where
+// the three carry only the date.
+//
+// Nothing is written until this is called, which is what lets a surface open
+// the corrected copy for reading and leave the date an Occurrence if nobody
+// saves it.
+func DetachEdited(s *store.Store, actor, id string, on time.Time, a store.Attributes, m Membership) (string, error) {
+	var written string
+	err := s.WithLease(actor, id, store.WriteTTL, func() error {
+		var err error
+		written, err = s.DetachEdited(actor, id, on, a, m.IntoLists, m.AddTags)
+		return err
+	})
+	return written, err
 }
 
 // MarkNames names the three, for the sentence a surface turns an unknown one
