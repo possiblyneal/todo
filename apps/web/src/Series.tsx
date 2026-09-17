@@ -83,6 +83,10 @@ export function Series({
         // date as its deadline. `store.Detached` says the same thing on the
         // other side; this is the draft, and the store is what writes it.
         draft={{ ...draftOf(task), deadline: editing }}
+        // Lifting a date out creates a Task, and `store.detach` writes the
+        // Lists and the Tags it is handed rather than a change to what the
+        // recurring Task carries, so the ticked sets go whole.
+        against={{}}
         lists={lists}
         tags={tags}
         action="Lift out"

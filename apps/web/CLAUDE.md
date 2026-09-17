@@ -118,7 +118,10 @@ over the Change History.
   component taking an `onSubmit` rather than three copies of the form. The
   memberships it submits are the difference between what it opened on and what
   is ticked now, because ticking and unticking are different fields on the wire
-  and an untick that sent nothing would leave the membership on.
+  and an untick that sent nothing would leave the membership on. `against` is
+  what the sheet takes that difference from where the draft is not it: a route
+  that creates takes the memberships whole, so a create prefilled from a Task
+  passes `{}` and sends the ticked sets rather than an empty difference.
 - **The other screens re-read on the ETag, not on a clock.** `App` hands the
   poll's tag down as a revision; the detail, Series and activity screens fetch
   their own read again when it changes, which is exactly when something was written.

@@ -18,6 +18,7 @@ const LEVELS = ['low', 'med', 'high']
 
 export function Sheet({
   draft,
+  against,
   lists,
   tags,
   action,
@@ -25,6 +26,14 @@ export function Sheet({
   onCancel,
 }: {
   draft: TaskBody
+  /**
+   * What submitting this is a change against, where that is not the draft it
+   * opened on. An edit is a change against the Task, which is the default. A
+   * create takes the memberships whole, so a create prefilled from a Task
+   * passes `{}` here: leaving the draft as the baseline would send an empty
+   * difference and write a Task belonging to no List the sheet drew ticked.
+   */
+  against?: TaskBody
   lists: Collection[]
   tags: Collection[]
   /** The word on the button, which is what submitting it does. */
@@ -37,7 +46,7 @@ export function Sheet({
   // draft prop is recomputed from every poll, so a membership another Actor
   // changed while the sheet was open would move the baseline under it and an
   // untick would come out as no change at all.
-  const [opened] = useState<TaskBody>(draft)
+  const [opened] = useState<TaskBody>(against ?? draft)
   const [error, setError] = useState<string | null>(null)
   const [writing, setWriting] = useState(false)
 
