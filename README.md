@@ -21,7 +21,7 @@ _A task tracker for a person at a keyboard and for agents working while nobody i
 > The interesting constraint is not the features. It is that two very different actors write concurrently and neither can tell which kind holds the claim, so a lease covers a whole task tree rather than a single task. `docs/adrs/0002-subtask-tree-is-one-aggregate.md` states the cost of that in plain words.
 
 > [!IMPORTANT]
-> **There is no release yet.** The store, the verbs, the JSON API and the browser client all run from a checkout; nothing is released, so there is nothing to install. `docs/plans/browser-client.md` names packaging as the stage left.
+> **There is no release yet.** Everything runs from a checkout, and [Install](#install) builds and places the two artifacts by hand. `docs/plans/browser-client.md` is the order the work landed in.
 
 ## Shape
 
@@ -39,7 +39,28 @@ The decisions behind all of it were worked out as a map of tickets on this repos
 
 ## Install
 
-There is nothing to install yet. Install and run instructions arrive with the first release; until then `scripts/package todo` builds a binary from a checkout and `scripts/run todo` starts one.
+Nothing is released, so the two artifacts are built from a checkout and placed by hand. Build them:
+
+```sh
+scripts/package todo   # apps/todo/dist/todo-<platform>
+npm run build          # apps/web/dist/
+```
+
+Place them, and start the service that serves both:
+
+```sh
+install -D -m755 apps/todo/dist/todo-linux-amd64 ~/.local/bin/todo
+rm -rf ~/.local/share/todo/web && mkdir -p ~/.local/share/todo/web
+cp -a apps/web/dist/. ~/.local/share/todo/web/
+
+install -D -m644 apps/todo/deploy/systemd/todo-api.service ~/.config/systemd/user/todo-api.service
+systemctl --user daemon-reload
+systemctl --user enable --now todo-api.service
+```
+
+The client is then at `http://<host>:8080` on the LAN, and `todo <verb>` at the terminal reaches the same store: the unit names no `TODO_DB` and no `TODO_ACTOR`, so the service and a verb both resolve `~/.config/todo/todo.db` and the login name. Change the listen address by editing `ExecStart` in a drop-in rather than in the shipped unit.
+
+`loginctl enable-linger $USER` is what makes a user service start at boot without a login. To run a build without installing anything, `scripts/run todo` starts one in the foreground.
 
 ## Contributing
 

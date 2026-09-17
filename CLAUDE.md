@@ -4,7 +4,7 @@
 
 The repository holds **two deployables**. Three bounded contexts — Tracking, Scheduling, Change History — collapse into a single Go binary, `apps/todo`, with three modes: bare `todo` prints usage, `todo <verb>` acts and exits, and `todo api` serves the JSON the browser client reads. `apps/web` is that client, and it builds to static files `todo api` serves beside the JSON. The store is SQLite embedded as a library, so it is not a deployable of its own.
 
-`docs/adrs/0003-replace-the-tui-with-a-browser-client.md` supersedes ADR 0001: the person's surface is a TypeScript browser client in `apps/web` over a LAN-only JSON API served by the same Go binary. The TUI and `todo serve` are deleted, so `apps/web` is the only thing a person looks at and `todo api` is what serves it. `docs/plans/browser-client.md` is the order that work lands in, and packaging is the stage left.
+`docs/adrs/0003-replace-the-tui-with-a-browser-client.md` supersedes ADR 0001: the person's surface is a TypeScript browser client in `apps/web` over a LAN-only JSON API served by the same Go binary. The TUI and `todo serve` are deleted, so `apps/web` is the only thing a person looks at and `todo api` is what serves it. `docs/plans/browser-client.md` is the order that work landed in, and every stage of it is done. The two are started on a host by `apps/todo/deploy/systemd/todo-api.service`, a `systemd --user` unit running the built binary against the compiled client's files; `apps/web` declares `ships: none` because those files are placed rather than executed, and the README's Install section is the sequence.
 
 **Three things are what this tracker is for, and the rest is support for them.**
 
