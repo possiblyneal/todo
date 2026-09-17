@@ -7,8 +7,9 @@ import { Detail } from './Detail'
 import { Row } from './Row'
 import { fetchState, type State } from './state'
 
-// The write-ahead log was polled once a second by the TUI; this is the same
-// poll over HTTP, and the ETag is what keeps it to a 304 while nothing writes.
+// The store's write-ahead log is what says a write happened, so this polls it
+// once a second over HTTP, and the ETag is what keeps that to a 304 while
+// nothing writes.
 const POLL_MS = 1000
 
 /**

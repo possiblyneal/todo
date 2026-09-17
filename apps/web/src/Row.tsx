@@ -1,9 +1,9 @@
 // A row in the list, and the verbs a press held on it opens.
 //
 // A tap opens the Task. A press held puts the four lifecycle verbs where the
-// thumb already is, which is what the TUI's verb keys were: the same writes,
-// reached without opening the Task first. There is no hover and no right
-// click to hang them off, so holding is what a phone has.
+// thumb already is: the same writes, reached without opening the Task first.
+// There is no hover and no right click to hang them off, so holding is what a
+// phone has.
 
 import { useEffect, useRef, useState } from 'react'
 

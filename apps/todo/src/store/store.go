@@ -212,8 +212,8 @@ type Lease struct {
 // but one gets SQLITE_BUSY on its first append, which the concurrency test
 // reproduces if this line is changed.
 // busy_timeout is ten seconds because it only ever has to outlast a real
-// write. No surface holds a transaction across think-time -- the TUI's form
-// gathers first and writes on submit -- so a writer waiting here is waiting on
+// write. No surface holds a transaction across think-time -- a sheet gathers
+// first and writes on submit -- so a writer waiting here is waiting on
 // milliseconds of work, and ten seconds means a queue, not a deadlock.
 func dsn(path string) string {
 	pragmas := []string{
@@ -1149,8 +1149,8 @@ const (
 
 // Sorts is every Sort there is, in the order anything offering them lists
 // them: the order docs/features.md names them in. The error a bad sort gets,
-// the flag help a person reads and the order the TUI's sort key cycles in all
-// come from here, so none of them can name a set the store does not have.
+// the flag help a person reads and the sorts GET /api/state accepts all come
+// from here, so none of them can name a set the store does not have.
 var Sorts = []Sort{SortTitle, SortDeadline, SortCreated, SortEstimate}
 
 // SortNames is Sorts as text, for a help string or an error.

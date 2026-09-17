@@ -91,32 +91,39 @@ func TestUnknownVerbIsRefused(t *testing.T) {
 	}
 }
 
-// TestTheTUINeedsATerminal is the bare invocation with its output piped, which
-// is how a test and an Agent reach it. The TUI takes a terminal, so without one
-// it says so and exits 2 rather than failing inside the renderer.
-func TestTheTUINeedsATerminal(t *testing.T) {
+// The bare invocation says what the binary is for. It used to open the TUI;
+// the person's surface is the browser client now, so there is nothing left for
+// it to open and nothing it should guess at.
+func TestBareTodoSaysWhatItIsFor(t *testing.T) {
 	storeInTemp(t)
 	code, out, errs := run(t)
 	if code != 2 {
-		t.Fatalf("bare todo without a terminal exited %d, want 2: %s%s", code, out, errs)
+		t.Fatalf("bare todo exited %d, want 2: %s%s", code, out, errs)
 	}
-	if !strings.Contains(errs, "terminal") {
-		t.Errorf("stderr = %q, want it to say the tui needs a terminal", errs)
+	for _, want := range []string{"todo <verb>", "todo api"} {
+		if !strings.Contains(errs, want) {
+			t.Errorf("stderr = %q, want it to name %q", errs, want)
+		}
+	}
+	// Every verb the dispatch holds is named, because the two read one list
+	// and a binary that offered a verb it does not take would be lying.
+	for _, one := range verbs {
+		if !strings.Contains(errs, one.verb) {
+			t.Errorf("stderr = %q, want it to name the verb %q", errs, one.verb)
+		}
 	}
 }
 
-// `todo serve` will not start without an allowlist. A public key is the only
-// way in, so a missing authorized_keys is a refusal to listen at all rather
-// than a server anyone can reach.
-func TestServeWillNotListenWithoutAnAllowlist(t *testing.T) {
+// `todo serve` is gone with the TUI it served. The word is an unknown verb now,
+// which is what every other word the binary does not know gets, rather than a
+// mode that starts a listener nothing reaches.
+func TestServeIsGone(t *testing.T) {
 	storeInTemp(t)
-	missing := filepath.Join(t.TempDir(), "authorized_keys")
-
-	code, _, errs := run(t, "serve", "-addr", "127.0.0.1:0", "-authorized-keys", missing)
-	if code != 1 {
-		t.Fatalf("todo serve exited %d, want 1", code)
+	code, _, errs := run(t, "serve")
+	if code != 2 {
+		t.Fatalf("todo serve exited %d, want 2", code)
 	}
-	if !strings.Contains(errs, "public key") {
-		t.Errorf("stderr = %q, want it to say a public key is the only way in", errs)
+	if !strings.Contains(errs, "unknown verb") {
+		t.Errorf("stderr = %q, want it to call serve an unknown verb", errs)
 	}
 }

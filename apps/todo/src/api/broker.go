@@ -105,10 +105,10 @@ type askBody struct {
 // still needs to know or what it proposes. Like the other two Broker routes it
 // writes nothing and takes no Lease.
 //
-// The TUI holds a Lease over the tree for the whole interaction, because there
-// the interaction is one screen with a person sitting at it. Here there is no
-// interaction to hold one across: each turn is a request that ends, and the
-// proposals live on the client until somebody approves them. So an approved
+// There is no interaction to hold a Lease across: each turn is a request that
+// ends, and the proposals live on the client until somebody approves them. A
+// Lease held over a browser's think time would be one no dead tab gives back,
+// which is why this route takes none at all. So an approved
 // proposal is written by POST /api/tasks/{id}/subtasks like any other Subtask,
 // under the Lease that write takes for itself, and a tree that moved while the
 // proposals were being read is the same thing that can happen to an add sheet
@@ -149,7 +149,7 @@ func breakdown(s *store.Store, c *ai.Client, w http.ResponseWriter, r *http.Requ
 	}
 	// A turn with neither half is the Broker having answered nothing usable.
 	// It is not this side failing and not the caller asking wrongly, which is
-	// what 500 means here: the same sentence the TUI ends a breakdown on.
+	// what 500 means here.
 	if len(step.Questions) == 0 && len(step.Proposals) == 0 {
 		fail(w, errors.New("the broker had nothing to ask and nothing to propose"))
 		return
