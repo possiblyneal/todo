@@ -105,6 +105,13 @@ func TestBareTodoSaysWhatItIsFor(t *testing.T) {
 			t.Errorf("stderr = %q, want it to name %q", errs, want)
 		}
 	}
+	// Every verb the dispatch holds is named, because the two read one list
+	// and a binary that offered a verb it does not take would be lying.
+	for _, one := range verbs {
+		if !strings.Contains(errs, one.verb) {
+			t.Errorf("stderr = %q, want it to name the verb %q", errs, one.verb)
+		}
+	}
 }
 
 // `todo serve` is gone with the TUI it served. The word is an unknown verb now,

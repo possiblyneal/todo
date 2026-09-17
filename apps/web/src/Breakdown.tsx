@@ -40,18 +40,19 @@ export function Breakdown({
   const turn = (said: QA[]) => {
     breakdown(task.id, said)
       .then((step) => {
-        // Proposals win over questions, which is the order the TUI reads a
-        // Step in (`tui/breakdown.go`). The two are alternatives, so a turn
-        // carrying both is the Broker having answered oddly rather than asked
-        // a question; taking the questions first would throw the proposals
-        // away and ask again for what was already proposed.
+        // Proposals win over questions. `POST /api/breakdown` carries both
+        // whole and ranks neither, so the order is this screen's to choose:
+        // the two are alternatives, and a turn carrying both is the Broker
+        // having answered oddly rather than asked a question; taking the
+        // questions first would throw the proposals away and ask again for
+        // what was already proposed.
         if (step.proposals.length > 0) {
           setAsking([])
           setReplies([])
           setProposals(step.proposals)
           // Every proposal starts ticked and unticking one is how it is
-          // declined, which is what the TUI's approval form does: the Broker
-          // was asked for these, so approving is the default.
+          // declined: the Broker was asked for these, so approving is the
+          // default.
           setApproved(step.proposals.map((_, at) => at))
           setWaiting(false)
           return

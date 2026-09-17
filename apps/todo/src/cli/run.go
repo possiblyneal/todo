@@ -17,14 +17,53 @@ import (
 // modes are testable without a process. It returns the exit status.
 func Run(args []string, stdout, stderr io.Writer) int {
 	switch ModeOf(args) {
-	case ModeUsage:
-		return usage(stderr)
 	case ModeAPI:
 		return runAPI(args[1:], stderr)
 	case ModeVerb:
 		return runVerb(args, stdout, stderr)
+	default:
+		// ModeUsage, and anything a later mode adds to ModeOf without adding
+		// itself here. Saying what the binary is for is the right answer to
+		// both, and it is the wrong answer loudly rather than exit 0 quietly.
+		return usage(stderr)
 	}
-	return 0
+}
+
+// verbs is every verb there is, in the order usage names them. Which verb makes
+// which call is written here once, the way `write.Lifecycle` holds the four
+// lifecycle verbs, so the sentence a bare `todo` prints and the dispatch below
+// cannot name different sets and let the binary lie about what it accepts.
+var verbs = []struct {
+	verb string
+	run  func(s *store.Store, args []string, stdout, stderr io.Writer) int
+}{
+	{"add", addTask},
+	{"capture", captureTask},
+	{"list", listTasks},
+	{"edit", func(s *store.Store, args []string, _, stderr io.Writer) int {
+		return editTask(s, args, stderr)
+	}},
+	{"lists", func(s *store.Store, args []string, stdout, stderr io.Writer) int {
+		return collections(s, "lists", args, stdout, stderr)
+	}},
+	{"tags", func(s *store.Store, args []string, stdout, stderr io.Writer) int {
+		return collections(s, "tags", args, stdout, stderr)
+	}},
+	{"attach", attachTask},
+	{"repeat", repeatTask},
+	{"complete", lifecycleVerb("complete")},
+	{"decline", lifecycleVerb("decline")},
+	{"reopen", lifecycleVerb("reopen")},
+	{"delete", lifecycleVerb("delete")},
+}
+
+// lifecycleVerb is one of the four, which take one id and no flags and differ
+// only in the name they pass on. `write.Lifecycle` is what knows the four; this
+// is only how the CLI reaches one of them.
+func lifecycleVerb(verb string) func(*store.Store, []string, io.Writer, io.Writer) int {
+	return func(s *store.Store, args []string, _, stderr io.Writer) int {
+		return lifecycle(s, verb, args, stderr)
+	}
 }
 
 // usage is bare `todo`: what the binary does and how to reach it. Opening the
@@ -32,14 +71,17 @@ func Run(args []string, stdout, stderr io.Writer) int {
 // which `todo api` serves, so there is nothing left for a bare invocation to
 // open. It is an error rather than a help screen because nothing was asked for.
 func usage(stderr io.Writer) int {
-	fmt.Fprint(stderr, `todo: a task tracker for a person and for agents.
+	named := make([]string, len(verbs))
+	for i, one := range verbs {
+		named[i] = one.verb
+	}
+	fmt.Fprintf(stderr, `todo: a task tracker for a person and for agents.
 
   todo <verb> [flags]   act and exit
   todo api [flags]      serve the json and the browser client on the lan
 
-Verbs: add, capture, list, edit, lists, tags, attach, repeat, complete,
-decline, reopen, delete. Each takes -h for its own flags.
-`)
+Verbs: %s. Each takes -h for its own flags.
+`, strings.Join(named, ", "))
 	return 2
 }
 
@@ -95,27 +137,13 @@ func runVerb(args []string, stdout, stderr io.Writer) int {
 	}
 	defer func() { _ = s.Close() }()
 
-	switch verb {
-	case "add":
-		return addTask(s, rest, stdout, stderr)
-	case "capture":
-		return captureTask(s, rest, stdout, stderr)
-	case "list":
-		return listTasks(s, rest, stdout, stderr)
-	case "edit":
-		return editTask(s, rest, stderr)
-	case "lists", "tags":
-		return collections(s, verb, rest, stdout, stderr)
-	case "attach":
-		return attachTask(s, rest, stdout, stderr)
-	case "repeat":
-		return repeatTask(s, rest, stdout, stderr)
-	case "complete", "decline", "reopen", "delete":
-		return lifecycle(s, verb, rest, stderr)
-	default:
-		fmt.Fprintf(stderr, "todo: unknown verb %q\n", verb)
-		return 2
+	for _, one := range verbs {
+		if one.verb == verb {
+			return one.run(s, rest, stdout, stderr)
+		}
 	}
+	fmt.Fprintf(stderr, "todo: unknown verb %q\n", verb)
+	return 2
 }
 
 // isRefusal says whether the store turned a write away rather than failing at

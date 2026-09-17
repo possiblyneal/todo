@@ -53,8 +53,7 @@ export type Snapshot = {
 /**
  * Reads the whole screen in one request. The ETag is handed back on the next
  * call so an unchanged store answers 304 with no body, which is what makes
- * polling once a second cheap -- the same thing the TUI did against the
- * write-ahead log.
+ * polling once a second cheap.
  *
  * A `null` return is "nothing changed", which is not the same as an empty
  * state and must not redraw as one.

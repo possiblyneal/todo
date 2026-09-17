@@ -187,9 +187,9 @@ type markBody struct {
 }
 
 // detachEdited is POST /api/tasks/{id}/series/edit: one date lifted out as the
-// Task it was corrected into. It is the fourth thing a surface does to a date
-// and the TUI's `e edit` on the Scheduling screen, which is one store call and
-// so one entry rather than a detach followed by an edit of what it became.
+// Task it was corrected into. It is the fourth thing a surface does to a date,
+// and it is one store call and so one entry rather than a detach followed by
+// an edit of what it became.
 //
 // It is a route of its own rather than a fourth name under {mark} because it
 // carries a whole Task where the three carry only the date, and because only
