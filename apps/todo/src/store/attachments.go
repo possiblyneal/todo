@@ -40,8 +40,11 @@ func (s *Store) Detach(actor, taskID, target string) error {
 }
 
 // pointer is how a target is written down. A web address is kept as typed; a
-// path is resolved against the directory it was typed in, so the same pointer
-// read from anywhere else still names the same file.
+// path is made absolute against the working directory of whoever is resolving
+// it, so the same pointer read from anywhere else still names the same file.
+// Whoever is resolving it is not always whoever typed it: a verb resolves
+// against the shell's directory, and `todo api` against the service's, so a
+// relative path typed in a browser means what it means to the service.
 func pointer(target string) (string, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
