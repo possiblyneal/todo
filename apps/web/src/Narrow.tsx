@@ -145,10 +145,8 @@ function Picker({
   value: string
   onPick: (value: string) => void
 }) {
-  const shown =
-    value === '' || all.some((one) => one.id === value)
-      ? all
-      : [...all, { id: value, name: value, color: '', count: 0 }]
+  const shown = all.map((one) => one.id)
+  if (value !== '' && !shown.includes(value)) shown.push(value)
   return (
     <select
       className="control"
@@ -157,11 +155,23 @@ function Picker({
       onChange={(event) => onPick(event.target.value)}
     >
       <option value="">{every}</option>
-      {shown.map((one) => (
-        <option key={one.id} value={one.id}>
-          {one.name} ({one.count})
+      {shown.map((id) => (
+        <option key={id} value={id}>
+          {labelled(all, id)}
         </option>
       ))}
     </select>
   )
+}
+
+/**
+ * What one option reads. A Collection the last read named carries the count the
+ * store worked out; an id nothing named reads as itself and carries no count at
+ * all, because a zero here would be the client answering a question the store
+ * never answered — the List may well have Tasks in it, and this side has no way
+ * to know.
+ */
+function labelled(all: Collection[], id: string) {
+  const named = all.find((one) => one.id === id)
+  return named ? `${named.name} (${named.count})` : id
 }

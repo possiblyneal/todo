@@ -178,7 +178,7 @@ func fail(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	var asked usage
 	switch {
-	case errors.Is(err, store.ErrRefused), errors.Is(err, store.ErrHeld):
+	case store.Refused(err):
 		status = http.StatusConflict
 	case errors.As(err, &asked):
 		status = http.StatusBadRequest
