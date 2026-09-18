@@ -52,11 +52,11 @@ and adds to this list rather than to the plan.
   is the title, description, why, deadline, estimate, priority, impact, color,
   snooze, the key/value pairs, and the Lists and Tags it is filed under. It
   makes no write of its own; whoever opens it says what submitting it does.
-- `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tag,
+- `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tags,
   the box searched in, and the one toggle that takes in the snoozed, completed,
   declined and deleted. It sets fields on the Narrowing and narrows nothing
-  itself. The List and the Tag are one picker, because a Collection is the same
-  shape either way.
+  itself. The List is a picker and the Tags are switches, because one is picked
+  one at a time and the other is a set.
 - `src/Row.tsx` — one row of the list: what the Task is called, two lines of
   what it says, when it arrived, when it is due, what it is filed under,
   whether it points anywhere, the tap that opens it, and the press held that
@@ -187,8 +187,13 @@ and adds to this list rather than to the plan.
   itself. A List or a Tag deleted from another surface while the list is
   narrowed to it would otherwise match no option, so the control would render
   blank over a list that was still narrowed and nothing would say what
-  happened. It is the same rule as the two below, which is why the List and the
-  Tag are one component rather than two copies of it.
+  happened. `Tags` keeps an unnamed id on screen for the same reason: a switch
+  nobody can see is a switch nobody can turn off. It is the same rule as the two
+  below.
+- **More than one Tag narrows to any of them, not all of them.** `Narrowing.tags`
+  is a set, sent as `?tag=` repeated, and a Task carrying any one of them is in
+  the list. Turning a second Tag on is somebody widening what they are willing
+  to look at; an intersection would empty the list on the second tap.
 - **A picked value the client does not know is offered rather than dropped.**
   `Choice` in `Sheet.tsx` is one control for the levels and the colors alike,
   and a value that is none of the offered ones is added to the end of the list:
