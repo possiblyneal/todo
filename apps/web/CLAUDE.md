@@ -32,10 +32,11 @@ and adds to this list rather than to the plan.
   calls that reach them, and the client's one copy of the four lifecycle verbs
   and the three Occurrence marks, plus the fourth thing done to a date, which
   is a call of its own because it carries a whole Task. It mirrors
-  `apps/todo/src/api/tasks.go`,
-  `apps/todo/src/api/series.go` and `apps/todo/src/api/broker.go`. It also turns
-  a Task read back into the body that edits it, and takes the difference between
-  the memberships a sheet opened on and the ones ticked when it was submitted.
+  `apps/todo/src/api/tasks.go`, `apps/todo/src/api/series.go`,
+  `apps/todo/src/api/collections.go` and `apps/todo/src/api/broker.go`. It also
+  turns a Task read back into the body that edits it, and takes the difference
+  between the memberships a sheet opened on and the ones ticked when it was
+  submitted.
 - `src/read.ts` — the one read a screen makes for itself, and the guard around
   it: what came back, what went wrong, and the dropping of an answer that
   arrives after the screen has moved on.
@@ -74,11 +75,12 @@ and adds to this list rather than to the plan.
   their log through it.
 - `src/App.tsx` — the box above the list, and which screen is open. It draws what the read returned and works nothing out for itself.
 - `src/main.tsx` — the mount, and nothing else.
-- `src/Sheet.test.tsx`, `src/Narrow.test.tsx`, `src/Collections.test.tsx` — the
-  three components with a grammar: what a pick turns into on the wire, what a
-  picker does with a value it cannot name, and which kind a collection write
-  goes out under. The other components are drawn from what they are handed, so
-  there is nothing in them a test would pin that reading them does not.
+- `src/Sheet.test.tsx`, `src/Narrow.test.tsx`, `src/Collections.test.tsx`,
+  `src/Detail.test.tsx` — the four components with a grammar: what a pick turns
+  into on the wire, what a picker does with a value it cannot name, which kind a
+  collection write goes out under, and whether the field holding a pointer is
+  cleared. The other components are drawn from what they are handed, so there is
+  nothing in them a test would pin that reading them does not.
 - `src/index.css` — the whole of the styling. There is no component-level
   stylesheet and no CSS-in-JS, so the 44px rule below is checkable by reading
   one file.
@@ -103,6 +105,21 @@ and adds to this list rather than to the plan.
   store's decision from issue #3 rather than a limit of the browser. A path is
   resolved by whoever runs `todo api`, so one typed on a phone names a file on
   that host and not on the phone.
+- **A field is cleared by the write landing, never by the tap.** The pointer
+  typed on the detail screen survives a refusal, because nothing was written and
+  re-tapping is the right thing to do: clearing it would cost the whole target
+  retyped on a phone and would disable the button that retries, since an empty
+  target cannot be submitted. `point` answers whether the write landed and the
+  field reads that answer.
+- **A pointer taken off is tappable until the next poll, and the second tap is
+  an entry that did not happen.** The screen draws the pointers the read
+  returned, so a landed detach leaves the row for up to a second and a second
+  tap appends a second `attachment_removed` against one pointer removed once.
+  The folded state stays right either way. Nothing here filters the read to hide
+  it: a screen keeping which pointers it thinks are gone would be a second
+  description of the store, which is the thing this client does not do, and the
+  window is bounded by the poll rather than open. The fix belongs in the store,
+  where it would hold for every surface and every Actor; issue #77 is that.
 - **The client works nothing out that the store already did.** `Task.marks` is
   drawn as it arrives; a Task that read as snoozed from a keyboard cannot read
   as plain here.
@@ -188,23 +205,57 @@ and adds to this list rather than to the plan.
   a dropped answer. The nine colors and the four snoozes were the same problem
   and are not any more: `colors` and `snoozes` arrive with the state, so the
   picker for each is the store's list and cannot offer a tenth or a fifth.
+- **A rename and a recolor are one write, and each carries only what changed.**
+  `Collections.tsx` edits a row's name and color in place and submits them
+  together, because the store writes them as one entry and a screen that sent
+  two would put two rows in the Change History for one correction. The body
+  carries the attribute the row changed and leaves the other absent, which is
+  what `api.collectionBody` reads as leave it alone: sending back the color the
+  row opened on would undo a recolor another Actor made while it sat there.
+  A row nobody touched cannot be saved at all, so no entry says nothing changed.
+  Nothing drawn under a heading is three different things — a read that has not
+  landed, a read that failed, and a store with no Lists in it — and the screen
+  says which: telling somebody their Lists are gone because a poll has not come
+  back is what gets one added twice.
+  The row is keyed on the name and the color it was drawn from as well as the
+  id, because it holds a draft and the screen redraws on the read: a Collection
+  renamed from another surface has to put the row back on the new baseline, or
+  Save lights up on a row nobody touched and sending it writes the old name
+  over theirs. The draft is lost in that case, which is the right way round —
+  the alternative offers to undo somebody else's write without saying so. It
+  also closes the window after a save of one's own to the poll that follows it.
+- **The collections screen says one thing about a refusal and clears the add
+  row either way.** The message belongs to the write somebody just made and
+  there is only ever one of those outstanding, so it sits above the screen
+  rather than on a row. The blank row empties whether or not the write landed,
+  because the refusal is already said in its own words and a name left sitting
+  there is a name added twice by whoever read the sentence and tapped again.
+  Deleting is one tap, the way the four verbs on a Task are: the Tasks that
+  carried the Collection survive it and the Change History says it went.
 - **A narrowing to something the client cannot name is kept on the screen.**
   `Picker` in `Narrow.tsx` draws an id it has no Collection for under the id
   itself. A List or a Tag deleted from another surface while the list is
   narrowed to it would otherwise match no option, so the control would render
   blank over a list that was still narrowed and nothing would say what
-  happened. The rule has three sites and they stay three: `Picker` here, and
-  `Choice` and `Snooze` in `Sheet.tsx` below. The List and the Tag are one
-  `Picker` because a Collection is the same shape either way, and that is the
-  only merge the rule makes — the other two sit over different elements, and a
-  helper spanning them would be an abstraction over three shapes. What `Picker`
+  happened. The rule has four sites: `Picker` here, `Choice` and `Snooze` in
+  `Sheet.tsx` below, and `Color` in `Collections.tsx`, which keeps a color the
+  served nine do not name so that saving a rename cannot clear it. The List and
+  the Tag are one `Picker` because a Collection is the same shape either way,
+  and that is the only merge the rule makes. `Color` and `Choice` are the
+  nearest pair and stay apart: one is a bare control in a row and the other a
+  labelled field in a form, so merging them would mean two props that configure
+  chrome and one file's layout change having to consider the other's. What is
+  duplicated across the four is the rule itself rather than the control, and
+  lifting that one expression out is worth doing on its own rather than inside
+  a feature branch. What `Picker`
   does share is `labelled`, which is what an option reads: a Collection the
   store named carries the count it worked out, and an id nothing named carries
   none, because a zero there would be this side answering a question the store
   never answered.
 - **A picked value the client does not know is offered rather than dropped.**
-  `Choice` in `Sheet.tsx` is one control for the levels and the colors alike,
-  and a value that is none of the offered ones is added to the end of the list:
+  `Choice` in `Sheet.tsx` is one control for the levels and the Task's color
+  alike — a Collection's color is `Color` in `Collections.tsx` — and a value
+  that is none of the offered ones is added to the end of the list:
   the Broker chose the word, and a picker that silently could not hold it would
   lose what it said. The API refuses what it refuses, in the sentence the sheet
   shows.
