@@ -11,7 +11,8 @@ beside the JSON, so there is no second process and no CORS.
 surface moved off the terminal.
 
 Stages 1 to 4 of the plan built everything this directory holds, stages 5 and 6
-having deleted the TUI and packaged the two without adding a screen: the list over `GET /api/state`, the
+having deleted the TUI and packaged the two without adding a screen: the list over `GET /api/state` and the
+controls that narrow and order it, the
 box that hands a dump to the Broker and opens the add sheet filled in, the
 detail screen a tap on a Task opens, the Series screen and the four things it
 does to a date, the breakdown that proposes Subtasks, and the activity screen
@@ -22,7 +23,9 @@ over the Change History.
 - `src/api.ts` — the fetch plumbing every call shares: one JSON body out and
   one back, and the one place a failed response becomes an Error.
 - `src/state.ts` — the wire shapes and the one call that reads them. It mirrors
-  `apps/todo/src/api/state.go`, which is the side that decides them.
+  `apps/todo/src/api/state.go`, which is the side that decides them. It also
+  holds the Narrowing and the one function that writes it as a query string,
+  which both the list and the question ask under.
 - `src/write.ts` — the wire shapes the write and Broker routes take, and the
   calls that reach them, and the client's one copy of the four lifecycle verbs
   and the three Occurrence marks, plus the fourth thing done to a date, which
@@ -42,6 +45,9 @@ over the Change History.
 - `src/Sheet.tsx` — the sheet: a Task open for correction, whether the Broker
   just read it or it already exists. It makes no write of its own; whoever
   opens it says what submitting it does.
+- `src/Narrow.tsx` — the controls over the list: the sort, the List, and the
+  one toggle that takes in the snoozed, completed, declined and deleted. It
+  sets fields on the Narrowing and narrows nothing itself.
 - `src/Row.tsx` — one row of the list: the tap that opens the Task and the
   press held that puts the four verbs under it.
 - `src/Series.tsx` — the Series screen: the rule, the dates it produces next,
@@ -101,9 +107,26 @@ over the Change History.
   so about, in its own words, with the value still in the field.
 - **A question is asked about the Tasks the read asked for.** `POST /api/ask`
   narrows by the same query string `GET /api/state` does, so whatever narrows
-  the list narrows the question with it. Nothing narrows either today; a filter
-  added to the poll goes on the question in the same change, or the box starts
-  answering about a list nobody is looking at.
+  the list narrows the question with it. `queryString` in `state.ts` is what
+  makes that structural rather than a discipline: both calls build the string
+  from the same Narrowing through the same function, and a narrowing added
+  there is on the question the moment it is on the poll.
+- **The sorts on offer are the API's, not a copy.** `GET /api/state` carries
+  `sorts` from `store.Sorts`, so the picker cannot offer one the store would
+  refuse and a fifth sort appears the day it lands. This is the pattern for a
+  set the store owns; the level names, the verbs and the marks are copied only
+  because no route answers what they are.
+- **A changed narrowing restarts the poll from no ETag.** The tag and the list
+  it describes have to be the same age, so `App` keys the polling effect on the
+  query string. The API hashes the query into the tag as well, which means a
+  stale one cannot be answered `304` against a different view even if it were
+  handed back; the two together are belt and braces on the one mistake that
+  would draw one narrowing's Tasks under another's controls.
+- **Narrowing to a List narrows the tree, not just its roots.** The store
+  applies the filter to Subtasks too, so a Task open from a List-narrowed read
+  shows only the Subtasks in that List. That is `store.Tasks` behaving as
+  `todo list -list` does, and the client draws what it returned rather than
+  reassembling a tree the store did not describe.
 - **The three level names are the one thing the client keeps a copy of.**
   `Sheet.tsx` names them because `GET /api/state` does not carry them; a fourth
   added to `store.Levels` has to be added here too. Nothing is lost in the
@@ -139,10 +162,9 @@ over the Change History.
 - **A verb is offered whatever state the Task is in.** Which of the four the
   store refuses is the store's to say, and it says it in a sentence. A screen
   that greyed out the wrong one would be a second copy of a rule that already
-  exists. Reopen is the one nobody can reach yet: the poll asks for the open
-  Tasks, so an ended one is not in the list to be tapped. It becomes reachable
-  with the state filters the plan gives the list, and it is on the screen in
-  the meantime rather than removed and put back.
+  exists. Reopen is reached through show ended: the everyday poll asks for the
+  open Tasks, so an ended one is in the list to be tapped only under
+  `?all=true`.
 - **The four verbs are the second thing the client keeps a copy of.**
   `write.VERBS` names them because no route answers what they are, and both the
   row and the detail screen read that one list. A fifth added to

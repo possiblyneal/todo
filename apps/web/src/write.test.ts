@@ -15,6 +15,7 @@ import {
   repeat,
   unrepeat,
 } from './write'
+import { queryString, WIDE } from './state'
 
 // What the last call sent, which is how the body is checked: the routes take
 // JSON and a client that posted something else would still get a Response.
@@ -63,9 +64,24 @@ test('a dump goes to the broker and comes back as the body the sheet submits', a
 test('a question comes back as prose', async () => {
   vi.stubGlobal('fetch', answering(200, { answer: 'Start with the fence.' }))
 
-  expect(await ask('what first?')).toBe('Start with the fence.')
+  expect(await ask('what first?', WIDE)).toBe('Start with the fence.')
   expect(sent?.url).toBe('/api/ask')
   expect(body()).toEqual({ question: 'what first?' })
+})
+
+// The question is about the Tasks on the screen. `POST /api/ask` reads the
+// query string the way `GET /api/state` does, so the narrowing goes on the
+// question or the Broker answers about a list nobody is looking at.
+test('a question is asked about the list as it is narrowed', async () => {
+  vi.stubGlobal('fetch', answering(200, { answer: 'Two of them are overdue.' }))
+  const narrowing = { all: true, list: 'l1', sort: 'deadline' }
+
+  await ask('how many?', narrowing)
+
+  expect(sent?.url).toBe('/api/ask?all=true&list=l1&sort=deadline')
+  // The same string the poll carries, built by the same function: the two
+  // agreeing is the point, and a second spelling is how they stop agreeing.
+  expect(sent?.url).toBe(`/api/ask${queryString(narrowing)}`)
 })
 
 test('a written task is named by the id the api answers with', async () => {

@@ -179,6 +179,26 @@ func TestStateTakesEverySortTheStoreHas(t *testing.T) {
 	}
 }
 
+// The sorts the response offers are the sorts it accepts. A surface drawing a
+// picker from this must not be able to offer one the store would refuse, which
+// is the whole reason the list is on the wire rather than copied client-side.
+func TestStateOffersExactlyTheSortsItAccepts(t *testing.T) {
+	s := openTemp(t)
+	state := decodeState(t, get(t, s, "/api/state", nil))
+
+	if len(state.Sorts) != len(store.Sorts) {
+		t.Fatalf("sorts = %v, want %v", state.Sorts, store.SortNames())
+	}
+	for i, sort := range store.Sorts {
+		if state.Sorts[i] != string(sort) {
+			t.Errorf("sorts[%d] = %q, want %q", i, state.Sorts[i], sort)
+		}
+		if w := get(t, s, "/api/state?sort="+state.Sorts[i], nil); w.Code != http.StatusOK {
+			t.Errorf("sort=%s = %d, want 200", state.Sorts[i], w.Code)
+		}
+	}
+}
+
 func ptr[T any](v T) *T { return &v }
 
 // An empty list on the wire is `[]` and never `null`, in every place one can

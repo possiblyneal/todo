@@ -43,6 +43,46 @@ export type State = {
   tasks: Task[]
   lists: Collection[]
   tags: Collection[]
+  // What `?sort=` accepts, in the order the store lists them. It is drawn as
+  // it arrives: a sort added to `store.Sorts` is in the picker the day it
+  // lands, and this client cannot offer one the store would refuse.
+  sorts: string[]
+}
+
+/**
+ * The three narrowings `GET /api/state` accepts, as the screen holds them.
+ * `all` is the store's own word for it: one flag that takes in the snoozed,
+ * the completed, the declined and the deleted together, because that is what
+ * the route does with it rather than four switches this side pretends to.
+ */
+export type Narrowing = {
+  all: boolean
+  list: string
+  sort: string
+}
+
+/** Narrowed by nothing, which is the everyday view and what the list opens on. */
+export const WIDE: Narrowing = { all: false, list: '', sort: '' }
+
+/**
+ * A Narrowing as the query string both the list and the question carry.
+ *
+ * It is one function because it has to be one string: `POST /api/ask` reads
+ * the query the same way `GET /api/state` does, so whatever narrows the list
+ * narrows the question with it. Building the two separately is how they come
+ * to disagree, and a question answered about a list nobody is looking at is
+ * wrong in a way nothing on the screen would show.
+ *
+ * An empty value is left out rather than sent empty, so the everyday view is
+ * the bare path and the ETag it is cached under does not change shape.
+ */
+export function queryString({ all, list, sort }: Narrowing): string {
+  const query = new URLSearchParams()
+  if (all) query.set('all', 'true')
+  if (list) query.set('list', list)
+  if (sort) query.set('sort', sort)
+  const written = query.toString()
+  return written ? `?${written}` : ''
 }
 
 export type Snapshot = {
@@ -57,12 +97,17 @@ export type Snapshot = {
  *
  * A `null` return is "nothing changed", which is not the same as an empty
  * state and must not redraw as one.
+ *
+ * The ETag the API answers with is hashed over the query as well as the
+ * store's log, so a narrowing changed with no write in between is a different
+ * representation and is answered in full rather than 304.
  */
 export async function fetchState(
+  narrowing: Narrowing,
   etag: string | null,
   signal?: AbortSignal,
 ): Promise<Snapshot | null> {
-  const response = await fetch('/api/state', {
+  const response = await fetch(`/api/state${queryString(narrowing)}`, {
     headers: etag ? { 'If-None-Match': etag } : {},
     signal,
   })

@@ -3,7 +3,7 @@
 // `apps/todo/src/api/broker.go`, which are the side that decides them.
 
 import { send } from './api'
-import type { Task } from './state'
+import { type Narrowing, queryString, type Task } from './state'
 
 /**
  * A Task's attributes and its memberships as they are sent, and the same shape
@@ -41,9 +41,21 @@ export function capture(text: string): Promise<TaskBody> {
 /**
  * Asks about the Tasks in view and gets prose back. It is a read like the list
  * it is about: nothing is appended and nothing is kept between calls.
+ *
+ * "In view" is the narrowing the list is drawn under, sent as the same query
+ * string the poll carries and read by the route the same way. A question asked
+ * without it would be answered about every open Task while the screen shows a
+ * sorted, narrowed few, and nothing on the screen would say so.
  */
-export async function ask(question: string): Promise<string> {
-  const said = await send<{ answer: string }>('POST', '/api/ask', { question })
+export async function ask(
+  question: string,
+  narrowing: Narrowing,
+): Promise<string> {
+  const said = await send<{ answer: string }>(
+    'POST',
+    `/api/ask${queryString(narrowing)}`,
+    { question },
+  )
   return said.answer
 }
 

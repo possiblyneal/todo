@@ -12,7 +12,8 @@ import (
 )
 
 // state is GET /api/state: everything one screen needs in one response, which
-// is the tree the list draws plus the Lists and Tags its sidebar ranks.
+// is the tree the list draws, the Lists and Tags it can be narrowed by, and
+// the sorts it can be ordered through.
 //
 // It is a read, so nothing is attributed and no Lease is taken.
 func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
@@ -67,6 +68,7 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 		Tasks: make([]task, 0, len(tasks)),
 		Lists: make([]collection, 0, len(lists)),
 		Tags:  make([]collection, 0, len(tags)),
+		Sorts: store.SortNames(),
 	}
 	for _, t := range tasks {
 		out.Tasks = append(out.Tasks, newTask(t))
@@ -122,6 +124,12 @@ type stateBody struct {
 	Tasks []task       `json:"tasks"`
 	Lists []collection `json:"lists"`
 	Tags  []collection `json:"tags"`
+
+	// Sorts is what ?sort= accepts, from store.Sorts, so a surface offering
+	// the choice does not keep its own list of it. It is the same set the
+	// store refuses an unknown sort against, which is what stops a picker
+	// offering one the store would turn away.
+	Sorts []string `json:"sorts"`
 }
 
 // collection is a List or a Tag as the client reads it. The two are the same
