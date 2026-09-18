@@ -183,13 +183,19 @@ export function App() {
       {state && state.tasks.length === 0 && (
         <p className="message">
           {/*
-            A sort reorders what came back and cannot empty it, so a store with
-            nothing in it says so under every sort rather than blaming a
-            narrowing that removed nothing. Every other field can empty the
-            answer, so any of them set means the list was narrowed to nothing
-            rather than being empty.
+            The List, the Tag and the search are what take Tasks out of a read
+            this client asks for, so one of them set is a list narrowed to
+            nothing. A sort reorders what came back and cannot empty it, and
+            `all` widens rather than narrows, so neither is asked about here: a
+            store with nothing in it says so under every sort and under the
+            toggle both ways.
+
+            That leaves the everyday view over a store holding only ended Tasks
+            saying nothing is here yet. Telling that from an empty store would
+            take a second read, and for a fresh store this is the right
+            sentence.
           */}
-          {!drawn.all && !drawn.list && !drawn.tag && !drawn.search
+          {!drawn.list && !drawn.tag && !drawn.search
             ? 'Nothing here yet.'
             : 'Nothing matches what the list is narrowed to.'}
         </p>

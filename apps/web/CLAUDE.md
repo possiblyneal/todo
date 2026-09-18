@@ -133,10 +133,11 @@ and adds to this list rather than to the plan.
   one query; a delay here to decide when typing stopped would be a list that
   lags the box it is searched from. The text goes out as typed, because the
   store is what matches it and `todo list -search` matches the same way.
-- **The empty list says which of two things happened.** `all`, `list`, `tag`
-  and `search` can each empty the answer and a sort cannot, so a read that came
-  back with nothing under any of the four says the list is narrowed to nothing
-  and otherwise says the store is empty. It branches on the narrowing the Tasks
+- **The empty list says which of two things happened.** The List, the Tag and
+  the search are what take Tasks out of a read this client asks for, so a read
+  that came back with nothing under one of the three says the list is narrowed
+  to nothing and otherwise says the store is empty. A sort cannot empty an
+  answer and `all` widens rather than narrows, so neither is asked about. It branches on the narrowing the Tasks
   on the screen were read under, held in `App.tsx` as `drawn`, not on the one
   the controls show: the list is left standing through the round trip after a
   control is touched, so the sentence under an empty one has to name the
@@ -172,10 +173,10 @@ and adds to this list rather than to the plan.
   written and also when the narrowing changes, because the API hashes the query
   into it. The second cannot be observed: the only screen the controls are on is
   the list, and the three are unmounted while it is. Do not go looking for the
-  cost of it. A store whose write-ahead log cannot be stat'd carries no ETag at all,
-  and then those three read once and never again while the list stays
-  live. That is the one state where they are behind, and it is the same state
-  the API describes as not knowing whether anything changed.
+  cost of it. A store whose write-ahead log cannot be stat'd carries no ETag at
+  all, and then those three read once and never again while the list stays live.
+  That is the one state where they are behind, and it is the same state the API
+  describes as not knowing whether anything changed.
 - **A verb is offered whatever state the Task is in.** Which of the four the
   store refuses is the store's to say, and it says it in a sentence. A screen
   that greyed out the wrong one would be a second copy of a rule that already
