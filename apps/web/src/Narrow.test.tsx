@@ -29,7 +29,9 @@ test('a List deleted elsewhere stays on the picker under its own id', () => {
   shown({ ...WIDE, list: 'gone' })
   const picker = screen.getByLabelText('List') as HTMLSelectElement
   expect(picker.value).toBe('gone')
-  expect([...picker.options].map((o) => o.textContent)).toContain('gone (0)')
+  // Under the id alone, with no count beside it: the store never said how many
+  // Tasks are in it, and a zero here would be the client making one up.
+  expect([...picker.options].map((o) => o.textContent)).toContain('gone')
 })
 
 // The Tags are switches rather than a picker, and the rule is the same one: a
@@ -80,4 +82,12 @@ test('showing everything is one toggle and not four', () => {
   const onChange = shown()
   fireEvent.click(screen.getByRole('button', { name: 'Show everything' }))
   expect(onChange).toHaveBeenCalledWith({ ...WIDE, all: true })
+})
+
+// The same button is the way back, so it reads the narrowing it is given
+// rather than only ever asking for everything.
+test('showing everything again narrows back to the everyday view', () => {
+  const onChange = shown({ ...WIDE, all: true })
+  fireEvent.click(screen.getByRole('button', { name: 'Everything shown' }))
+  expect(onChange).toHaveBeenCalledWith({ ...WIDE, all: false })
 })
