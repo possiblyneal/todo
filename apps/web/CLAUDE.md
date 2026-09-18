@@ -142,7 +142,17 @@ and adds to this list rather than to the plan.
   the Lists, the Tags, the sorts, the colors and the snoozes, and `State` is it
   plus the Tasks. Every component takes `offered` whole, including the three
   that only hand it on, so a sixth set the route serves is one field here rather
-  than a prop threaded through them again.
+  than a prop threaded through them again. **What belongs in it is what the
+  route serves, not what one screen reads.** A set used by both the controls and
+  the sheet would have nowhere to live under a bundle shaped by its consumers,
+  and the wire has one shape whatever reads it; the cost is that `Narrow` and
+  `Sheet` each say which fields are not theirs. `Choice`, `Snooze` and `Picker`
+  name their own list `options` or `all` rather than `offered`, so the served
+  bundle and one control's values are never the same word in one file.
+- **A component reading the wrong set off `Offered` is a mistake a test catches.**
+  Five string lists behind one prop makes `offered.sorts` and `offered.colors`
+  interchangeable to the compiler, so `Narrow.test.tsx` pins which set feeds the
+  sort and `Sheet.test.tsx` pins the color and the snooze.
 - **A changed narrowing restarts the poll from no ETag.** The tag and the list
   it describes have to be the same age, so `App` keys the polling effect on the
   query string. The API hashes the query into the tag as well, which means a
