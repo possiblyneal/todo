@@ -104,7 +104,7 @@ button.row {
   font: inherit;
 }
 
-/* Show ended is a toggle, and there is no hover to say which way it is set, so
+/* Show everything is a toggle, and there is no hover to say which way it is set, so
    it is filled in when it is on. aria-pressed is what says it to a reader. */
 .control.on {
   background: currentColor;

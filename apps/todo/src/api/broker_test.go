@@ -162,6 +162,24 @@ func TestAskTakesTheSameNarrowingsTheListDoes(t *testing.T) {
 	}
 }
 
+// A question narrowed the way the list is narrowed is refused the way the list
+// is refused. An Agent is the only caller that can reach this, since a picker
+// offers only the sorts the read served, and an Agent gets the same contract a
+// person does.
+func TestAskRefusesASortTheStoreDoesNotHave(t *testing.T) {
+	s := openTemp(t)
+	add(t, s, "Buy paint")
+	told := broker(t, "Nothing left.")
+
+	w := do(t, s, http.MethodPost, "/api/ask?sort=whenever", `{"question": "what first?"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (%s)", w.Code, w.Body.String())
+	}
+	if *told != "" {
+		t.Errorf("the broker was told %q, want nothing asked under a sort the store refused", *told)
+	}
+}
+
 func TestAskWritesNothingAndRefusesAnEmptyQuestion(t *testing.T) {
 	s := openTemp(t)
 	add(t, s, "Paint the fence")

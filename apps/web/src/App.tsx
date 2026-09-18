@@ -36,6 +36,12 @@ export function App() {
   // no flags. It is held here rather than in the controls because the poll and
   // the question both ask under it.
   const [narrowing, setNarrowing] = useState<Narrowing>(WIDE)
+  // The narrowing the Tasks on the screen were read under, which is not the
+  // one the controls show for the round trip after a control is touched. The
+  // list is left standing meanwhile rather than blanked, so the sentence under
+  // an empty one has to name the narrowing that emptied it and not the one
+  // being asked for.
+  const [drawn, setDrawn] = useState<Narrowing>(WIDE)
 
   // The query is what the effect depends on rather than the object holding it:
   // a Narrowing is a new object on every render and depending on one would
@@ -53,6 +59,7 @@ export function App() {
         if (snapshot) {
           etag = snapshot.etag
           setState(snapshot.state)
+          setDrawn(narrowing)
           // The tag is the revision the other screens fetch their own reads
           // again on: it changes exactly when something was written, which is
           // what keeps them current without a second clock.
@@ -174,7 +181,13 @@ export function App() {
       {!state && !error && <p className="message">Reading the list…</p>}
       {state && state.tasks.length === 0 && (
         <p className="message">
-          {query === ''
+          {/*
+            Only `all` and `list` take Tasks out of the answer. A sort reorders
+            what came back and cannot empty it, so a store with nothing in it
+            says so under every sort rather than blaming a narrowing that
+            removed nothing.
+          */}
+          {!drawn.all && !drawn.list
             ? 'Nothing here yet.'
             : 'Nothing matches what the list is narrowed to.'}
         </p>

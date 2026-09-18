@@ -10,13 +10,13 @@ beside the JSON, so there is no second process and no CORS.
 `docs/adrs/0003-replace-the-tui-with-a-browser-client.md` records why the
 surface moved off the terminal.
 
-Stages 1 to 4 of the plan built everything this directory holds, stages 5 and 6
-having deleted the TUI and packaged the two without adding a screen: the list over `GET /api/state` and the
-controls that narrow and order it, the
-box that hands a dump to the Broker and opens the add sheet filled in, the
-detail screen a tap on a Task opens, the Series screen and the four things it
-does to a date, the breakdown that proposes Subtasks, and the activity screen
-over the Change History.
+What it holds: the list over `GET /api/state` and the controls that narrow and
+order it, the box that hands a dump to the Broker and opens the add sheet
+filled in, the detail screen a tap on a Task opens, the Series screen and the
+four things it does to a date, the breakdown that proposes Subtasks, and the
+activity screen over the Change History. The six stages of
+`docs/plans/browser-client.md` are all done; work since then is issue by issue
+and adds to this list rather than to the plan.
 
 ## Ownership
 
@@ -153,16 +153,19 @@ over the Change History.
   passes `{}` and sends the ticked sets rather than an empty difference.
 - **The other screens re-read on the ETag, not on a clock.** `App` hands the
   poll's tag down as a revision; the detail, Series and activity screens fetch
-  their own read again when it changes, which is exactly when something was written.
-  A second poll of their own would be a second clock disagreeing with the
-  first. A store whose write-ahead log cannot be stat'd carries no ETag at all,
+  their own read again when it changes. A second poll of their own would be a
+  second clock disagreeing with the first. The tag changes when something was
+  written and also when the narrowing changes, because the API hashes the query
+  into it. The second cannot be observed: the only screen the controls are on is
+  the list, and the three are unmounted while it is. Do not go looking for the
+  cost of it. A store whose write-ahead log cannot be stat'd carries no ETag at all,
   and then those three read once and never again while the list stays
   live. That is the one state where they are behind, and it is the same state
   the API describes as not knowing whether anything changed.
 - **A verb is offered whatever state the Task is in.** Which of the four the
   store refuses is the store's to say, and it says it in a sentence. A screen
   that greyed out the wrong one would be a second copy of a rule that already
-  exists. Reopen is reached through show ended: the everyday poll asks for the
+  exists. Reopen is reached through show everything: the everyday poll asks for the
   open Tasks, so an ended one is in the list to be tapped only under
   `?all=true`.
 - **The four verbs are the second thing the client keeps a copy of.**

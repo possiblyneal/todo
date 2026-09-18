@@ -17,8 +17,6 @@ import (
 //
 // It is a read, so nothing is attributed and no Lease is taken.
 func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
-	q := query(r)
-
 	// The ETag is the write-ahead log's token hashed with the query that
 	// produced the response. The token alone is store-global while this
 	// response is not: a client changing its filter or its sort with no
@@ -38,15 +36,8 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tasks, err := s.Tasks(q)
+	tasks, err := narrowed(s, r)
 	if err != nil {
-		// The store holds the only list of sorts there is, so it is the store
-		// that turns an unknown one away and the store's sentence that says
-		// so. Reaching that refusal means the caller asked wrongly, which is
-		// 400 here and exit status 2 at a terminal; anything else went wrong.
-		if q.Sort != "" && !slices.Contains(store.Sorts, q.Sort) {
-			err = usage{err}
-		}
 		fail(w, err)
 		return
 	}
@@ -118,6 +109,27 @@ func query(r *http.Request) store.Query {
 		List:             r.URL.Query().Get("list"),
 		Sort:             store.Sort(r.URL.Query().Get("sort")),
 	}
+}
+
+// narrowed reads the Tasks a request asked for, and turns the store's refusal
+// of an unknown sort into a caller's error.
+//
+// The store holds the only list of sorts there is, so it is the store that
+// turns an unknown one away and the store's sentence that says so. Reaching
+// that refusal means the caller asked wrongly, which is 400 here and exit
+// status 2 at a terminal; anything else went wrong.
+//
+// Every route that narrows by the query string reads it through this, so a
+// sort the store does not have is refused the same way wherever it is sent. An
+// Agent asking a question under a bad sort gets the answer a person's list
+// gets, rather than a 500 for the same mistake.
+func narrowed(s *store.Store, r *http.Request) ([]store.Task, error) {
+	q := query(r)
+	tasks, err := s.Tasks(q)
+	if err != nil && q.Sort != "" && !slices.Contains(store.Sorts, q.Sort) {
+		return nil, usage{err}
+	}
+	return tasks, err
 }
 
 type stateBody struct {
