@@ -81,6 +81,20 @@ var ErrRefused = errors.New("refused: the write needs an unexpired Lease on the 
 // cannot tell whether a person or an Agent took it, nor does it need to.
 var ErrHeld = errors.New("refused: an unexpired Lease is held on this Task")
 
+// ErrGone is a write against a Task that has been deleted. A deletion is the
+// one thing there is no way back from: declining is how a Task is put aside
+// and kept, so a deleted Task is one that should not have been there at all
+// and nothing brings it back.
+var ErrGone = errors.New("refused: a deleted Task is gone, and reopening does not bring one back")
+
+// Refused is the one statement of which errors are the store turning a write
+// away rather than something failing. A surface reads it to pick the status or
+// the exit code a refusal carries, so adding a fourth is adding it here and
+// nowhere else.
+func Refused(err error) bool {
+	return errors.Is(err, ErrRefused) || errors.Is(err, ErrHeld) || errors.Is(err, ErrGone)
+}
+
 // stamp is how every instant is stored. It is fixed-width on purpose, unlike
 // time.RFC3339Nano, which trims trailing zeros from the fraction and so orders
 // "12:00:00.5Z" before "12:00:00Z" under the TEXT comparison SQLite does. Both
@@ -162,9 +176,8 @@ type Task struct {
 	DeclinedAt  time.Time
 
 	// DeletedAt is the third state that takes a Task out of the everyday
-	// view, and it is not terminal: reopening undoes it too, because reopen
-	// is the only way back there is and a deletion is a thing somebody can
-	// be wrong about.
+	// view, and it is the one there is no way back from: a deleted Task is
+	// gone, and reopening refuses rather than bringing one back.
 	DeletedAt time.Time
 
 	// Overdue is the expression deadline < now, worked out by the read that
@@ -469,16 +482,11 @@ BEGIN
 	UPDATE task SET declined_at = NEW.at WHERE id = NEW.subject;
 END;
 
--- Reopening undoes any of the three states a Task is out of the everyday list
--- for: completed, declined, deleted. One entry serves all three because
--- reopening is the same act every way round -- the Task is open again -- and
--- the Change History already says which state it was reopened out of.
---
--- A deletion is undone here rather than by a verb of its own because reopen is
--- the only way back there is: the browser reaches a deleted Task by showing
--- everything, offers reopen on it the way it offers reopen on a completed one,
--- and a reopen that answered as though it had worked and left the Task deleted
--- wrote a reopening into the Change History that did not happen.
+-- Reopening undoes either terminal state, on the Task and on everything above
+-- it. One entry serves both because reopening is the same act either way: the
+-- Task is open again, and the Change History already says which state it was
+-- reopened out of. A deletion is not one of them -- ReopenTask refuses a
+-- deleted Task before the entry is appended, so there is nothing here to undo.
 --
 -- Reopening a Subtask reopens everything above it, in one statement. A trigger
 -- that cleared the parent and left the parent's own trigger to clear the
@@ -489,7 +497,7 @@ DROP TRIGGER IF EXISTS fold_task_reopened;
 CREATE TRIGGER fold_task_reopened
 AFTER INSERT ON change_history WHEN NEW.kind = 'task_reopened'
 BEGIN
-	UPDATE task SET completed_at = NULL, declined_at = NULL, deleted_at = NULL WHERE id IN (
+	UPDATE task SET completed_at = NULL, declined_at = NULL WHERE id IN (
 		WITH RECURSIVE ancestry(id, parent_id) AS (
 			SELECT id, parent_id FROM task WHERE id = NEW.subject
 			UNION ALL
@@ -1047,8 +1055,30 @@ func (s *Store) DeclineTask(actor, taskID string) error {
 	return s.guarded(actor, taskID, KindTaskDeclined, map[string]any{})
 }
 
+// ReopenTask undoes an ending. It refuses a deleted Task rather than bringing
+// one back: deleting says the Task should not have been there, and declining
+// is what puts one aside and keeps it, so the two are not a state and a softer
+// state but two different answers. The read is inside the same transaction as
+// the append, so a deletion landing between them cannot slip a reopening past.
+//
+// Refusing is what keeps the Change History honest. Appending the entry and
+// leaving the row deleted -- which is what this did before -- reads afterwards
+// as a reopening that happened, and no later write can take that back.
 func (s *Store) ReopenTask(actor, taskID string) error {
-	return s.guarded(actor, taskID, KindTaskReopened, map[string]any{})
+	_, err := s.inTx(func(tx *sql.Tx) (Entry, error) {
+		var deleted sql.NullString
+		switch err := tx.QueryRow(`SELECT deleted_at FROM task WHERE id = ?`, taskID).Scan(&deleted); {
+		case errors.Is(err, sql.ErrNoRows):
+			// No row at all is not this rule's to phrase: the append below
+			// answers a Task that never existed the way every other write does.
+		case err != nil:
+			return Entry{}, fmt.Errorf("read the Task's deletion: %w", err)
+		case deleted.Valid:
+			return Entry{}, ErrGone
+		}
+		return guardedAppend(tx, actor, KindTaskReopened, taskID, taskID, map[string]any{})
+	})
+	return err
 }
 
 func (s *Store) DeleteTask(actor, taskID string) error {

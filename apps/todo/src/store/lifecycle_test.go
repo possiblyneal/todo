@@ -308,54 +308,54 @@ func TestWithLeaseTakesAndGivesBack(t *testing.T) {
 	}
 }
 
-// Reopening is the only way back from a deletion, so it undoes one the way it
-// undoes an ending. The Task is in the everyday view afterwards rather than
-// answered 200 and left gone.
-func TestReopeningUndoesADeletion(t *testing.T) {
+// A deletion is the one thing there is no way back from. Reopening a deleted
+// Task is refused rather than answered 200 and left gone: an appended Task
+// Reopened that changed nothing reads afterwards as a reopening that happened,
+// and the Change History is append-only, so nothing later can take it back.
+func TestReopeningADeletedTaskIsRefused(t *testing.T) {
 	s := openTemp(t)
 	id := leased(t, s, "alice", Attributes{Title: Set("Buy milk")})
 
 	if err := s.DeleteTask("alice", id); err != nil {
 		t.Fatalf("DeleteTask: %v", err)
 	}
+
+	err := s.ReopenTask("alice", id)
+	if !errors.Is(err, ErrGone) {
+		t.Fatalf("ReopenTask on a deleted Task = %v, want ErrGone", err)
+	}
+	if !Refused(err) {
+		t.Error("the refusal does not read as a refusal, so a surface reports it as a failure")
+	}
+
+	// Nothing was appended, so the record does not claim a reopening.
+	history, err := s.HistoryOf(id)
+	if err != nil {
+		t.Fatalf("HistoryOf: %v", err)
+	}
+	for _, e := range history {
+		if e.Kind == KindTaskReopened {
+			t.Fatal("a refused reopening was written into the Change History")
+		}
+	}
+}
+
+// Declining is what puts a Task aside and keeps it, which is the way back the
+// deletion above does not have. The two are different answers rather than a
+// state and a softer state.
+func TestReopeningUndoesADeclineButNotADeletion(t *testing.T) {
+	s := openTemp(t)
+	id := leased(t, s, "alice", Attributes{Title: Set("Buy milk")})
+
+	if err := s.DeclineTask("alice", id); err != nil {
+		t.Fatalf("DeclineTask: %v", err)
+	}
 	if err := s.ReopenTask("alice", id); err != nil {
 		t.Fatalf("ReopenTask: %v", err)
 	}
 
 	got := only(t, s, Query{})
-	if !got.DeletedAt.IsZero() {
-		t.Error("reopening left the Task deleted")
-	}
-	if got.Title != "Buy milk" {
-		t.Errorf("the reopened Task reads %q, want it back whole", got.Title)
-	}
-}
-
-// A Subtask reopened out of a deletion comes back under a parent that is
-// there: the walk up clears every state above it, so nothing is undeleted into
-// a tree it cannot be reached through.
-func TestReopeningADeletedSubtaskUndeletesTheTasksAboveIt(t *testing.T) {
-	s := openTemp(t)
-	parent := leased(t, s, "alice", Attributes{Title: Set("Redecorate")})
-	child, err := s.AddSubtask("alice", parent, Attributes{Title: Set("Paint the fence")})
-	if err != nil {
-		t.Fatalf("AddSubtask: %v", err)
-	}
-	if err := s.DeleteTask("alice", child); err != nil {
-		t.Fatalf("DeleteTask on the Subtask: %v", err)
-	}
-	if err := s.DeleteTask("alice", parent); err != nil {
-		t.Fatalf("DeleteTask on the parent: %v", err)
-	}
-	if err := s.ReopenTask("alice", child); err != nil {
-		t.Fatalf("ReopenTask: %v", err)
-	}
-
-	tasks, err := s.Tasks(Query{})
-	if err != nil {
-		t.Fatalf("Tasks: %v", err)
-	}
-	if len(tasks) != 2 {
-		t.Fatalf("the everyday view holds %d Tasks, want the Subtask and the parent above it", len(tasks))
+	if !got.DeclinedAt.IsZero() {
+		t.Error("reopening left the Task declined")
 	}
 }
