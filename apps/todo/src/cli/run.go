@@ -145,13 +145,6 @@ func runVerb(args []string, stdout, stderr io.Writer) int {
 	return 2
 }
 
-// isRefusal says whether the store turned a write away rather than failing at
-// it. Which errors those are is store.Refused's to say, so this surface and
-// the API's status codes cannot come to disagree about what a refusal is.
-func isRefusal(err error) bool {
-	return store.Refused(err)
-}
-
 func open() (*store.Store, error) {
 	path, err := storePath()
 	if err != nil {
