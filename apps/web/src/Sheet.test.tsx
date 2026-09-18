@@ -21,6 +21,11 @@ const OFFERED: Offered = {
   sorts: ['title'],
   colors: ['red', 'blue'],
   snoozes: ['an hour', 'tomorrow'],
+  priorities: [
+    { name: 'low', example: 'It can wait a month.' },
+    { name: 'high', example: 'Today.' },
+  ],
+  impacts: [{ name: 'med', example: 'One piece of work moves.' }],
 }
 
 /** Renders the sheet and answers with what submitting it sent. */
@@ -195,4 +200,28 @@ test('a refused creation says so and ticks nothing', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Add List' }))
   await screen.findByText('that name is taken')
   expect(sheet.submit().intoLists).toEqual([])
+})
+
+// The three words are the API's now, and the example beside each is why: it is
+// what makes `high` mean the same thing to whoever is reading the form and to
+// an Agent writing through the same call.
+test('a level is offered under the example that says what it means', () => {
+  opened({ title: 'Buy milk' })
+  const priority = screen.getByLabelText('Priority') as HTMLSelectElement
+  expect([...priority.options].map((one) => one.textContent)).toEqual([
+    '—',
+    'low — It can wait a month.',
+    'high — Today.',
+  ])
+})
+
+// A level the served set does not name is still offered, the rule every picker
+// on this sheet follows. It has no example, because the route is what says what
+// one means and it said nothing about this.
+test('a level the route does not offer is kept, under its own name', () => {
+  opened({ title: 'Buy milk', priority: 'urgent' })
+  const priority = screen.getByLabelText('Priority') as HTMLSelectElement
+  expect([...priority.options].map((one) => one.textContent)).toContain(
+    'urgent',
+  )
 })

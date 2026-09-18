@@ -37,6 +37,23 @@ var (
 	}
 )
 
+// LevelOffer is a level and the example that says what it means, which is what
+// a surface offering the choice shows. The two travel together because a level
+// without its example is the thing this type exists to prevent.
+type LevelOffer struct {
+	Name    string
+	Example string
+}
+
+// LevelOffers pairs the three with one of the example maps above, in order.
+func LevelOffers(examples map[Level]string) []LevelOffer {
+	offers := make([]LevelOffer, len(Levels))
+	for i, l := range Levels {
+		offers[i] = LevelOffer{Name: string(l), Example: examples[l]}
+	}
+	return offers
+}
+
 // ParseLevel reads a level off a surface, so a bad one is refused where it is
 // typed rather than deep in the write path. An empty string clears the level.
 func ParseLevel(v string) (Level, error) {

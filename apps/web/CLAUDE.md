@@ -176,14 +176,14 @@ and adds to this list rather than to the plan.
   the controls show: the list is left standing through the round trip after a
   control is touched, so the sentence under an empty one has to name the
   narrowing that emptied it.
-- **The three level names are the one thing the client keeps a copy of.**
-  `Sheet.tsx` names them because `GET /api/state` does not carry them; a fourth
-  added to `store.Levels` has to be added here too. Nothing is lost in the
-  meantime: a level the client does not recognise is offered as an extra option
-  rather than blanked, so the copy going stale costs a missing choice and never
-  a dropped answer. The nine colors and the four snoozes were the same problem
-  and are not any more: `colors` and `snoozes` arrive with the state, so the
-  picker for each is the store's list and cannot offer a tenth or a fifth.
+- **The client keeps a copy of nothing on offer.** The sorts, the colors, the
+  snoozes and now the levels all arrive with the state, so no picker here can
+  offer a value the store would refuse or miss one added on the other side.
+  `priorities` and `impacts` are two fields because the three words are the same
+  and what they mean is not, and each level travels beside the example that says
+  what it means. `Choice` puts that example in the option itself: the question
+  it answers is asked while the three are side by side, and showing only the
+  chosen one's would mean picking each in turn to read them.
 - **A narrowing to something the client cannot name is kept on the screen.**
   `Picker` in `Narrow.tsx` draws an id it has no Collection for under the id
   itself. A List or a Tag deleted from another surface while the list is

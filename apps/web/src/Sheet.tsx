@@ -9,19 +9,11 @@
 import { useState } from 'react'
 
 import { sentence } from './api'
-import type { Collection, Offered } from './state'
+import type { Collection, Level, Offered } from './state'
 import { addCollection, type Kind, memberships, type TaskBody } from './write'
 
 /** The attributes this sheet takes as text, which is every one it shows. */
 type Said = 'title' | 'description' | 'why' | 'deadline' | 'estimate'
-
-/**
- * The three level names, and the one list the client still keeps a copy of:
- * nothing on the wire carries them, so a fourth added to `store.Levels` has to
- * be added here too. The colors and the snoozes used to be the same problem and
- * are not any more — `GET /api/state` carries both.
- */
-const LEVELS = ['low', 'med', 'high']
 
 export function Sheet({
   draft,
@@ -153,13 +145,15 @@ export function Sheet({
 
       <Choice
         name="Priority"
-        offered={LEVELS}
+        offered={offered.priorities.map((one) => one.name)}
+        examples={offered.priorities}
         value={body.priority ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, priority: value }))}
       />
       <Choice
         name="Impact"
-        offered={LEVELS}
+        offered={offered.impacts.map((one) => one.name)}
+        examples={offered.impacts}
         value={body.impact ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, impact: value }))}
       />
@@ -223,24 +217,38 @@ export function Sheet({
 function Choice({
   name,
   offered,
+  examples,
   value,
   onPick,
 }: {
   name: string
   offered: string[]
+  /**
+   * What each value means, where the route says. The levels carry one and the
+   * colors do not: blue means blue. A value with none is offered under its own
+   * name, which is what a value the client cannot recognise gets as well.
+   */
+  examples?: Level[]
   value: string
   onPick: (value: string) => void
 }) {
   const shown =
     value === '' || offered.includes(value) ? offered : [...offered, value]
+  const said = (one: string) => examples?.find((each) => each.name === one)
   return (
     <label className="field">
       <span>{name}</span>
+      {/*
+        The example is in the option rather than under the picker, because the
+        question it answers is asked while the three are side by side. Showing
+        only the chosen one's would mean picking each in turn to read them,
+        which is the choice being made to find out what the choice is.
+      */}
       <select value={value} onChange={(event) => onPick(event.target.value)}>
         <option value="">—</option>
         {shown.map((one) => (
           <option key={one} value={one}>
-            {one}
+            {said(one) ? `${one} — ${said(one)?.example}` : one}
           </option>
         ))}
       </select>

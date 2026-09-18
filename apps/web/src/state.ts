@@ -68,6 +68,20 @@ export type Offered = {
   // the Broker said as well as what is offered here.
   colors: string[]
   snoozes: string[]
+  // The three levels twice over, each beside the example that says what it
+  // means. Two fields and not one because the words are the same and what they
+  // mean is not: high priority is today, high impact is what unblocks other
+  // work. The examples are why these are served at all — they are what makes
+  // the three words mean the same thing to a person and to an Agent, and a
+  // client keeping the words alone would keep none of it.
+  priorities: Level[]
+  impacts: Level[]
+}
+
+/** One of the three, and what choosing it means. */
+export type Level = {
+  name: string
+  example: string
 }
 
 /**
@@ -81,6 +95,8 @@ export const OFFERED_NOTHING: Offered = {
   sorts: [],
   colors: [],
   snoozes: [],
+  priorities: [],
+  impacts: [],
 }
 
 export type State = Offered & {
