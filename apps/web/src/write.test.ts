@@ -4,8 +4,10 @@ import {
   addSubtask,
   addTask,
   ask,
+  attach,
   breakdown,
   capture,
+  detach,
   detachEdited,
   draftOf,
   editTask,
@@ -187,6 +189,32 @@ test('a subtask is written under the task in the path', async () => {
   expect(id).toBe('task_child')
   expect(sent?.url).toBe('/api/tasks/task_parent/subtasks')
   expect(body()).toEqual({ title: 'Buy the paint' })
+})
+
+// The target rides in the body and not the path, because a pointer carries its
+// own slashes. Both sides have to agree on the field name for that to work, and
+// `decode` refuses a field it does not know, so a rename on either side is a
+// 400 nothing else would catch.
+test('a pointer is added in the body under the task in the path', async () => {
+  vi.stubGlobal('fetch', answering(200, { id: 'task_abc' }))
+
+  await attach('task_abc', '/home/neal/plans/shed.pdf')
+
+  expect(sent?.url).toBe('/api/tasks/task_abc/attachments')
+  expect(sent?.init?.method).toBe('POST')
+  expect(body()).toEqual({ target: '/home/neal/plans/shed.pdf' })
+})
+
+test('taking a pointer off names it in the body too', async () => {
+  vi.stubGlobal('fetch', answering(200, { id: 'task_abc' }))
+
+  await detach('task_abc', 'https://example.com/a?b=c#d')
+
+  expect(sent?.url).toBe('/api/tasks/task_abc/attachments')
+  expect(sent?.init?.method).toBe('DELETE')
+  // Slashes, a query and a fragment all survive, which is the whole reason the
+  // target is not a path segment.
+  expect(body()).toEqual({ target: 'https://example.com/a?b=c#d' })
 })
 
 test('an edit patches the task it is about', async () => {

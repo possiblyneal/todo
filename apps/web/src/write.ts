@@ -1,5 +1,6 @@
 // The wire shapes the write routes take and the two Broker calls, and the
-// calls that reach them. They mirror `apps/todo/src/api/tasks.go` and
+// calls that reach them. They mirror `apps/todo/src/api/tasks.go`,
+// `apps/todo/src/api/series.go`, `apps/todo/src/api/collections.go` and
 // `apps/todo/src/api/broker.go`, which are the side that decides them.
 
 import { send } from './api'
