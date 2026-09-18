@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -147,9 +146,10 @@ func runVerb(args []string, stdout, stderr io.Writer) int {
 }
 
 // isRefusal says whether the store turned a write away rather than failing at
-// it: no Lease, or one another Actor holds.
+// it. Which errors those are is store.Refused's to say, so this surface and
+// the API's status codes cannot come to disagree about what a refusal is.
 func isRefusal(err error) bool {
-	return errors.Is(err, store.ErrRefused) || errors.Is(err, store.ErrHeld)
+	return store.Refused(err)
 }
 
 func open() (*store.Store, error) {
