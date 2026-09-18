@@ -149,8 +149,9 @@ func TestAttachingNeedsTheLease(t *testing.T) {
 	}
 }
 
-// The same pointer twice is one pointer, and a relative path is resolved
-// where it was typed, so it means the same thing read from anywhere else.
+// The same pointer twice is one pointer, and a relative path is made absolute
+// against the resolving process's working directory, so it means the same
+// thing read from anywhere else.
 func TestAPointerIsWrittenDownOnceAndInFull(t *testing.T) {
 	s := openTemp(t)
 	id := leased(t, s, "alice", Attributes{Title: Set("Tidy up")})
