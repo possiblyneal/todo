@@ -17,6 +17,8 @@ const OFFERED: Offered = {
   lists: [{ id: 'l1', name: 'Home', color: 'blue', count: 2 }],
   tags: [{ id: 't1', name: 'errand', color: 'red', count: 1 }],
   sorts: ['title', 'deadline'],
+  colors: ['blue', 'red'],
+  snoozes: ['1h', '1d'],
 }
 
 function shown(narrowing = WIDE) {
@@ -24,6 +26,18 @@ function shown(narrowing = WIDE) {
   render(<Narrow narrowing={narrowing} offered={OFFERED} onChange={onChange} />)
   return onChange
 }
+
+// Five served sets arrive under one prop now, so reading the wrong one off it
+// is a mistake that can be made. This says which set feeds the sort.
+test('the sort offers the orders the store served and nothing else', () => {
+  shown()
+  const picker = screen.getByLabelText('Sort') as HTMLSelectElement
+  expect([...picker.options].map((o) => o.value)).toEqual([
+    '',
+    'title',
+    'deadline',
+  ])
+})
 
 test('a List deleted elsewhere stays on the picker under its own id', () => {
   shown({ ...WIDE, list: 'gone' })
