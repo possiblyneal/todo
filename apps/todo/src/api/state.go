@@ -96,8 +96,8 @@ func matches(values []string, tag string) bool {
 	return false
 }
 
-// query reads a Query out of the request, on the same four narrowings and the
-// same names `todo list` takes them under. An unknown sort is not refused
+// query reads a Query out of the request, on the same narrowings and the same
+// names `todo list` takes them under. An unknown sort is not refused
 // here: the store keeps the list of sorts, so the store is what refuses one.
 func query(r *http.Request) store.Query {
 	all := r.URL.Query().Get("all") == "true"
@@ -107,6 +107,8 @@ func query(r *http.Request) store.Query {
 		IncludeSnoozed:   all,
 		IncludeDeleted:   all,
 		List:             r.URL.Query().Get("list"),
+		Tag:              r.URL.Query().Get("tag"),
+		Search:           r.URL.Query().Get("search"),
 		Sort:             store.Sort(r.URL.Query().Get("sort")),
 	}
 }

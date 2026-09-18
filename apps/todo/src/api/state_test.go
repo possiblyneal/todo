@@ -347,3 +347,32 @@ func TestAPathThatClimbsOutOfTheServedDirectoryDoesNot(t *testing.T) {
 		}
 	}
 }
+
+// The Tag and the search reach the read the same way the List does, under the
+// names `todo list` takes them under. An Agent narrows by query string and a
+// person's client narrows by query string, so what a client can ask for is what
+// this route accepts and no less.
+func TestStateNarrowsByTagAndBySearch(t *testing.T) {
+	s := openTemp(t)
+	fence := add(t, s, "Paint the fence")
+	shop := add(t, s, "Buy paint")
+	tag, err := s.AddTag("tester", "errand", "green")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+	if err := s.WithLease("tester", shop, store.WriteTTL, func() error {
+		return s.AttachTag("tester", shop, tag)
+	}); err != nil {
+		t.Fatalf("AttachTag: %v", err)
+	}
+
+	body := decodeState(t, get(t, s, "/api/state?tag="+tag, nil))
+	if len(body.Tasks) != 1 || body.Tasks[0].ID != shop {
+		t.Errorf("tag narrowing gave %d tasks, want only the tagged one", len(body.Tasks))
+	}
+
+	body = decodeState(t, get(t, s, "/api/state?search=fence", nil))
+	if len(body.Tasks) != 1 || body.Tasks[0].ID != fence {
+		t.Errorf("search gave %d tasks, want only the one whose words hold it", len(body.Tasks))
+	}
+}

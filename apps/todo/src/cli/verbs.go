@@ -126,6 +126,8 @@ func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	fs := flags("list", stderr)
 	all := fs.Bool("all", false, "include completed, declined, snoozed and deleted tasks")
 	in := fs.String("list", "", "only the tasks in this list, by id")
+	tag := fs.String("tag", "", "only the tasks carrying this tag, by id")
+	search := fs.String("search", "", "only the tasks whose title, description or why hold this text")
 	sort := fs.String("sort", string(store.SortCreated),
 		"order siblings by "+strings.Join(store.SortNames(), ", "))
 	if err := fs.Parse(args); err != nil {
@@ -137,6 +139,8 @@ func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 		IncludeSnoozed:   *all,
 		IncludeDeleted:   *all,
 		List:             *in,
+		Tag:              *tag,
+		Search:           *search,
 		Sort:             store.Sort(*sort),
 	}
 

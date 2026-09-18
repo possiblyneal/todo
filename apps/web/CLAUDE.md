@@ -45,9 +45,10 @@ and adds to this list rather than to the plan.
 - `src/Sheet.tsx` — the sheet: a Task open for correction, whether the Broker
   just read it or it already exists. It makes no write of its own; whoever
   opens it says what submitting it does.
-- `src/Narrow.tsx` — the controls over the list: the sort, the List, and the
-  one toggle that takes in the snoozed, completed, declined and deleted. It
-  sets fields on the Narrowing and narrows nothing itself.
+- `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tag,
+  the box searched in, and the one toggle that takes in the snoozed, completed,
+  declined and deleted. It sets fields on the Narrowing and narrows nothing
+  itself.
 - `src/Row.tsx` — one row of the list: the tap that opens the Task and the
   press held that puts the four verbs under it.
 - `src/Series.tsx` — the Series screen: the rule, the dates it produces next,
@@ -127,6 +128,19 @@ and adds to this list rather than to the plan.
   shows only the Subtasks in that List. That is `store.Tasks` behaving as
   `todo list -list` does, and the client draws what it returned rather than
   reassembling a tree the store did not describe.
+- **Searching is a keystroke and a read, with no timer in between.** Each
+  character is a new narrowing, so the poll restarts and the store answers off
+  one query; a delay here to decide when typing stopped would be a list that
+  lags the box it is searched from. The text goes out as typed, because the
+  store is what matches it and `todo list -search` matches the same way.
+- **The empty list says which of two things happened.** `all`, `list`, `tag`
+  and `search` can each empty the answer and a sort cannot, so a read that came
+  back with nothing under any of the four says the list is narrowed to nothing
+  and otherwise says the store is empty. It branches on the narrowing the Tasks
+  on the screen were read under, held in `App.tsx` as `drawn`, not on the one
+  the controls show: the list is left standing through the round trip after a
+  control is touched, so the sentence under an empty one has to name the
+  narrowing that emptied it.
 - **The three level names are the one thing the client keeps a copy of.**
   `Sheet.tsx` names them because `GET /api/state` does not carry them; a fourth
   added to `store.Levels` has to be added here too. Nothing is lost in the

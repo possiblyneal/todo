@@ -10,11 +10,13 @@ import type { Collection, Narrowing } from './state'
 export function Narrow({
   narrowing,
   lists,
+  tags,
   sorts,
   onChange,
 }: {
   narrowing: Narrowing
   lists: Collection[]
+  tags: Collection[]
   // What `?sort=` accepts, as `GET /api/state` answered it. The client keeps no
   // list of its own, so a sort added to the store is offered here the day it
   // lands and one this side invented cannot be offered at all.
@@ -66,6 +68,42 @@ export function Narrow({
           </option>
         ))}
       </select>
+
+      <select
+        className="control"
+        aria-label="Tag"
+        value={narrowing.tag}
+        onChange={(event) => onChange({ ...narrowing, tag: event.target.value })}
+      >
+        <option value="">Every tag</option>
+        {tags.map((tag) => (
+          <option key={tag.id} value={tag.id}>
+            {tag.name} ({tag.count})
+          </option>
+        ))}
+      </select>
+
+      {/*
+        Typing asks again: each keystroke is a new narrowing and so a new read,
+        which on a LAN is a request the store answers off one query. Holding
+        the text back until somebody stops typing would mean a list that lags
+        the box it is being searched from, and a timer here to decide when
+        typing stopped.
+
+        The store is what matches, so this sends the text and nothing else. It
+        searches a Task's own Title, Description and Why, which the store
+        decides and this side does not restate on the screen.
+      */}
+      <input
+        className="control"
+        type="search"
+        aria-label="Search"
+        placeholder="Search"
+        value={narrowing.search}
+        onChange={(event) =>
+          onChange({ ...narrowing, search: event.target.value })
+        }
+      />
 
       {/*
         One button and not four. `?all=true` takes in the snoozed, the

@@ -174,6 +174,7 @@ export function App() {
       <Narrow
         narrowing={narrowing}
         lists={state?.lists ?? []}
+        tags={state?.tags ?? []}
         sorts={state?.sorts ?? []}
         onChange={setNarrowing}
       />
@@ -182,12 +183,13 @@ export function App() {
       {state && state.tasks.length === 0 && (
         <p className="message">
           {/*
-            Only `all` and `list` take Tasks out of the answer. A sort reorders
-            what came back and cannot empty it, so a store with nothing in it
-            says so under every sort rather than blaming a narrowing that
-            removed nothing.
+            A sort reorders what came back and cannot empty it, so a store with
+            nothing in it says so under every sort rather than blaming a
+            narrowing that removed nothing. Every other field can empty the
+            answer, so any of them set means the list was narrowed to nothing
+            rather than being empty.
           */}
-          {!drawn.all && !drawn.list
+          {!drawn.all && !drawn.list && !drawn.tag && !drawn.search
             ? 'Nothing here yet.'
             : 'Nothing matches what the list is narrowed to.'}
         </p>

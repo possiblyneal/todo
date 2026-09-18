@@ -50,19 +50,30 @@ export type State = {
 }
 
 /**
- * The three narrowings `GET /api/state` accepts, as the screen holds them.
- * `all` is the store's own word for it: one flag that takes in the snoozed,
- * the completed, the declined and the deleted together, because that is what
- * the route does with it rather than four switches this side pretends to.
+ * The narrowings `GET /api/state` accepts, as the screen holds them. `all` is
+ * the store's own word for it: one flag that takes in the snoozed, the
+ * completed, the declined and the deleted together, because that is what the
+ * route does with it rather than four switches this side pretends to.
+ *
+ * `list` and `tag` are ids rather than names, because that is what a Task
+ * carries. `search` is text, matched by the store against a Task's own words.
  */
 export type Narrowing = {
   all: boolean
   list: string
+  tag: string
+  search: string
   sort: string
 }
 
 /** Narrowed by nothing, which is the everyday view and what the list opens on. */
-export const WIDE: Narrowing = { all: false, list: '', sort: '' }
+export const WIDE: Narrowing = {
+  all: false,
+  list: '',
+  tag: '',
+  search: '',
+  sort: '',
+}
 
 /**
  * A Narrowing as the query string both the list and the question carry.
@@ -76,10 +87,12 @@ export const WIDE: Narrowing = { all: false, list: '', sort: '' }
  * An empty value is left out rather than sent empty, so the everyday view is
  * the bare path and the ETag it is cached under does not change shape.
  */
-export function queryString({ all, list, sort }: Narrowing): string {
+export function queryString({ all, list, tag, search, sort }: Narrowing): string {
   const query = new URLSearchParams()
   if (all) query.set('all', 'true')
   if (list) query.set('list', list)
+  if (tag) query.set('tag', tag)
+  if (search) query.set('search', search)
   if (sort) query.set('sort', sort)
   const written = query.toString()
   return written ? `?${written}` : ''

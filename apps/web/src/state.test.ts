@@ -125,20 +125,33 @@ test('narrowed by nothing is the path and no query at all', () => {
 })
 
 test('each narrowing is sent under the name the route reads it by', () => {
-  expect(queryString({ all: true, list: 'l1', sort: 'deadline' })).toBe(
-    '?all=true&list=l1&sort=deadline',
-  )
+  expect(
+    queryString({
+      all: true,
+      list: 'l1',
+      tag: 't1',
+      search: 'paint',
+      sort: 'deadline',
+    }),
+  ).toBe('?all=true&list=l1&tag=t1&search=paint&sort=deadline')
 })
 
 // `all` is one flag over four states, because that is what the route does with
 // it. Sending `all=false` would be asking for something the route has no word
 // for.
 test('showing only the everyday tasks says nothing rather than false', () => {
-  expect(queryString({ all: false, list: '', sort: '' })).toBe('')
+  expect(queryString({ ...WIDE, all: false })).toBe('')
 })
 
 test('a list id that needs escaping is escaped', () => {
   expect(queryString({ ...WIDE, list: 'a b&c' })).toBe('?list=a+b%26c')
+})
+
+// The store is what matches the text, so whatever was typed goes out as typed.
+// Trimming or splitting it here would be this side deciding what a search means
+// and then disagreeing with `todo list -search`.
+test('searched text is sent as it was typed', () => {
+  expect(queryString({ ...WIDE, search: '50% off' })).toBe('?search=50%25+off')
 })
 
 test('the read asks under the narrowing it was given', async () => {
@@ -147,7 +160,7 @@ test('the read asks under the narrowing it was given', async () => {
     answering(200, { tasks: [], lists: [], tags: [], sorts: [] }),
   )
 
-  await fetchState({ all: true, list: 'l1', sort: 'title' }, null)
+  await fetchState({ ...WIDE, all: true, list: 'l1', sort: 'title' }, null)
 
   expect(at).toBe('/api/state?all=true&list=l1&sort=title')
 })

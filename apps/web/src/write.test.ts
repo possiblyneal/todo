@@ -74,7 +74,7 @@ test('a question comes back as prose', async () => {
 // question or the Broker answers about a list nobody is looking at.
 test('a question is asked about the list as it is narrowed', async () => {
   vi.stubGlobal('fetch', answering(200, { answer: 'Two of them are overdue.' }))
-  const narrowing = { all: true, list: 'l1', sort: 'deadline' }
+  const narrowing = { ...WIDE, all: true, list: 'l1', sort: 'deadline' }
 
   await ask('how many?', narrowing)
 
