@@ -27,8 +27,12 @@ A single piece of work the tracker holds, with its own lifecycle — added, desc
 _Avoid_: Todo, item, entry, ticket
 
 **Declined**:
-Said of a Task that will not be done. It ends the Task the way completing does, and a Task ends once — a Task that has ended is reopened before it ends the other way. It is not a deletion: a deleted Task is one that should not have been there, and a declined one was there, was looked at, and was refused. Nothing records why. Reopening undoes it, and undoes a deletion too: somebody can be wrong about a Task having no business existing, and reopen is the only way back there is.
+Said of a Task that will not be done. It ends the Task the way completing does, and a Task ends once — a Task that has ended is reopened before it ends the other way. It is not a deletion: a deleted Task is one that should not have been there, and a declined one was there, was looked at, and was refused. Nothing records why. Reopening undoes it, which is what makes declining the way to put a Task aside and keep it.
 _Avoid_: Rejected, cancelled, dropped, won't-do
+
+**Deleted**:
+Said of a Task that should not have been there. It is the one thing there is no way back from: reopening a deleted Task is refused, so a Task somebody may want again is declined rather than deleted. What the Change History says about it stays, because a deletion is an appended entry and never an erasure; the Task itself does not come back.
+_Avoid_: Removed, archived, trashed
 
 **Subtask**:
 A Task nested under another Task, to five levels. A Subtask is fixed where it was created: it never moves to a different parent and never leaves the Task it sits under. A top-level Task and everything nested beneath it are written and kept correct as one whole.
