@@ -197,6 +197,12 @@ and adds to this list rather than to the plan.
   in the Broker's words: a tick over attributes nobody is shown is not a gate,
   and a level none of the three is drawn as the word that was used for the store
   to refuse in its own sentence.
+- **A deadline is typed, and picked beside being typed.** The box is the field
+  and is submitted as typed, which is what keeps a phrase the Broker used from
+  being blanked by a control that can hold only what it can parse. The native
+  `<input type="date">` next to it writes into the box and never reads it:
+  "next Friday" is not a date it can show, and one that guessed at it would be
+  the same failure a control later.
 - **An Attachment is collected on the sheet and written after the Task exists.**
   `Pointers` in `Sheet.tsx` puts them on the body; `addTask`, `addSubtask` and
   `editTask` in `write.ts` split them off, because the routes refuse a field

@@ -119,20 +119,34 @@ export function Sheet({
       </label>
 
       {/*
-        A date is typed rather than picked. The Broker answers in prose and may
-        say a day this program cannot read, and a native picker holds only what
-        it can parse: it would blank the answer on the way to the screen, which
-        is the one thing this sheet exists to prevent. What it could not read
-        stays in the field and the API says so in its own words.
+        A date is typed, and picked beside being typed. The box is the field:
+        the Broker answers in prose and may say a day this program cannot read,
+        and a control holding only what it can parse would blank the answer on
+        the way to the screen, which is the one thing this sheet exists to
+        prevent. What it could not read stays in the box and the API says so in
+        its own words.
+
+        The picker writes into the box and never reads it. "next Friday" is not
+        a date it can show, and one that blanked or guessed at it would be the
+        same failure a control later. So it is the platform's own, uncontrolled,
+        and the box is still free text after a date lands in it.
       */}
-      <label className="field">
-        <span>Deadline</span>
-        <input
-          value={body.deadline ?? ''}
-          onChange={(event) => say('deadline', event.target.value)}
-          placeholder="2026-03-04"
-        />
-      </label>
+      <fieldset className="field">
+        <legend>Deadline</legend>
+        <div className="pair">
+          <input
+            aria-label="Deadline"
+            value={body.deadline ?? ''}
+            onChange={(event) => say('deadline', event.target.value)}
+            placeholder="2026-03-04"
+          />
+          <input
+            type="date"
+            aria-label="Pick a deadline"
+            onChange={(event) => say('deadline', event.target.value)}
+          />
+        </div>
+      </fieldset>
 
       <label className="field">
         <span>Estimate</span>

@@ -249,3 +249,27 @@ test('a collected attachment is taken off before anything is written', () => {
   fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]!)
   expect(sheet.submit().attachments).toEqual(['/two'])
 })
+
+// The picker writes into the box, which stays the field. A day picked is the
+// same text somebody could have typed, and is still editable afterwards.
+test('a picked date lands in the deadline box as text', () => {
+  const sheet = opened({ title: 'Buy milk' })
+  fireEvent.change(screen.getByLabelText('Pick a deadline'), {
+    target: { value: '2026-03-04' },
+  })
+  expect((screen.getByLabelText('Deadline') as HTMLInputElement).value).toBe(
+    '2026-03-04',
+  )
+  expect(sheet.submit().deadline).toBe('2026-03-04')
+})
+
+// The one thing the picker must not do. A phrase the store may yet read is the
+// reason the box exists, and a picker reaching into it would blank or guess at
+// that phrase, which is the failure this shape was chosen to avoid.
+test('a phrase the picker cannot show is left in the box', () => {
+  const sheet = opened({ title: 'Buy milk', deadline: 'next Friday' })
+  expect((screen.getByLabelText('Deadline') as HTMLInputElement).value).toBe(
+    'next Friday',
+  )
+  expect(sheet.submit().deadline).toBe('next Friday')
+})
