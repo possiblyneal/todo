@@ -33,9 +33,10 @@ and adds to this list rather than to the plan.
   and the three Occurrence marks, plus the fourth thing done to a date, which
   is a call of its own because it carries a whole Task. It mirrors
   `apps/todo/src/api/tasks.go`, `apps/todo/src/api/series.go`,
-  `apps/todo/src/api/collections.go` and `apps/todo/src/api/broker.go`. It also turns
-  a Task read back into the body that edits it, and takes the difference between
-  the memberships a sheet opened on and the ones ticked when it was submitted.
+  `apps/todo/src/api/collections.go` and `apps/todo/src/api/broker.go`. It also
+  turns a Task read back into the body that edits it, and takes the difference
+  between the memberships a sheet opened on and the ones ticked when it was
+  submitted.
 - `src/read.ts` — the one read a screen makes for itself, and the guard around
   it: what came back, what went wrong, and the dropping of an answer that
   arrives after the screen has moved on.
@@ -229,7 +230,8 @@ and adds to this list rather than to the plan.
   never answered.
 - **A picked value the client does not know is offered rather than dropped.**
   `Choice` in `Sheet.tsx` is one control for the levels and the Task's color
-  alike — a Collection's color is `Color` in `Collections.tsx` — and a value that is none of the offered ones is added to the end of the list:
+  alike — a Collection's color is `Color` in `Collections.tsx` — and a value
+  that is none of the offered ones is added to the end of the list:
   the Broker chose the word, and a picker that silently could not hold it would
   lose what it said. The API refuses what it refuses, in the sentence the sheet
   shows.
