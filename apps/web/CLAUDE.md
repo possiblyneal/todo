@@ -72,11 +72,12 @@ and adds to this list rather than to the plan.
   their log through it.
 - `src/App.tsx` — the box above the list, and which screen is open. It draws what the read returned and works nothing out for itself.
 - `src/main.tsx` — the mount, and nothing else.
-- `src/Sheet.test.tsx`, `src/Narrow.test.tsx`, `src/Collections.test.tsx` — the
-  three components with a grammar: what a pick turns into on the wire, what a
-  picker does with a value it cannot name, and which kind a collection write
-  goes out under. The other components are drawn from what they are handed, so
-  there is nothing in them a test would pin that reading them does not.
+- `src/Sheet.test.tsx`, `src/Narrow.test.tsx`, `src/Collections.test.tsx`,
+  `src/Detail.test.tsx` — the four components with a grammar: what a pick turns
+  into on the wire, what a picker does with a value it cannot name, which kind a
+  collection write goes out under, and whether the field holding a pointer is
+  cleared. The other components are drawn from what they are handed, so there is
+  nothing in them a test would pin that reading them does not.
 - `src/index.css` — the whole of the styling. There is no component-level
   stylesheet and no CSS-in-JS, so the 44px rule below is checkable by reading
   one file.
@@ -101,6 +102,21 @@ and adds to this list rather than to the plan.
   store's decision from issue #3 rather than a limit of the browser. A path is
   resolved by whoever runs `todo api`, so one typed on a phone names a file on
   that host and not on the phone.
+- **A field is cleared by the write landing, never by the tap.** The pointer
+  typed on the detail screen survives a refusal, because nothing was written and
+  re-tapping is the right thing to do: clearing it would cost the whole target
+  retyped on a phone and would disable the button that retries, since an empty
+  target cannot be submitted. `point` answers whether the write landed and the
+  field reads that answer.
+- **A pointer taken off is tappable until the next poll, and the second tap is
+  an entry that did not happen.** The screen draws the pointers the read
+  returned, so a landed detach leaves the row for up to a second and a second
+  tap appends a second `attachment_removed` against one pointer removed once.
+  The folded state stays right either way. Nothing here filters the read to hide
+  it: a screen keeping which pointers it thinks are gone would be a second
+  description of the store, which is the thing this client does not do, and the
+  window is bounded by the poll rather than open. The fix belongs in the store,
+  where it would hold for every surface and every Actor; issue #77 is that.
 - **The client works nothing out that the store already did.** `Task.marks` is
   drawn as it arrives; a Task that read as snoozed from a keyboard cannot read
   as plain here.

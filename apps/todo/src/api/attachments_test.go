@@ -62,8 +62,19 @@ func TestAttachingIsNotMistakenForALifecycleVerb(t *testing.T) {
 	s := openTemp(t)
 	id := add(t, s, "Read the paper")
 
-	do(t, s, "POST", "/api/tasks/"+id+"/attachments", `{"target":"https://example.com/x"}`)
-	if got := only(t, s).CompletedAt; !got.IsZero() {
-		t.Fatalf("the task ended at %v, want the attachment route to have served it", got)
+	// The answer as well as the state: `attachments` reaching the lifecycle
+	// handler would be turned away as a verb it does not know, which leaves
+	// the Task just as unended as this route serving it does. Only the pointer
+	// arriving says which of the two happened.
+	w := do(t, s, "POST", "/api/tasks/"+id+"/attachments", `{"target":"https://example.com/x"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200 (%s)", w.Code, w.Body.String())
+	}
+	one := only(t, s)
+	if !slices.Equal(one.Attachments, []string{"https://example.com/x"}) {
+		t.Fatalf("attachments %v, want the one pointed at", one.Attachments)
+	}
+	if !one.CompletedAt.IsZero() {
+		t.Fatalf("the task ended at %v, want the attachment route to have served it", one.CompletedAt)
 	}
 }
