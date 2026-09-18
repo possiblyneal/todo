@@ -22,8 +22,9 @@ type attachmentBody struct {
 // file path or a web address and carries its own slashes, which a path segment
 // cannot hold without being escaped into something no one can read in a log.
 //
-// A literal segment beats the wildcard `{verb}` route in this mux, so
-// `attachments` never reaches the lifecycle handler.
+// A literal segment beats the wildcard `{verb}` route in this mux, so a
+// `POST` to `attachments` never reaches the lifecycle handler. The `DELETE`
+// shares the path and not that hazard: the lifecycle route is `POST` only.
 func attach(s *store.Store, actor string, w http.ResponseWriter, r *http.Request) {
 	pointed(s, actor, w, r, write.Attach)
 }
