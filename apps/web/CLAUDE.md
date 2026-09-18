@@ -188,6 +188,10 @@ and adds to this list rather than to the plan.
   what `api.collectionBody` reads as leave it alone: sending back the color the
   row opened on would undo a recolor another Actor made while it sat there.
   A row nobody touched cannot be saved at all, so no entry says nothing changed.
+  Nothing drawn under a heading is three different things — a read that has not
+  landed, a read that failed, and a store with no Lists in it — and the screen
+  says which: telling somebody their Lists are gone because a poll has not come
+  back is what gets one added twice.
   The row is keyed on the name and the color it was drawn from as well as the
   id, because it holds a draft and the screen redraws on the read: a Collection
   renamed from another surface has to put the row back on the new baseline, or

@@ -30,12 +30,16 @@ function opened() {
     describe: vi.spyOn(write, 'describeCollection').mockResolvedValue(),
     drop: vi.spyOn(write, 'dropCollection').mockResolvedValue(),
   }
-  const drawn = render(<Collections offered={OFFERED} onBack={() => {}} />)
+  const drawn = render(
+    <Collections offered={OFFERED} read error={null} onBack={() => {}} />,
+  )
   return {
     ...wrote,
     /** What the next poll handed down, redrawn the way `App.tsx` redraws it. */
     polled: (offered: Offered) =>
-      drawn.rerender(<Collections offered={offered} onBack={() => {}} />),
+      drawn.rerender(
+        <Collections offered={offered} read error={null} onBack={() => {}} />,
+      ),
   }
 }
 
@@ -102,10 +106,31 @@ test('a rename from another surface resets the row rather than offering to undo 
 
 // The two sets are the same three writes against different aggregates, so the
 // only thing that tells them apart on the wire is the segment.
-test('a Tag is written under its own kind', () => {
+// All three and not just the delete: the segment is handed down per set, so one
+// of the three given the wrong one is a Tag written as a List. Each is its own
+// test because a write in flight disables the rest of the screen.
+test('a Tag is deleted under its own kind', () => {
   const wrote = opened()
   fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[1]!)
   expect(wrote.drop).toHaveBeenCalledWith('tags', 't1')
+})
+
+test('a Tag is created under its own kind', () => {
+  const wrote = opened()
+  fireEvent.change(screen.getByLabelText('New Tag'), {
+    target: { value: 'urgent' },
+  })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Add' })[1]!)
+  expect(wrote.add).toHaveBeenCalledWith('tags', { name: 'urgent', color: '' })
+})
+
+test('a Tag is renamed under its own kind', () => {
+  const wrote = opened()
+  fireEvent.change(screen.getByLabelText('errand name'), {
+    target: { value: 'chore' },
+  })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[1]!)
+  expect(wrote.describe).toHaveBeenCalledWith('tags', 't1', { name: 'chore' })
 })
 
 test('the blank row creates one and then clears itself', async () => {
@@ -123,6 +148,46 @@ test('an unnamed create cannot be submitted', () => {
   expect((add as HTMLButtonElement).disabled).toBe(true)
 })
 
+// Nothing to draw is three different things, and the screen is reachable before
+// the first read lands. Telling somebody their Lists are gone because a poll has
+// not come back is the one of the three that costs them a duplicate.
+test('an empty screen says whether the read has landed', () => {
+  const { rerender } = render(
+    <Collections
+      offered={OFFERED_NOTHING}
+      read={false}
+      error={null}
+      onBack={() => {}}
+    />,
+  )
+  expect(screen.getAllByText('Reading…')).toHaveLength(2)
+
+  rerender(
+    <Collections
+      offered={OFFERED_NOTHING}
+      read
+      error={null}
+      onBack={() => {}}
+    />,
+  )
+  expect(screen.getAllByText('None.')).toHaveLength(2)
+})
+
+test('a read that failed says so over the screen', () => {
+  render(
+    <Collections
+      offered={OFFERED}
+      read
+      error="the api is not answering"
+      onBack={() => {}}
+    />,
+  )
+  expect(screen.getByText('the api is not answering')).toBeDefined()
+  // Over it and not in place of it: the Lists the last read named are still
+  // the Lists, and taking them away is what a failed poll does not say.
+  expect(screen.getByLabelText('Home name')).toBeDefined()
+})
+
 // A color the read does not offer is still the color the Collection carries,
 // so the picker holds it rather than rendering blank over it.
 test('a color the client does not offer stays on the picker', () => {
@@ -132,6 +197,8 @@ test('a color the client does not offer stays on the picker', () => {
         ...OFFERED,
         lists: [{ id: 'l1', name: 'Home', color: 'chartreuse', count: 0 }],
       }}
+      read
+      error={null}
       onBack={() => {}}
     />,
   )

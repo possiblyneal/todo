@@ -22,10 +22,21 @@ import {
 
 export function Collections({
   offered,
+  read,
+  error,
   onBack,
 }: {
   /** The Lists, the Tags and the nine colors, as the last read named them. */
   offered: Offered
+  /**
+   * Whether a read has landed. Nothing to draw means one of three things and
+   * this screen has to tell them apart: a read that has not come back yet, a
+   * read that failed, and a store with no Lists in it. Saying the third when it
+   * is one of the first two is telling somebody their Lists are gone.
+   */
+  read: boolean
+  /** What the poll was told, drawn over the screen rather than in place of it. */
+  error: string | null
   onBack: () => void
 }) {
   // What a write was told. It is one message for the screen rather than one
@@ -58,12 +69,14 @@ export function Collections({
       </div>
 
       {refused && <p className="message">{refused}</p>}
+      {error && <p className="message">{error}</p>}
 
       <Kinds
         kind="lists"
         name="Lists"
         all={offered.lists}
         colors={offered.colors}
+        read={read}
         working={working}
         onWrite={write}
       />
@@ -72,6 +85,7 @@ export function Collections({
         name="Tags"
         all={offered.tags}
         colors={offered.colors}
+        read={read}
         working={working}
         onWrite={write}
       />
@@ -85,6 +99,7 @@ function Kinds({
   name,
   all,
   colors,
+  read,
   working,
   onWrite,
 }: {
@@ -92,13 +107,16 @@ function Kinds({
   name: string
   all: Collection[]
   colors: string[]
+  read: boolean
   working: boolean
   onWrite: (made: Promise<unknown>) => Promise<void>
 }) {
   return (
     <>
       <h2 className="heading">{name}</h2>
-      {all.length === 0 && <p className="message">None.</p>}
+      {all.length === 0 && (
+        <p className="message">{read ? 'None.' : 'Reading…'}</p>
+      )}
       <ul className="list">
         {all.map((one) => (
           <OneCollection
