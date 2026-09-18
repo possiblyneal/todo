@@ -96,13 +96,20 @@ export function Detail({
   // A pointer added or taken off. Unlike the four verbs, the Task is still here
   // afterwards and this screen is still the one to be on, so it stays put and
   // the next poll is what redraws the list.
+  //
+  // It answers whether the write landed, which is what lets the field keep what
+  // was typed through a refusal: nothing was written, so re-tapping is the
+  // right thing to do and retyping the pointer is the whole cost of the feature
+  // on a phone.
   const point = async (made: Promise<void>) => {
     setWorking(true)
     setRefused(null)
     try {
       await made
+      return true
     } catch (caught) {
       setRefused(sentence(caught))
+      return false
     } finally {
       setWorking(false)
     }
@@ -279,7 +286,8 @@ function Attachments({
 }: {
   on: string[]
   working: boolean
-  onAttach: (target: string) => void
+  /** Answers whether the write landed, which is what clears the field. */
+  onAttach: (target: string) => Promise<boolean>
   onDetach: (target: string) => void
 }) {
   const [target, setTarget] = useState('')
@@ -319,12 +327,12 @@ function Attachments({
         <button
           type="button"
           disabled={working || target.trim() === ''}
-          onClick={() => {
-            onAttach(target)
-            // Cleared whether or not the write landed: a refusal is said in its
-            // own words above, and a target left sitting here would be added
-            // twice by somebody who read the sentence and tapped again.
-            setTarget('')
+          onClick={async () => {
+            // Cleared on the write landing and not before. A refusal wrote
+            // nothing, so the pointer has to still be here to tap again;
+            // clearing it either way would make a refused attach cost the
+            // whole target retyped, and disable the button that retries.
+            if (await onAttach(target)) setTarget('')
           }}
         >
           Attach
