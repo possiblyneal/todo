@@ -188,6 +188,13 @@ and adds to this list rather than to the plan.
   what `api.collectionBody` reads as leave it alone: sending back the color the
   row opened on would undo a recolor another Actor made while it sat there.
   A row nobody touched cannot be saved at all, so no entry says nothing changed.
+  The row is keyed on the name and the color it was drawn from as well as the
+  id, because it holds a draft and the screen redraws on the read: a Collection
+  renamed from another surface has to put the row back on the new baseline, or
+  Save lights up on a row nobody touched and sending it writes the old name
+  over theirs. The draft is lost in that case, which is the right way round —
+  the alternative offers to undo somebody else's write without saying so. It
+  also closes the window after a save of one's own to the poll that follows it.
 - **The collections screen says one thing about a refusal and clears the add
   row either way.** The message belongs to the write somebody just made and
   there is only ever one of those outstanding, so it sits above the screen

@@ -30,8 +30,13 @@ function opened() {
     describe: vi.spyOn(write, 'describeCollection').mockResolvedValue(),
     drop: vi.spyOn(write, 'dropCollection').mockResolvedValue(),
   }
-  render(<Collections offered={OFFERED} onBack={() => {}} />)
-  return wrote
+  const drawn = render(<Collections offered={OFFERED} onBack={() => {}} />)
+  return {
+    ...wrote,
+    /** What the next poll handed down, redrawn the way `App.tsx` redraws it. */
+    polled: (offered: Offered) =>
+      drawn.rerender(<Collections offered={offered} onBack={() => {}} />),
+  }
 }
 
 // Two attributes and one entry: a screen that sent the rename and the recolor
@@ -74,6 +79,23 @@ test('a recolor carries the color alone', () => {
 
 test('a row nobody touched cannot be saved', () => {
   opened()
+  const save = screen.getAllByRole('button', { name: 'Save' })[0]!
+  expect((save as HTMLButtonElement).disabled).toBe(true)
+})
+
+// A row holds a draft, and the screen redraws on the read rather than on the
+// write, so a Collection somebody else renamed has to put the row back on the
+// new baseline. Otherwise Save lights up on a row nobody touched and sending it
+// writes the old name back over theirs.
+test('a rename from another surface resets the row rather than offering to undo it', () => {
+  const wrote = opened()
+  wrote.polled({
+    ...OFFERED,
+    lists: [{ id: 'l1', name: 'House', color: 'blue', count: 2 }],
+  })
+
+  const field = screen.getByLabelText('House name') as HTMLInputElement
+  expect(field.value).toBe('House')
   const save = screen.getAllByRole('button', { name: 'Save' })[0]!
   expect((save as HTMLButtonElement).disabled).toBe(true)
 })

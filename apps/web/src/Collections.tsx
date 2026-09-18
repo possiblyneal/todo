@@ -101,10 +101,14 @@ function Kinds({
       {all.length === 0 && <p className="message">None.</p>}
       <ul className="list">
         {all.map((one) => (
-          <Row
-            // Keyed on the id, so a rename in flight does not carry a half
-            // typed name onto whichever row takes its place in the order.
-            key={one.id}
+          <OneCollection
+            // Keyed on what the row is drawn from and not on the id alone. The
+            // id keeps a half typed name off whichever row takes its place in
+            // the order; the name and the color put the row back on the read's
+            // baseline the moment a poll carries a new one, so a Collection
+            // another Actor renamed cannot leave this one offering to save the
+            // name it opened on over the top of theirs.
+            key={`${one.id}:${one.name}:${one.color}`}
             one={one}
             colors={colors}
             working={working}
@@ -128,7 +132,7 @@ function Kinds({
  * The count is drawn and not edited: it is what the read worked out, and the
  * way to change it is to file a Task under this one.
  */
-function Row({
+function OneCollection({
   one,
   colors,
   working,
