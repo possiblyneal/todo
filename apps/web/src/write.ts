@@ -272,3 +272,56 @@ export async function detachEdited(
   )
   return written.id
 }
+
+/**
+ * A List or a Tag as `api.collectionBody` takes one. Both attributes follow the
+ * same rule every attribute of a Task follows: absent leaves it alone, which is
+ * what makes a rename and a recolor one body rather than two writes.
+ */
+export type CollectionBody = {
+  name?: string
+  color?: string
+}
+
+/**
+ * Which of the two a write is about, as the path spells it. A List and a Tag
+ * are the same three writes against different aggregates, so the calls are
+ * written once and given the segment, the way `api.kind` hands the routes a
+ * pair of store calls rather than writing each route twice.
+ */
+export type Kind = 'lists' | 'tags'
+
+/** Writes one List or Tag and names it. */
+export async function addCollection(
+  kind: Kind,
+  body: CollectionBody,
+): Promise<string> {
+  const written = await send<{ id: string }>('POST', `/api/${kind}`, body)
+  return written.id
+}
+
+/** Renames a List or Tag, recolors it, or does both as the one write it is. */
+export async function describeCollection(
+  kind: Kind,
+  id: string,
+  body: CollectionBody,
+): Promise<void> {
+  await send<{ id: string }>(
+    'PATCH',
+    `/api/${kind}/${encodeURIComponent(id)}`,
+    body,
+  )
+}
+
+/**
+ * Deletes a List or Tag. Every Task that carried it goes on existing and loses
+ * the membership, which is the store's transaction and not something this
+ * screen arranges afterwards.
+ */
+export async function dropCollection(kind: Kind, id: string): Promise<void> {
+  await send<{ id: string }>(
+    'DELETE',
+    `/api/${kind}/${encodeURIComponent(id)}`,
+    undefined,
+  )
+}

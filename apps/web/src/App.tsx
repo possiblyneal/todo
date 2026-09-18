@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Activity } from './Activity'
 import { Box } from './Box'
 import { sentence } from './api'
+import { Collections } from './Collections'
 import { Detail } from './Detail'
 import { Narrow } from './Narrow'
 import { Row } from './Row'
@@ -21,12 +22,15 @@ import {
 const POLL_MS = 1000
 
 /**
- * Which of the three screens is open. There is no router: the client is three
- * screens and a box, and a screen is what is on the phone rather than an
+ * Which screen is open. There is no router: the client is a handful of screens
+ * and a box, and a screen is what is on the phone rather than an
  * address, so a dependency for it would be a decision and not a convenience.
  */
 type Screen =
-  { name: 'list' } | { name: 'task'; id: string } | { name: 'agents' }
+  | { name: 'list' }
+  | { name: 'task'; id: string }
+  | { name: 'agents' }
+  | { name: 'collections' }
 
 export function App() {
   const [state, setState] = useState<State | null>(null)
@@ -106,6 +110,15 @@ export function App() {
   // says nothing about the Tasks already on the screen, and a phone that walked
   // out of range should not have its list taken away while it walks back.
   const open = screen.name === 'task' ? find(state, screen.id) : undefined
+
+  if (screen.name === 'collections') {
+    return (
+      <Collections
+        offered={state ?? OFFERED_NOTHING}
+        onBack={() => setScreen({ name: 'list' })}
+      />
+    )
+  }
 
   if (screen.name === 'agents') {
     return (
@@ -211,6 +224,12 @@ export function App() {
       <div className="buttons">
         <button type="button" onClick={() => setScreen({ name: 'agents' })}>
           Activity
+        </button>
+        <button
+          type="button"
+          onClick={() => setScreen({ name: 'collections' })}
+        >
+          Lists and Tags
         </button>
       </div>
     </>

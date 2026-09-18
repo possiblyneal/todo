@@ -13,8 +13,9 @@ surface moved off the terminal.
 What it holds: the list over `GET /api/state` and the controls that narrow and
 order it, the box that hands a dump to the Broker and opens the add sheet
 filled in, the detail screen a tap on a Task opens, the Series screen and the
-four things it does to a date, the breakdown that proposes Subtasks, and the
-activity screen over the Change History. The six stages of
+four things it does to a date, the breakdown that proposes Subtasks, the
+collections screen over the Lists and Tags, and the activity screen over the
+Change History. The six stages of
 `docs/plans/browser-client.md` are all done; work since then is issue by issue
 and adds to this list rather than to the plan.
 
@@ -62,18 +63,20 @@ and adds to this list rather than to the plan.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
   Subtasks, its Series, its breakdown, the four lifecycle verbs, and its
   history.
+- `src/Collections.tsx` — the collections screen: the Lists and the Tags
+  created, renamed, recolored and deleted. Both sets are drawn by one component
+  given the path segment, because a List and a Tag are the same three writes.
 - `src/Activity.tsx` — the activity screen: the Change History across every
   Task, with the filter for Actors that name a harness and a model.
 - `src/Log.tsx` — the entries drawn as who, what and when. Both screens draw
   their log through it.
-- `src/App.tsx` — the box above the list, and which of the three screens is
-  open. It draws what the read returned and works nothing out for itself.
+- `src/App.tsx` — the box above the list, and which screen is open. It draws what the read returned and works nothing out for itself.
 - `src/main.tsx` — the mount, and nothing else.
-- `src/Sheet.test.tsx`, `src/Narrow.test.tsx` — the two components with a
-  grammar: what a pick turns into on the wire, and what a picker does with a
-  value it cannot name. The other components are drawn from what they are
-  handed, so there is nothing in them a test would pin that reading them does
-  not.
+- `src/Sheet.test.tsx`, `src/Narrow.test.tsx`, `src/Collections.test.tsx` — the
+  three components with a grammar: what a pick turns into on the wire, what a
+  picker does with a value it cannot name, and which kind a collection write
+  goes out under. The other components are drawn from what they are handed, so
+  there is nothing in them a test would pin that reading them does not.
 - `src/index.css` — the whole of the styling. There is no component-level
   stylesheet and no CSS-in-JS, so the 44px rule below is checkable by reading
   one file.
