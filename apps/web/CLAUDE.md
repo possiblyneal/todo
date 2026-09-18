@@ -68,6 +68,11 @@ and adds to this list rather than to the plan.
 - `src/App.tsx` — the box above the list, and which of the three screens is
   open. It draws what the read returned and works nothing out for itself.
 - `src/main.tsx` — the mount, and nothing else.
+- `src/Sheet.test.tsx`, `src/Narrow.test.tsx` — the two components with a
+  grammar: what a pick turns into on the wire, and what a picker does with a
+  value it cannot name. The other components are drawn from what they are
+  handed, so there is nothing in them a test would pin that reading them does
+  not.
 - `src/index.css` — the whole of the styling. There is no component-level
   stylesheet and no CSS-in-JS, so the 44px rule below is checkable by reading
   one file.
@@ -82,7 +87,10 @@ and adds to this list rather than to the plan.
 ## Local Contracts
 
 - **Vite, React, and nothing else.** No router, no data-fetching library, no
-  component kit. A dependency added here is a decision, not a convenience.
+  component kit. A dependency added here is a decision, not a convenience. The
+  two under Verification below are the decision recorded in #49: the sheet's
+  snooze and the pickers' unknown-value rule turn a pick into a different thing
+  on the wire, and an inversion there is a wrong write nobody sees happen.
 - **The client works nothing out that the store already did.** `Task.marks` is
   drawn as it arrives; a Task that read as snoozed from a keyboard cannot read
   as plain here.
@@ -327,9 +335,15 @@ and adds to this list rather than to the plan.
 `npm run lint`, `npm run typecheck`, `npm run test` and `npm run build` from
 the repository root, or `scripts/check` for the gate CI runs.
 
-Tests run under `environment: 'node'`: they reach the modules that talk to the
-API and not the components, since rendering one would mean a DOM environment
-and a testing library, which are dependencies nobody has decided on.
+`environment: 'node'` is the default, and the modules that talk to the API are
+tested under it. A component test opts into a DOM with a
+`// @vitest-environment jsdom` docblock at the top of its file, so the default
+stays the cheaper one and a pure-function test cannot reach a DOM by accident.
+
+`jsdom` and `@testing-library/react` are the only two devDependencies here that
+exist for the tests. `@testing-library/user-event` and `jest-dom` are
+deliberately absent: `fireEvent` and plain `expect` cover what these tests
+assert, and the two-dependency floor above is what keeps that a decision.
 
 ## Child Index
 
