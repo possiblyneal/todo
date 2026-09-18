@@ -115,6 +115,13 @@ export function App() {
     return (
       <Collections
         offered={state ?? OFFERED_NOTHING}
+        // Whether a read has landed, which is not the same as having no Lists:
+        // this screen is reachable inside the first second and a poll that has
+        // been failing since load would otherwise tell somebody their Lists are
+        // gone. The error is drawn over what is there for the reason the list
+        // draws it that way.
+        read={state !== null}
+        error={error}
         onBack={() => setScreen({ name: 'list' })}
       />
     )
