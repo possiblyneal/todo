@@ -225,3 +225,27 @@ test('a level the route does not offer is kept, under its own name', () => {
     'urgent',
   )
 })
+
+// An Attachment is collected and not written: the sheet is the gate, and a
+// draft backed out of has to leave no pointer behind.
+test('an attachment typed on the sheet comes back with the body', () => {
+  const sheet = opened({ title: 'Buy milk' })
+  fireEvent.change(screen.getByLabelText('New attachment'), {
+    target: { value: '/home/neal/receipt.pdf' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
+  expect(sheet.submit().attachments).toEqual(['/home/neal/receipt.pdf'])
+})
+
+// Collected means removable. Nothing was written, so taking one off the list
+// is the list changing and not a detach.
+test('a collected attachment is taken off before anything is written', () => {
+  const sheet = opened({ title: 'Buy milk' })
+  const typed = screen.getByLabelText('New attachment')
+  fireEvent.change(typed, { target: { value: '/one' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
+  fireEvent.change(typed, { target: { value: '/two' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
+  fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]!)
+  expect(sheet.submit().attachments).toEqual(['/two'])
+})

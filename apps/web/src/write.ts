@@ -38,6 +38,16 @@ export type TaskBody = {
    */
   fields?: Record<string, string>
   parent?: string
+  /**
+   * Pointers to attach once the Task exists. They never travel in the body:
+   * `POST /api/tasks` takes no attachments and `store.Attach` is a guarded
+   * write against a Task that does not exist yet, so `addTask`, `addSubtask`
+   * and `editTask` split them off and attach them one at a time afterwards.
+   *
+   * It adds and never removes. A pointer already on the Task is taken off from
+   * the detail screen, which is the only screen that can show what is there.
+   */
+  attachments?: string[]
   intoLists?: string[]
   outOfLists?: string[]
   addTags?: string[]
@@ -74,19 +84,44 @@ export async function ask(
   return said.answer
 }
 
+/**
+ * Splits the pointers off a body. The routes refuse a field they do not know,
+ * and an Attachment is a write of its own against a Task that has to exist
+ * first, so this is where the two part company.
+ */
+function unattached(body: TaskBody): [TaskBody, string[]] {
+  const { attachments, ...rest } = body
+  return [rest, attachments ?? []]
+}
+
+/**
+ * Attaches each pointer to a Task just written. One at a time and in order,
+ * because each is its own guarded write; a refusal on one stops there and is
+ * said in the sentence the API gave, with the Task and whatever was attached
+ * before it left standing. That is the same thing approving a breakdown does
+ * with the Subtasks it writes.
+ */
+async function attachAll(id: string, pointers: string[]): Promise<void> {
+  for (const pointer of pointers) await attach(id, pointer)
+}
+
 /** Writes one Task and files it, and names the Task it wrote. */
 export async function addTask(body: TaskBody): Promise<string> {
-  const written = await send<{ id: string }>('POST', '/api/tasks', body)
+  const [create, pointers] = unattached(body)
+  const written = await send<{ id: string }>('POST', '/api/tasks', create)
+  await attachAll(written.id, pointers)
   return written.id
 }
 
 /** Changes a Task's attributes and its memberships together, as one write. */
 export async function editTask(id: string, body: TaskBody): Promise<void> {
+  const [change, pointers] = unattached(body)
   await send<{ id: string }>(
     'PATCH',
     `/api/tasks/${encodeURIComponent(id)}`,
-    body,
+    change,
   )
+  await attachAll(id, pointers)
 }
 
 /** Writes one Task under another, which is the same write with a parent. */
@@ -94,11 +129,13 @@ export async function addSubtask(
   parent: string,
   body: TaskBody,
 ): Promise<string> {
+  const [create, pointers] = unattached(body)
   const written = await send<{ id: string }>(
     'POST',
     `/api/tasks/${encodeURIComponent(parent)}/subtasks`,
-    body,
+    create,
   )
+  await attachAll(written.id, pointers)
   return written.id
 }
 

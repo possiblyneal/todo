@@ -263,3 +263,36 @@ test('lifting a date out carries the whole corrected task with the date', async 
   })
   expect(written).toBe('task_lifted')
 })
+
+// `POST /api/tasks` refuses a field it does not know and `store.Attach` is a
+// guarded write against a Task that has to exist first, so the pointers are
+// split off the create and written one at a time after it.
+test('an attachment on the body is written after the task it is for', async () => {
+  const calls: { url: string; body: Record<string, unknown> }[] = []
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+    calls.push({
+      url,
+      body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+    })
+    return Promise.resolve(
+      new Response(JSON.stringify({ id: 'task_abc' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  })
+
+  await addTask({ title: 'Paint the fence', attachments: ['/a', '/b'] })
+
+  expect(calls.map((one) => one.url)).toEqual([
+    '/api/tasks',
+    '/api/tasks/task_abc/attachments',
+    '/api/tasks/task_abc/attachments',
+  ])
+  // The create carries no trace of them: the route would refuse the field.
+  expect(calls[0]?.body).toEqual({ title: 'Paint the fence' })
+  expect(calls.slice(1).map((one) => one.body)).toEqual([
+    { target: '/a' },
+    { target: '/b' },
+  ])
+})

@@ -175,6 +175,11 @@ export function Sheet({
         onChange={(fields) => setBody((was) => ({ ...was, fields }))}
       />
 
+      <Pointers
+        on={body.attachments ?? []}
+        onChange={(attachments) => setBody((was) => ({ ...was, attachments }))}
+      />
+
       <Ticks
         name="Lists"
         kind="lists"
@@ -359,6 +364,64 @@ function Fields({
         />
         <button type="button" onClick={add} disabled={key === ''}>
           Add
+        </button>
+      </div>
+    </fieldset>
+  )
+}
+
+/**
+ * The Attachments to add, collected and not written. Each is its own guarded
+ * write against a Task that may not exist yet, so submitting is what sends
+ * them: a draft backed out of leaves no pointer behind because none was sent.
+ *
+ * It adds and never removes. An edit opens with this empty rather than with
+ * what the Task carries, because taking one off is the detail screen's, which
+ * is the screen that can show what is there.
+ *
+ * A pointer is text and nothing else. Nothing is uploaded and nothing fetched,
+ * so one naming a file names it on the machine `todo api` runs on rather than
+ * on the phone it was typed into.
+ */
+function Pointers({
+  on,
+  onChange,
+}: {
+  on: string[]
+  onChange: (on: string[]) => void
+}) {
+  const [target, setTarget] = useState('')
+
+  const add = () => {
+    const pointer = target.trim()
+    if (pointer === '' || on.includes(pointer)) return
+    onChange([...on, pointer])
+    setTarget('')
+  }
+
+  return (
+    <fieldset className="field">
+      <legend>Attachments</legend>
+      {on.map((pointer) => (
+        <div className="pair pointer" key={pointer}>
+          <span>{pointer}</span>
+          <button
+            type="button"
+            onClick={() => onChange(on.filter((other) => other !== pointer))}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <div className="pair">
+        <input
+          aria-label="New attachment"
+          placeholder="https://… or /a/path"
+          value={target}
+          onChange={(event) => setTarget(event.target.value)}
+        />
+        <button type="button" onClick={add} disabled={target.trim() === ''}>
+          Attach
         </button>
       </div>
     </fieldset>

@@ -197,6 +197,14 @@ and adds to this list rather than to the plan.
   in the Broker's words: a tick over attributes nobody is shown is not a gate,
   and a level none of the three is drawn as the word that was used for the store
   to refuse in its own sentence.
+- **An Attachment is collected on the sheet and written after the Task exists.**
+  `Pointers` in `Sheet.tsx` puts them on the body; `addTask`, `addSubtask` and
+  `editTask` in `write.ts` split them off, because the routes refuse a field
+  they do not know and `store.Attach` is a guarded write against a Task that may
+  not exist yet. They go one at a time, and a refusal on one leaves the Task and
+  the pointers before it standing, which is what approving a breakdown already
+  does. The field adds and never removes: taking one off is the detail screen's,
+  the only screen that shows what a Task already carries.
 - **A List or a Tag made on the sheet is made then, not on submit.** `Ticks` in
   `Sheet.tsx` posts it, holds the name until the poll answers with it, and ticks
   it. A Collection is an aggregate of its own, so it exists on the same terms as
