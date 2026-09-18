@@ -1,11 +1,12 @@
 package api
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
+	"github.com/possiblyneal/todo/apps/todo/src/write"
 )
 
 // attachmentBody is the one thing an Attachment is: the text naming somewhere
@@ -24,37 +25,41 @@ type attachmentBody struct {
 // A literal segment beats the wildcard `{verb}` route in this mux, so
 // `attachments` never reaches the lifecycle handler.
 func attach(s *store.Store, actor string, w http.ResponseWriter, r *http.Request) {
-	pointed(s, actor, w, r, func(target string) error {
-		return s.Attach(actor, r.PathValue("id"), target)
-	})
+	pointed(s, actor, w, r, write.Attach)
 }
 
 func detach(s *store.Store, actor string, w http.ResponseWriter, r *http.Request) {
-	pointed(s, actor, w, r, func(target string) error {
-		return s.Detach(actor, r.PathValue("id"), target)
-	})
+	pointed(s, actor, w, r, write.Detach)
 }
 
-// pointed reads the target and answers the write, under the Lease every write
-// to a Task needs. Adding and removing differ only in the store call, the way a
-// List and a Tag differ only in theirs.
-func pointed(s *store.Store, actor string, w http.ResponseWriter, r *http.Request, write func(target string) error) {
+// pointed reads the target and answers the write. Adding and removing differ
+// only in which of the two write calls they are given, the way a List and a Tag
+// differ only in theirs.
+func pointed(
+	s *store.Store,
+	actor string,
+	w http.ResponseWriter,
+	r *http.Request,
+	point func(*store.Store, string, string, string) error,
+) {
 	in, err := decode[attachmentBody](w, r)
 	if err != nil {
 		fail(w, usage{err})
 		return
 	}
-	// A body carrying no target is the caller asking wrongly, which is the
-	// wire shape's rule rather than the store's: `store.pointer` decides what
-	// a pointer is, and what it decides comes back as the store's own refusal.
+	// A target with nothing in it is a Task pointed nowhere, which the store
+	// refuses and which is the caller asking wrongly rather than anything
+	// going wrong here. Saying so at 400 is the mapping editTask makes for a
+	// Title sent empty; without it the store's plain error falls through to
+	// 500 for a sentence a person can act on. The sentence is the store's own,
+	// so the browser and the terminal say the same thing about this mistake,
+	// and the route's test asks the store for it rather than repeating it.
 	if strings.TrimSpace(in.Target) == "" {
-		fail(w, usage{fmt.Errorf("an attachment needs a target: somewhere to point")})
+		fail(w, usage{errors.New("an Attachment needs somewhere to point")})
 		return
 	}
 	id := r.PathValue("id")
-	if err := s.WithLease(actor, id, store.WriteTTL, func() error {
-		return write(in.Target)
-	}); err != nil {
+	if err := point(s, actor, id, in.Target); err != nil {
 		fail(w, err)
 		return
 	}

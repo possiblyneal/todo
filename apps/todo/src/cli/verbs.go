@@ -279,12 +279,10 @@ func attachTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	}
 
 	target := strings.Join(fs.Args()[1:], " ")
-	return refuse(stderr, "attach", s.WithLease(actor(), id, store.WriteTTL, func() error {
-		if *off {
-			return s.Detach(actor(), id, target)
-		}
-		return s.Attach(actor(), id, target)
-	}))
+	if *off {
+		return refuse(stderr, "attach", write.Detach(s, actor(), id, target))
+	}
+	return refuse(stderr, "attach", write.Attach(s, actor(), id, target))
 }
 
 // markHelp is what each mark does, in this surface's words. It describes the
