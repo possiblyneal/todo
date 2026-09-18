@@ -175,8 +175,15 @@ and adds to this list rather than to the plan.
   itself. A List or a Tag deleted from another surface while the list is
   narrowed to it would otherwise match no option, so the control would render
   blank over a list that was still narrowed and nothing would say what
-  happened. It is the same rule as the two below, which is why the List and the
-  Tag are one component rather than two copies of it.
+  happened. The rule has three sites and they stay three: `Picker` here, and
+  `Choice` and `Snooze` in `Sheet.tsx` below. The List and the Tag are one
+  `Picker` because a Collection is the same shape either way, and that is the
+  only merge the rule makes — the other two sit over different elements, and a
+  helper spanning them would be an abstraction over three shapes. What `Picker`
+  does share is `labelled`, which is what an option reads: a Collection the
+  store named carries the count it worked out, and an id nothing named carries
+  none, because a zero there would be this side answering a question the store
+  never answered.
 - **A picked value the client does not know is offered rather than dropped.**
   `Choice` in `Sheet.tsx` is one control for the levels and the colors alike,
   and a value that is none of the offered ones is added to the end of the list:

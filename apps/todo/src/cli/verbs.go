@@ -397,7 +397,9 @@ func refuse(stderr io.Writer, verb string, err error) int {
 	switch {
 	case err == nil:
 		return 0
-	case isRefusal(err):
+	// store.Refused is the one statement of which errors are a refusal, so this
+	// exit code and the API's 409 cannot come to disagree about what one is.
+	case store.Refused(err):
 		fmt.Fprintf(stderr, "todo %s: %v\n", verb, err)
 		return 3
 	default:
