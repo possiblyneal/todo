@@ -105,12 +105,12 @@ and adds to this list rather than to the plan.
   store's decision from issue #3 rather than a limit of the browser. A path is
   resolved by whoever runs `todo api`, so one typed on a phone names a file on
   that host and not on the phone.
-- **A field is cleared by the write landing, never by the tap.** The pointer
-  typed on the detail screen survives a refusal, because nothing was written and
-  re-tapping is the right thing to do: clearing it would cost the whole target
-  retyped on a phone and would disable the button that retries, since an empty
-  target cannot be submitted. `point` answers whether the write landed and the
-  field reads that answer.
+- **The detail screen's attachment field is cleared by the write landing, never
+  by the tap.** The pointer typed there survives a refusal, because nothing was
+  written and re-tapping is the right thing to do: clearing it would cost the
+  whole target retyped on a phone and would disable the button that retries,
+  since an empty target cannot be submitted. `point` answers whether the write
+  landed and the field reads that answer.
 - **A pointer taken off is tappable until the next poll, and the second tap is
   an entry that did not happen.** The screen draws the pointers the read
   returned, so a landed detach leaves the row for up to a second and a second
@@ -230,6 +230,9 @@ and adds to this list rather than to the plan.
   rather than on a row. The blank row empties whether or not the write landed,
   because the refusal is already said in its own words and a name left sitting
   there is a name added twice by whoever read the sentence and tapped again.
+  That is the opposite of the rule the attachment field follows above, and the
+  two screens disagreeing is issue #78 rather than a distinction either one
+  argues for.
   Deleting is one tap, the way the four verbs on a Task are: the Tasks that
   carried the Collection survive it and the Change History says it went.
 - **A narrowing to something the client cannot name is kept on the screen.**
