@@ -122,11 +122,24 @@ func addTask(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+// tagIDs is -tag given more than once. A Task carrying any of them is in the
+// answer, which is what store.Query.Tags means; there is no separator to get
+// wrong and no tag id with a comma in it to worry about.
+type tagIDs []string
+
+func (t *tagIDs) String() string { return strings.Join(*t, ",") }
+
+func (t *tagIDs) Set(value string) error {
+	*t = append(*t, value)
+	return nil
+}
+
 func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	fs := flags("list", stderr)
 	all := fs.Bool("all", false, "include completed, declined, snoozed and deleted tasks")
 	in := fs.String("list", "", "only the tasks in this list, by id")
-	tag := fs.String("tag", "", "only the tasks carrying this tag, by id")
+	var tags tagIDs
+	fs.Var(&tags, "tag", "only the tasks carrying this tag, by id; repeat for any of several")
 	search := fs.String("search", "", "only the tasks whose title, description or why hold this text")
 	sort := fs.String("sort", string(store.SortCreated),
 		"order siblings by "+strings.Join(store.SortNames(), ", "))
@@ -139,7 +152,7 @@ func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 		IncludeSnoozed:   *all,
 		IncludeDeleted:   *all,
 		List:             *in,
-		Tag:              *tag,
+		Tags:             tags,
 		Search:           *search,
 		Sort:             store.Sort(*sort),
 	}

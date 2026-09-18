@@ -205,7 +205,7 @@ export function App() {
             take a second read, and for a fresh store this is the right
             sentence.
           */}
-          {!drawn.list && !drawn.tag && !drawn.search
+          {!drawn.list && drawn.tags.length === 0 && !drawn.search
             ? 'Nothing here yet.'
             : 'Nothing matches what the list is narrowed to.'}
         </p>

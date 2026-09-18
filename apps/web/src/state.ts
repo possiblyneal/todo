@@ -93,13 +93,18 @@ export type State = Offered & {
  * completed, the declined and the deleted together, because that is what the
  * route does with it rather than four switches this side pretends to.
  *
- * `list` and `tag` are ids rather than names, because that is what a Task
+ * `list` and `tags` are ids rather than names, because that is what a Task
  * carries. `search` is text, matched by the store against a Task's own words.
+ *
+ * `tags` is a set where `list` is one value: a Task is filed in a List and
+ * that is where it lives, where a Task carries Tags and somebody clicking a
+ * second one is widening what they are willing to look at. The store takes any
+ * of them rather than all of them for the same reason.
  */
 export type Narrowing = {
   all: boolean
   list: string
-  tag: string
+  tags: string[]
   search: string
   sort: string
 }
@@ -108,7 +113,7 @@ export type Narrowing = {
 export const WIDE: Narrowing = {
   all: false,
   list: '',
-  tag: '',
+  tags: [],
   search: '',
   sort: '',
 }
@@ -128,14 +133,17 @@ export const WIDE: Narrowing = {
 export function queryString({
   all,
   list,
-  tag,
+  tags,
   search,
   sort,
 }: Narrowing): string {
   const query = new URLSearchParams()
   if (all) query.set('all', 'true')
   if (list) query.set('list', list)
-  if (tag) query.set('tag', tag)
+  // Repeated, not joined: `?tag=a&tag=b` is a set of values in a query string,
+  // and the route reads it that way. A separator here would be one this side
+  // invented and one no tag id could then contain.
+  for (const tag of tags) query.append('tag', tag)
   if (search) query.set('search', search)
   if (sort) query.set('sort', sort)
   const written = query.toString()
