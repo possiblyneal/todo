@@ -2,14 +2,22 @@
 // or one that already exists. Submitting it is the only thing that writes, so a
 // dump handed over and then thought better of leaves nothing behind.
 //
-// It makes no write of its own. Whoever opens it says what submitting it does,
-// which is what lets one sheet be the add form, the edit form and the subtask
-// form without holding three descriptions of the same ten attributes.
+// It makes one write of its own, the List or Tag its ticks offer to make, which
+// is an aggregate rather than part of the Task. Every other write is whoever
+// opens it saying what submitting it does, which is what lets one sheet be the
+// add form, the edit form and the subtask form without holding three
+// descriptions of the same ten attributes.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { sentence } from './api'
-import type { Collection, Level, Offered } from './state'
+import {
+  type Collection,
+  fetchFiles,
+  type Files,
+  type Level,
+  type Offered,
+} from './state'
 import { addCollection, type Kind, memberships, type TaskBody } from './write'
 
 /** The attributes this sheet takes as text, which is every one it shows. */
@@ -405,6 +413,7 @@ function Pointers({
   onChange: (on: string[]) => void
 }) {
   const [target, setTarget] = useState('')
+  const [browsing, setBrowsing] = useState(false)
 
   const add = () => {
     const pointer = target.trim()
@@ -434,11 +443,92 @@ function Pointers({
           value={target}
           onChange={(event) => setTarget(event.target.value)}
         />
+        <button type="button" onClick={() => setBrowsing(!browsing)}>
+          {browsing ? 'Close' : 'Browse'}
+        </button>
         <button type="button" onClick={add} disabled={target.trim() === ''}>
           Attach
         </button>
       </div>
+      {browsing && (
+        <Machine
+          onPick={(path) => {
+            setTarget(path)
+            setBrowsing(false)
+          }}
+        />
+      )}
     </fieldset>
+  )
+}
+
+/**
+ * The machine `todo api` runs on, one directory at a time. It is here because
+ * a pointer naming a file names it on that machine: the browser's own file
+ * input answers with a bare filename and no directory, so a file chosen on a
+ * phone would be a path the host cannot resolve.
+ *
+ * It fills the box and never reads it back, which is the rule the deadline's
+ * picker follows: a pointer half typed is not a path this could show, and the
+ * box stays the field that is submitted.
+ *
+ * It lists and never opens. Nothing is fetched and nothing is copied in, so
+ * what a name points at is as unknown here as it is to the store.
+ */
+function Machine({ onPick }: { onPick: (path: string) => void }) {
+  const [at, setAt] = useState<string | undefined>(undefined)
+  const [files, setFiles] = useState<Files | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let live = true
+    fetchFiles(at)
+      .then((answer) => {
+        if (!live) return
+        setFiles(answer)
+        setError('')
+      })
+      .catch((caught: unknown) => {
+        if (live) setError(sentence(caught))
+      })
+    return () => {
+      live = false
+    }
+  }, [at])
+
+  if (error !== '') return <p className="aside">{error}</p>
+  if (!files) return <p className="aside">…</p>
+  return (
+    <div role="group" aria-label="Files">
+      <p className="aside">{files.path}</p>
+      {files.parent !== '' && (
+        <button
+          type="button"
+          className="row"
+          onClick={() => setAt(files.parent)}
+        >
+          <span>Up a directory</span>
+        </button>
+      )}
+      {files.entries.map((one) => {
+        // The separator the host uses is the one in the path it answered, and
+        // every path it answers is absolute, so this is a join rather than a
+        // guess: `todo api` is a Unix service and the route is the only thing
+        // that names a directory here.
+        const path = `${files.path}/${one.name}`
+        return (
+          <button
+            key={one.name}
+            type="button"
+            className="row"
+            onClick={() => (one.dir ? setAt(path) : onPick(path))}
+          >
+            <span>{one.dir ? `${one.name}/` : one.name}</span>
+          </button>
+        )
+      })}
+      {files.entries.length === 0 && <p className="aside">Nothing here.</p>}
+    </div>
   )
 }
 

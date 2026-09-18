@@ -28,10 +28,14 @@ import (
 // authentication here and so nobody to name per request: `todo api` resolves
 // its Actor once, the same way a verb resolves one, and the whole listener
 // writes as that. A browser on the LAN is the person who started it.
+// Browse is the directory the file picker lists from and will not look above.
+// Empty is the home directory of the user running `todo api`, which is the
+// machine a pointer's relative path resolves against.
 type Options struct {
-	Addr  string
-	Web   string
-	Actor string
+	Addr   string
+	Web    string
+	Actor  string
+	Browse string
 }
 
 // Handler is every route, and it is what a test exercises without a listener.
@@ -109,6 +113,16 @@ func Handler(s *store.Store, o Options) http.Handler {
 			dropCollection(k, o.Actor, w, r)
 		})
 	}
+	// The one route reading outside the store. It lists and never opens, and
+	// what it lists is the machine a pointer resolves against rather than the
+	// phone the pointer is being typed into.
+	root := o.Browse
+	if root == "" {
+		root = home()
+	}
+	mux.HandleFunc("GET /api/files", func(w http.ResponseWriter, r *http.Request) {
+		browse(root, w, r)
+	})
 	mux.HandleFunc("POST /api/capture", func(w http.ResponseWriter, r *http.Request) {
 		capture(s, broker, w, r)
 	})

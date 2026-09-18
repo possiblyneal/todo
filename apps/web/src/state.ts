@@ -278,3 +278,26 @@ export async function fetchSeries(id: string): Promise<Series> {
   if (!response.ok) throw await refused(response)
   return (await response.json()) as Series
 }
+
+/**
+ * One directory on the machine `todo api` runs on, as `GET /api/files` lists
+ * it. `apps/todo/src/api/files.go` is the side that decides the shape.
+ *
+ * It is a read and nothing else: the route lists names and never opens a file,
+ * because an Attachment is a pointer and the tracker holds no copy of what it
+ * points at. `parent` is empty at the root the listener will look no further
+ * up than.
+ */
+export type Files = {
+  path: string
+  parent: string
+  entries: { name: string; dir: boolean }[]
+}
+
+/** Lists one directory, or the listener's root where none is named. */
+export async function fetchFiles(path?: string): Promise<Files> {
+  const at = path === undefined ? '' : `?path=${encodeURIComponent(path)}`
+  const response = await fetch(`/api/files${at}`)
+  if (!response.ok) throw await refused(response)
+  return (await response.json()) as Files
+}
