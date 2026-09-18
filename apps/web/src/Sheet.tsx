@@ -159,27 +159,27 @@ export function Sheet({
 
       <Choice
         name="Priority"
-        offered={offered.priorities.map((one) => one.name)}
+        options={offered.priorities.map((one) => one.name)}
         examples={offered.priorities}
         value={body.priority ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, priority: value }))}
       />
       <Choice
         name="Impact"
-        offered={offered.impacts.map((one) => one.name)}
+        options={offered.impacts.map((one) => one.name)}
         examples={offered.impacts}
         value={body.impact ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, impact: value }))}
       />
       <Choice
         name="Color"
-        offered={offered.colors}
+        options={offered.colors}
         value={body.color ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, color: value }))}
       />
 
       <Snooze
-        offered={offered.snoozes}
+        options={offered.snoozes}
         value={body.snooze}
         onPick={(value) => setBody((was) => ({ ...was, snooze: value }))}
       />
@@ -235,13 +235,13 @@ export function Sheet({
  */
 function Choice({
   name,
-  offered,
+  options,
   examples,
   value,
   onPick,
 }: {
   name: string
-  offered: string[]
+  options: string[]
   /**
    * What each value means, where the route says. The levels carry one and the
    * colors do not: blue means blue. A value with none is offered under its own
@@ -252,7 +252,7 @@ function Choice({
   onPick: (value: string) => void
 }) {
   const shown =
-    value === '' || offered.includes(value) ? offered : [...offered, value]
+    value === '' || options.includes(value) ? options : [...options, value]
   const said = (one: string) => examples?.find((each) => each.name === one)
   return (
     <label className="field">
@@ -286,11 +286,11 @@ function Choice({
  * string wakes it, which is the only way back from a snooze on this surface.
  */
 function Snooze({
-  offered,
+  options,
   value,
   onPick,
 }: {
-  offered: string[]
+  options: string[]
   value?: string
   onPick: (value: string | undefined) => void
 }) {
@@ -298,9 +298,9 @@ function Snooze({
   // word it did not know: `write.Snooze` takes a plain duration as well as the
   // labels, so one is not a value to drop on the way to the screen.
   const shown =
-    value === undefined || value === '' || offered.includes(value)
-      ? offered
-      : [...offered, value]
+    value === undefined || value === '' || options.includes(value)
+      ? options
+      : [...options, value]
   return (
     <label className="field">
       <span>Snooze</span>
