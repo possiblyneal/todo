@@ -40,9 +40,21 @@ func TestAttachRefusesAPointerToNowhere(t *testing.T) {
 	s := openTemp(t)
 	id := add(t, s, "Read the paper")
 
-	w := do(t, s, "POST", "/api/tasks/"+id+"/attachments", `{"target":""}`)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status %d, want 400 (%s)", w.Code, w.Body.String())
+	// Whitespace as well as empty: the store trims before it decides, so a
+	// target of spaces is the same mistake and has to be the same answer.
+	for _, target := range []string{"", "   "} {
+		w := do(t, s, "POST", "/api/tasks/"+id+"/attachments", `{"target":"`+target+`"}`)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status %d, want 400 (%s)", w.Code, w.Body.String())
+		}
+		// The sentence is the store's own rather than a second one this
+		// surface keeps, so the browser and the terminal say the same thing
+		// about the same mistake. Asking the store for it here is what keeps
+		// the two from drifting apart.
+		wanted := s.Attach("someone", id, target).Error()
+		if got := said(t, w)["error"]; got != wanted {
+			t.Fatalf("answered %q, want the store's own %q", got, wanted)
+		}
 	}
 }
 
