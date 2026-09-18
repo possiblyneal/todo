@@ -78,7 +78,8 @@ and adds to this list rather than to the plan.
   their log through it.
 - `src/App.tsx` — the box above the list, and which screen is open. It draws what the read returned and works nothing out for itself.
 - `src/main.tsx` — the mount, and nothing else.
-- `src/rank.test.ts`, `src/Sheet.test.tsx`, `src/Narrow.test.tsx`,
+- `src/rank.test.ts`, `src/Sheet.test.tsx`, `src/Breakdown.test.tsx`,
+  `src/Narrow.test.tsx`,
   `src/Collections.test.tsx` — the ranking's draw, and the three components
   with a grammar: what a pick turns into on the wire, what a
   picker does with a value it cannot name, and which kind a collection write
@@ -191,6 +192,11 @@ and adds to this list rather than to the plan.
   happened. `Tags` keeps an unnamed id on screen for the same reason: a switch
   nobody can see is a switch nobody can turn off. It is the same rule as the two
   below.
+- **A proposal draws every attribute approving it would write.** `Breakdown.tsx`
+  shows the title, description, why, estimate, priority and impact, unparsed and
+  in the Broker's words: a tick over attributes nobody is shown is not a gate,
+  and a level none of the three is drawn as the word that was used for the store
+  to refuse in its own sentence.
 - **A List or a Tag made on the sheet is made then, not on submit.** `Ticks` in
   `Sheet.tsx` posts it, holds the name until the poll answers with it, and ticks
   it. A Collection is an aggregate of its own, so it exists on the same terms as

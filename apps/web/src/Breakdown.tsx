@@ -179,14 +179,28 @@ export function Breakdown({
                   <span>{proposal.title}</span>
                 </label>
                 {/*
-                  What the Broker said about it, in its own words and unparsed,
-                  because a proposal is approved on what it says rather than on
-                  what this side could make of it.
+                  Everything the tick beside it would write, in the Broker's own
+                  words and unparsed: a proposal is approved on what it says
+                  rather than on what this side could make of it, and a gate
+                  over attributes nobody is shown is not a gate. A priority that
+                  is none of the three is drawn as the word that was used; the
+                  store is what refuses it, and says so in its own sentence.
+
+                  The estimate and the two levels are labelled because they are
+                  single words that mean nothing alone — `high` says neither
+                  which attribute it is nor that anybody chose it.
                 */}
-                {proposal.why && <p className="marks">{proposal.why}</p>}
-                {proposal.estimate && (
-                  <p className="marks">{proposal.estimate}</p>
+                {proposal.description && (
+                  <p className="lines">{proposal.description}</p>
                 )}
+                {proposal.why && <p className="marks">{proposal.why}</p>}
+                <p className="facts">
+                  {proposal.estimate && <span>{proposal.estimate}</span>}
+                  {proposal.priority && (
+                    <span>Priority {proposal.priority}</span>
+                  )}
+                  {proposal.impact && <span>Impact {proposal.impact}</span>}
+                </p>
               </li>
             ))}
           </ul>
