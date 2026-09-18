@@ -121,6 +121,22 @@ test('a color the client does not offer is on the picker too', () => {
   expect(picker.value).toBe('chartreuse')
 })
 
+// Five served sets arrive under one prop, so reading the wrong one off it is a
+// mistake that can be made: the color and the snooze are both lists of strings
+// and the compiler cannot tell them apart. This says which set feeds which.
+test('the color and the snooze each offer their own served set', () => {
+  opened({ title: 'Ship it' })
+  const color = screen.getByLabelText('Color') as HTMLSelectElement
+  expect([...color.options].map((o) => o.value)).toEqual(['', 'red', 'blue'])
+  const snooze = screen.getByLabelText('Snooze') as HTMLSelectElement
+  expect([...snooze.options].map((o) => o.value)).toEqual([
+    'leave',
+    'wake',
+    'an hour',
+    'tomorrow',
+  ])
+})
+
 test('emptying a picker clears the attribute rather than leaving it alone', () => {
   const sheet = opened({ title: 'Ship it', priority: 'high' })
   sheet.pick('Priority', '')
