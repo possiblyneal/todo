@@ -39,6 +39,9 @@ and adds to this list rather than to the plan.
 - `src/read.ts` — the one read a screen makes for itself, and the guard around
   it: what came back, what went wrong, and the dropping of an answer that
   arrives after the screen has moved on.
+- `src/rank.ts` — the order the Tags are offered in, and the only thing this
+  client works out that the store did not: the counts are the store's, and what
+  to do with them is a question about looking at a list.
 - `src/log.ts` — what a Change History entry says, worked out without
   recognising anything by name: the Actor split on the first slash, and which
   kinds are the Lease bookkeeping rather than activity.
@@ -74,8 +77,9 @@ and adds to this list rather than to the plan.
   their log through it.
 - `src/App.tsx` — the box above the list, and which screen is open. It draws what the read returned and works nothing out for itself.
 - `src/main.tsx` — the mount, and nothing else.
-- `src/Sheet.test.tsx`, `src/Narrow.test.tsx`, `src/Collections.test.tsx` — the
-  three components with a grammar: what a pick turns into on the wire, what a
+- `src/rank.test.ts`, `src/Sheet.test.tsx`, `src/Narrow.test.tsx`,
+  `src/Collections.test.tsx` — the ranking's draw, and the three components
+  with a grammar: what a pick turns into on the wire, what a
   picker does with a value it cannot name, and which kind a collection write
   goes out under. The other components are drawn from what they are handed, so
   there is nothing in them a test would pin that reading them does not.
@@ -334,8 +338,15 @@ and adds to this list rather than to the plan.
   body the sheet submits and is written as it came, so an estimate this side
   cannot read is the API's to refuse in its own words rather than this screen's
   to drop.
+- **The Tags are ranked for discovery, and the draw is once per Tag.**
+  Efraimidis-Spirakis weighted sampling over `count + 1`, so a Tag carried
+  twice usually sits above one carried once and sometimes sits below it. The
+  keys are held in a ref across polls rather than redrawn from each one: the
+  poll runs every second, and a list re-weighted that often would move between
+  seeing a Tag and reaching it. The Lists are not ranked — there are few of
+  them, and a stable order is what makes one easy to reach.
 - **A paperclip is the row's own count, not a mark the store keeps.**
-  `store.Task.Marks` is the store's vocabulary for what a Task *is*, and
+  `store.Task.Marks` is the store's vocabulary for what a Task _is_, and
   holding a pointer is not a state it is in. The row reads
   `attachments.length` instead, which is the one thing it works out — and it
   works it out from what the read already carried rather than asking.

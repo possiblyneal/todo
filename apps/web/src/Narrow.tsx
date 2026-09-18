@@ -5,6 +5,9 @@
 // and the next poll asks the API again, so the list on the screen is always a
 // list the store described rather than one this side sifted.
 
+import { useState } from 'react'
+
+import { ranked } from './rank'
 import type { Collection, Narrowing, Offered } from './state'
 
 export function Narrow({
@@ -23,6 +26,18 @@ export function Narrow({
   offered: Offered
   onChange: (narrowing: Narrowing) => void
 }) {
+  // The Tags' draw, kept across polls rather than recomputed from one. That is
+  // what makes it once per Tag: `ranked` keys whatever it has not seen and
+  // leaves the rest where they were, so the order holds while somebody reads
+  // it and a Tag made elsewhere still finds a place.
+  //
+  // `useState` and not `useRef` because this is read while rendering, which is
+  // the one thing a ref is not for. Nothing ever sets it: the map is the piece
+  // of state, and `ranked` writes into it. Keying a Tag twice is keying it
+  // once, so a render repeated is a draw not repeated.
+  const [keys] = useState(() => new Map<string, number>())
+  const tags = ranked(offered.tags, keys, Math.random)
+
   return (
     <div className="narrow">
       {/*
@@ -61,10 +76,17 @@ export function Narrow({
         onPick={(list) => onChange({ ...narrowing, list })}
       />
 
+      {/*
+        The Lists are offered as the read listed them and the Tags are not.
+        A List is somewhere a Task is filed and there are few of them, so a
+        stable order is what makes one easy to reach; Tags accumulate, and an
+        order by count alone would bury an old one forever. `rank.ts` is where
+        that difference is argued.
+      */}
       <Picker
         name="Tag"
         every="Every tag"
-        all={offered.tags}
+        all={tags}
         value={narrowing.tag}
         onPick={(tag) => onChange({ ...narrowing, tag })}
       />
