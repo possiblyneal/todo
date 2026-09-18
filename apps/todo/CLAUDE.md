@@ -69,6 +69,15 @@ One Go binary with three modes. Bare `todo` prints usage, `todo <verb>` acts and
 - **An edit says what it touches and nothing else.** An attribute flag nobody typed leaves its attribute alone; one given empty clears it. The fold reads `json_type(payload, '$.x') IS NULL` for untouched and a JSON null for cleared, which is the distinction `COALESCE` cannot express, and `fs.Visit` is what makes the CLI say it.
 - **The lifecycle verbs are one shape.** `complete`, `decline`, `reopen` and `delete` each take one id, no flags, and the same guard, so the dispatch and the CLI's map of them are the only places a new one is named.
 - **Exit status is 0 for done, 1 for a failure, 2 for usage, 3 for a refusal.** A refusal is the store turning a write away — no Lease, or one another Actor holds — and a surface distinguishes it from a crash. A bad attribute value is refused where it was typed, so `store.ParseLevel` is the CLI's, not only the write path's.
+- **The two attachment routes are one path and differ by method.** `POST` and
+  `DELETE /api/tasks/{id}/attachments` both carry the target in the body, because
+  a pointer is a file path or a web address and carries its own slashes, which a
+  path segment cannot hold without being escaped into something unreadable in a
+  log. The literal segment beats the `{verb}` wildcard beside it, the way the
+  Subtask route does. Both take the Task's Lease, since pointing a Task at
+  something is a write to the Task. A body with no target at all is usage,
+  because the wire shape requires one; what counts as somewhere to point is
+  `store.pointer`'s and comes back as the store's own sentence.
 - **An Attachment is a pointer, and the tracker never holds a copy.** A file path or a web address, written down and nothing more: a path is resolved to an absolute one where it was typed, an address is kept as typed, and nothing is fetched. A target that moves leaves a dead link the tracker cannot tell you about, decided at issue #3, so there is no checker and never will be.
 - **Deleting a Task collects nothing.** Nothing was copied in, so there is nothing to collect. The pointers stay on the deleted Task and what they name is untouched.
 - **A Series is a rule and nothing else.** Scheduling's two tables hold ids, a rule, a date and a state; no title, description or estimate crosses into it, and `TestNoTaskContentEntersScheduling` reads both tables to check. Tracking points at the rule through `task.series_id`.

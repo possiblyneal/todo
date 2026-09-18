@@ -53,6 +53,14 @@ func Handler(s *store.Store, o Options) http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/subtasks", func(w http.ResponseWriter, r *http.Request) {
 		addSubtask(s, o.Actor, w, r)
 	})
+	// The pointers a Task holds. Both carry the target in the body, so the two
+	// are one path and differ by method the way the collections' do.
+	mux.HandleFunc("POST /api/tasks/{id}/attachments", func(w http.ResponseWriter, r *http.Request) {
+		attach(s, o.Actor, w, r)
+	})
+	mux.HandleFunc("DELETE /api/tasks/{id}/attachments", func(w http.ResponseWriter, r *http.Request) {
+		detach(s, o.Actor, w, r)
+	})
 	// The four lifecycle verbs, by name in the path. A literal segment beats a
 	// wildcard one in this mux, so the route above is what serves `subtasks`
 	// and this one never sees it.

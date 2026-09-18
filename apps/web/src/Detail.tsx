@@ -22,6 +22,8 @@ import {
 } from './state'
 import {
   addSubtask,
+  attach,
+  detach,
   draftOf,
   editTask,
   estimate,
@@ -87,6 +89,21 @@ export function Detail({
       onBack()
     } catch (caught) {
       setRefused(sentence(caught))
+      setWorking(false)
+    }
+  }
+
+  // A pointer added or taken off. Unlike the four verbs, the Task is still here
+  // afterwards and this screen is still the one to be on, so it stays put and
+  // the next poll is what redraws the list.
+  const point = async (made: Promise<void>) => {
+    setWorking(true)
+    setRefused(null)
+    try {
+      await made
+    } catch (caught) {
+      setRefused(sentence(caught))
+    } finally {
       setWorking(false)
     }
   }
@@ -168,10 +185,14 @@ export function Detail({
         {Object.entries(task.fields ?? {}).map(([name, value]) => (
           <Carried key={name} name={name} value={value} />
         ))}
-        {(task.attachments ?? []).map((pointer) => (
-          <Carried key={pointer} name="Attachment" value={pointer} />
-        ))}
       </dl>
+
+      <Attachments
+        on={task.attachments ?? []}
+        working={working}
+        onAttach={(target) => point(attach(task.id, target))}
+        onDetach={(target) => point(detach(task.id, target))}
+      />
 
       {/*
         The four are buttons whatever state the Task is in. Which of them the
@@ -240,4 +261,75 @@ function named(ids: string[] | undefined, all: Collection[]): string {
   return (ids ?? [])
     .map((id) => all.find((one) => one.id === id)?.name ?? id)
     .join(', ')
+}
+
+/**
+ * The pointers a Task holds, each with the tap that takes it off, and the row
+ * that adds one.
+ *
+ * An Attachment is text and nothing else: nothing is uploaded here and nothing
+ * is fetched, so a pointer naming a file names it on the machine `todo api`
+ * runs on rather than on the phone it was typed into.
+ */
+function Attachments({
+  on,
+  working,
+  onAttach,
+  onDetach,
+}: {
+  on: string[]
+  working: boolean
+  onAttach: (target: string) => void
+  onDetach: (target: string) => void
+}) {
+  const [target, setTarget] = useState('')
+
+  return (
+    <>
+      <h2 className="heading">Attachments</h2>
+      {on.length === 0 && <p className="message">None.</p>}
+      <ul className="list">
+        {on.map((pointer) => (
+          <li className="row" key={pointer}>
+            {/*
+              A web address is followable and a path is not, so the pointer is
+              drawn as text either way rather than as a link this screen decides
+              the shape of. The store never looked at what one names and neither
+              does this.
+            */}
+            <span>{pointer}</span>
+            <button
+              type="button"
+              disabled={working}
+              onClick={() => onDetach(pointer)}
+            >
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="row">
+        <input
+          className="control"
+          aria-label="New attachment"
+          placeholder="https://… or /a/path"
+          value={target}
+          onChange={(event) => setTarget(event.target.value)}
+        />
+        <button
+          type="button"
+          disabled={working || target.trim() === ''}
+          onClick={() => {
+            onAttach(target)
+            // Cleared whether or not the write landed: a refusal is said in its
+            // own words above, and a target left sitting here would be added
+            // twice by somebody who read the sentence and tapped again.
+            setTarget('')
+          }}
+        >
+          Attach
+        </button>
+      </div>
+    </>
+  )
 }

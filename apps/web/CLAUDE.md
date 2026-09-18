@@ -61,8 +61,8 @@ and adds to this list rather than to the plan.
 - `src/Breakdown.tsx` — the breakdown screen: the turn with the Broker, the
   questions it still has, and the proposals ticked by position.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
-  Subtasks, its Series, its breakdown, the four lifecycle verbs, and its
-  history.
+  Subtasks, its Series, its breakdown, the four lifecycle verbs, its pointers
+  added and taken off, and its history.
 - `src/Collections.tsx` — the collections screen: the Lists and the Tags
   created, renamed, recolored and deleted. Both sets are drawn by one component
   given the path segment, because a List and a Tag are the same three writes.
@@ -95,6 +95,12 @@ and adds to this list rather than to the plan.
   two under Verification below are the decision recorded in #49: the sheet's
   snooze and the pickers' unknown-value rule turn a pick into a different thing
   on the wire, and an inversion there is a wrong write nobody sees happen.
+- **An Attachment is text, and this surface uploads nothing.** The detail
+  screen sends the pointer as typed and draws it as text, a web address and a
+  file path alike: nothing is fetched and nothing is copied in, which is the
+  store's decision from issue #3 rather than a limit of the browser. A path is
+  resolved by whoever runs `todo api`, so one typed on a phone names a file on
+  that host and not on the phone.
 - **The client works nothing out that the store already did.** `Task.marks` is
   drawn as it arrives; a Task that read as snoozed from a keyboard cannot read
   as plain here.
