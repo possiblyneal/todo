@@ -14,6 +14,7 @@ import { sentence } from './api'
 import type { Collection, Offered } from './state'
 import {
   addCollection,
+  type CollectionBody,
   describeCollection,
   dropCollection,
   type Kind,
@@ -21,10 +22,21 @@ import {
 
 export function Collections({
   offered,
+  read,
+  error,
   onBack,
 }: {
   /** The Lists, the Tags and the nine colors, as the last read named them. */
   offered: Offered
+  /**
+   * Whether a read has landed. Nothing to draw means one of three things and
+   * this screen has to tell them apart: a read that has not come back yet, a
+   * read that failed, and a store with no Lists in it. Saying the third when it
+   * is one of the first two is telling somebody their Lists are gone.
+   */
+  read: boolean
+  /** What the poll was told, drawn over the screen rather than in place of it. */
+  error: string | null
   onBack: () => void
 }) {
   // What a write was told. It is one message for the screen rather than one
@@ -57,12 +69,14 @@ export function Collections({
       </div>
 
       {refused && <p className="message">{refused}</p>}
+      {error && <p className="message">{error}</p>}
 
       <Kinds
         kind="lists"
         name="Lists"
         all={offered.lists}
         colors={offered.colors}
+        read={read}
         working={working}
         onWrite={write}
       />
@@ -71,6 +85,7 @@ export function Collections({
         name="Tags"
         all={offered.tags}
         colors={offered.colors}
+        read={read}
         working={working}
         onWrite={write}
       />
@@ -84,6 +99,7 @@ function Kinds({
   name,
   all,
   colors,
+  read,
   working,
   onWrite,
 }: {
@@ -91,19 +107,26 @@ function Kinds({
   name: string
   all: Collection[]
   colors: string[]
+  read: boolean
   working: boolean
   onWrite: (made: Promise<unknown>) => Promise<void>
 }) {
   return (
     <>
       <h2 className="heading">{name}</h2>
-      {all.length === 0 && <p className="message">None.</p>}
+      {all.length === 0 && (
+        <p className="message">{read ? 'None.' : 'Reading…'}</p>
+      )}
       <ul className="list">
         {all.map((one) => (
-          <Row
-            // Keyed on the id, so a rename in flight does not carry a half
-            // typed name onto whichever row takes its place in the order.
-            key={one.id}
+          <OneCollection
+            // Keyed on what the row is drawn from and not on the id alone. The
+            // id keeps a half typed name off whichever row takes its place in
+            // the order; the name and the color put the row back on the read's
+            // baseline the moment a poll carries a new one, so a Collection
+            // another Actor renamed cannot leave this one offering to save the
+            // name it opened on over the top of theirs.
+            key={`${one.id}:${one.name}:${one.color}`}
             one={one}
             colors={colors}
             working={working}
@@ -127,7 +150,7 @@ function Kinds({
  * The count is drawn and not edited: it is what the read worked out, and the
  * way to change it is to file a Task under this one.
  */
-function Row({
+function OneCollection({
   one,
   colors,
   working,
@@ -137,12 +160,14 @@ function Row({
   one: Collection
   colors: string[]
   working: boolean
-  onDescribe: (body: { name: string; color: string }) => void
+  onDescribe: (body: CollectionBody) => void
   onDrop: () => void
 }) {
   const [name, setName] = useState(one.name)
   const [color, setColor] = useState(one.color)
-  const changed = name !== one.name || color !== one.color
+  const renamed = name !== one.name
+  const recolored = color !== one.color
+  const changed = renamed || recolored
 
   return (
     <li className="row">
@@ -164,7 +189,16 @@ function Row({
         // Nothing to write is nothing to submit, which is also what keeps a row
         // nobody touched from appending an entry that changed nothing.
         disabled={working || !changed}
-        onClick={() => onDescribe({ name, color })}
+        onClick={() =>
+          // Only what this row changed. The body's absent attribute is what
+          // tells the store to leave the other one alone, so a rename that
+          // carried the color it opened on would put back a recolor another
+          // Actor made while the row sat here.
+          onDescribe({
+            ...(renamed && { name }),
+            ...(recolored && { color }),
+          })
+        }
       >
         Save
       </button>
