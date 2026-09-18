@@ -50,7 +50,8 @@ and adds to this list rather than to the plan.
 - `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tag,
   the box searched in, and the one toggle that takes in the snoozed, completed,
   declined and deleted. It sets fields on the Narrowing and narrows nothing
-  itself.
+  itself. The List and the Tag are one picker, because a Collection is the same
+  shape either way.
 - `src/Row.tsx` — one row of the list: the tap that opens the Task and the
   press held that puts the four verbs under it.
 - `src/Series.tsx` — the Series screen: the rule, the dates it produces next,
@@ -152,6 +153,13 @@ and adds to this list rather than to the plan.
   a dropped answer. The nine colors and the four snoozes were the same problem
   and are not any more: `colors` and `snoozes` arrive with the state, so the
   picker for each is the store's list and cannot offer a tenth or a fifth.
+- **A narrowing to something the client cannot name is kept on the screen.**
+  `Picker` in `Narrow.tsx` draws an id it has no Collection for under the id
+  itself. A List or a Tag deleted from another surface while the list is
+  narrowed to it would otherwise match no option, so the control would render
+  blank over a list that was still narrowed and nothing would say what
+  happened. It is the same rule as the two below, which is why the List and the
+  Tag are one component rather than two copies of it.
 - **A picked value the client does not know is offered rather than dropped.**
   `Choice` in `Sheet.tsx` is one control for the levels and the colors alike,
   and a value that is none of the offered ones is added to the end of the list:
@@ -200,7 +208,9 @@ and adds to this list rather than to the plan.
   That is the one state where they are behind, and it is the same state the API
   describes as not knowing whether anything changed.
 - **A verb is offered whatever state the Task is in.** Which of the four the
-  store refuses is the store's to say, and it says it in a sentence. A screen
+  store refuses is the store's to say, and it says it in a sentence. Reopen is
+  offered on a deleted Task and undoes the deletion, which is why the rule holds
+  on the one Task that showing everything is the only way to reach. A screen
   that greyed out the wrong one would be a second copy of a rule that already
   exists. Reopen is reached through show everything: the everyday poll asks for the
   open Tasks, so an ended one is in the list to be tapped only under

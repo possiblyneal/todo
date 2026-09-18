@@ -53,37 +53,21 @@ export function Narrow({
         ))}
       </select>
 
-      <select
-        className="control"
-        aria-label="List"
+      <Picker
+        name="List"
+        every="Every list"
+        all={lists}
         value={narrowing.list}
-        onChange={(event) =>
-          onChange({ ...narrowing, list: event.target.value })
-        }
-      >
-        <option value="">Every list</option>
-        {lists.map((list) => (
-          <option key={list.id} value={list.id}>
-            {list.name} ({list.count})
-          </option>
-        ))}
-      </select>
+        onPick={(list) => onChange({ ...narrowing, list })}
+      />
 
-      <select
-        className="control"
-        aria-label="Tag"
+      <Picker
+        name="Tag"
+        every="Every tag"
+        all={tags}
         value={narrowing.tag}
-        onChange={(event) =>
-          onChange({ ...narrowing, tag: event.target.value })
-        }
-      >
-        <option value="">Every tag</option>
-        {tags.map((tag) => (
-          <option key={tag.id} value={tag.id}>
-            {tag.name} ({tag.count})
-          </option>
-        ))}
-      </select>
+        onPick={(tag) => onChange({ ...narrowing, tag })}
+      />
 
       {/*
         Typing asks again: each keystroke is a new narrowing and so a new read,
@@ -131,5 +115,53 @@ export function Narrow({
         {narrowing.all ? 'Everything shown' : 'Show everything'}
       </button>
     </div>
+  )
+}
+
+/**
+ * The List picker and the Tag picker, which are one control: a Collection is
+ * the same shape either way and the two narrow the same list by the same kind
+ * of id.
+ *
+ * An id the client cannot name is offered under the id itself rather than left
+ * matching nothing. A Collection deleted from another surface while the list is
+ * narrowed to it would otherwise blank the control while the list stayed
+ * narrowed, so the screen would show a wide-open picker over a narrowed list
+ * and nothing would say what happened. It is the rule `Sheet.tsx` already
+ * follows for a level it does not recognise and for a membership it cannot yet
+ * put a name to.
+ */
+function Picker({
+  name,
+  every,
+  all,
+  value,
+  onPick,
+}: {
+  name: string
+  /** What the empty option says, which is what leaving it does. */
+  every: string
+  all: Collection[]
+  value: string
+  onPick: (value: string) => void
+}) {
+  const shown =
+    value === '' || all.some((one) => one.id === value)
+      ? all
+      : [...all, { id: value, name: value, color: '', count: 0 }]
+  return (
+    <select
+      className="control"
+      aria-label={name}
+      value={value}
+      onChange={(event) => onPick(event.target.value)}
+    >
+      <option value="">{every}</option>
+      {shown.map((one) => (
+        <option key={one.id} value={one.id}>
+          {one.name} ({one.count})
+        </option>
+      ))}
+    </select>
   )
 }

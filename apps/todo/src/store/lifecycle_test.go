@@ -307,3 +307,55 @@ func TestWithLeaseTakesAndGivesBack(t *testing.T) {
 		t.Errorf("the Lease outlived WithLease: a later write = %v, want ErrRefused", err)
 	}
 }
+
+// Reopening is the only way back from a deletion, so it undoes one the way it
+// undoes an ending. The Task is in the everyday view afterwards rather than
+// answered 200 and left gone.
+func TestReopeningUndoesADeletion(t *testing.T) {
+	s := openTemp(t)
+	id := leased(t, s, "alice", Attributes{Title: Set("Buy milk")})
+
+	if err := s.DeleteTask("alice", id); err != nil {
+		t.Fatalf("DeleteTask: %v", err)
+	}
+	if err := s.ReopenTask("alice", id); err != nil {
+		t.Fatalf("ReopenTask: %v", err)
+	}
+
+	got := only(t, s, Query{})
+	if !got.DeletedAt.IsZero() {
+		t.Error("reopening left the Task deleted")
+	}
+	if got.Title != "Buy milk" {
+		t.Errorf("the reopened Task reads %q, want it back whole", got.Title)
+	}
+}
+
+// A Subtask reopened out of a deletion comes back under a parent that is
+// there: the walk up clears every state above it, so nothing is undeleted into
+// a tree it cannot be reached through.
+func TestReopeningADeletedSubtaskUndeletesTheTasksAboveIt(t *testing.T) {
+	s := openTemp(t)
+	parent := leased(t, s, "alice", Attributes{Title: Set("Redecorate")})
+	child, err := s.AddSubtask("alice", parent, Attributes{Title: Set("Paint the fence")})
+	if err != nil {
+		t.Fatalf("AddSubtask: %v", err)
+	}
+	if err := s.DeleteTask("alice", child); err != nil {
+		t.Fatalf("DeleteTask on the Subtask: %v", err)
+	}
+	if err := s.DeleteTask("alice", parent); err != nil {
+		t.Fatalf("DeleteTask on the parent: %v", err)
+	}
+	if err := s.ReopenTask("alice", child); err != nil {
+		t.Fatalf("ReopenTask: %v", err)
+	}
+
+	tasks, err := s.Tasks(Query{})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("the everyday view holds %d Tasks, want the Subtask and the parent above it", len(tasks))
+	}
+}

@@ -160,7 +160,12 @@ type Task struct {
 	// the a_task_ends_once trigger is what keeps a Task out of both.
 	CompletedAt time.Time
 	DeclinedAt  time.Time
-	DeletedAt   time.Time
+
+	// DeletedAt is the third state that takes a Task out of the everyday
+	// view, and it is not terminal: reopening undoes it too, because reopen
+	// is the only way back there is and a deletion is a thing somebody can
+	// be wrong about.
+	DeletedAt time.Time
 
 	// Overdue is the expression deadline < now, worked out by the read that
 	// produced this Task. It is never stored, and nothing records the moment
@@ -464,10 +469,16 @@ BEGIN
 	UPDATE task SET declined_at = NEW.at WHERE id = NEW.subject;
 END;
 
--- Reopening undoes either terminal state, on the Task and on everything above
--- it. One entry serves both because reopening is the same act either way: the
--- Task is open again, and the Change History already says which state it was
--- reopened out of.
+-- Reopening undoes any of the three states a Task is out of the everyday list
+-- for: completed, declined, deleted. One entry serves all three because
+-- reopening is the same act every way round -- the Task is open again -- and
+-- the Change History already says which state it was reopened out of.
+--
+-- A deletion is undone here rather than by a verb of its own because reopen is
+-- the only way back there is: the browser reaches a deleted Task by showing
+-- everything, offers reopen on it the way it offers reopen on a completed one,
+-- and a reopen that answered as though it had worked and left the Task deleted
+-- wrote a reopening into the Change History that did not happen.
 --
 -- Reopening a Subtask reopens everything above it, in one statement. A trigger
 -- that cleared the parent and left the parent's own trigger to clear the
@@ -478,7 +489,7 @@ DROP TRIGGER IF EXISTS fold_task_reopened;
 CREATE TRIGGER fold_task_reopened
 AFTER INSERT ON change_history WHEN NEW.kind = 'task_reopened'
 BEGIN
-	UPDATE task SET completed_at = NULL, declined_at = NULL WHERE id IN (
+	UPDATE task SET completed_at = NULL, declined_at = NULL, deleted_at = NULL WHERE id IN (
 		WITH RECURSIVE ancestry(id, parent_id) AS (
 			SELECT id, parent_id FROM task WHERE id = NEW.subject
 			UNION ALL
@@ -1201,6 +1212,24 @@ type Query struct {
 	Sort Sort
 }
 
+// Check is everything Tasks refuses a Query for, worked out without reading
+// anything. It is exported because a caller may answer before the read gets
+// to run -- an ETag that says nothing changed, say -- and a Query that would
+// have been refused must be refused there too rather than served a cached
+// answer to a question the store never accepted.
+//
+// The zero Sort is SortCreated and passes, so a Query narrowed by nothing is
+// checked the same way as any other.
+func (q Query) Check() error {
+	if q.Sort == "" {
+		return nil
+	}
+	if _, ok := sortKeys[q.Sort]; !ok {
+		return fmt.Errorf("%q is not a sort: want %s", q.Sort, strings.Join(SortNames(), ", "))
+	}
+	return nil
+}
+
 // Tasks reads current state. It writes nothing, and it evaluates Overdue and
 // the snooze against the clock as it goes: neither is stored, and nothing
 // records the moment either becomes true.
@@ -1227,10 +1256,10 @@ func (s *Store) Tasks(q Query) ([]Task, error) {
 	if q.Sort == "" {
 		q.Sort = SortCreated
 	}
-	key, ok := sortKeys[q.Sort]
-	if !ok {
-		return nil, fmt.Errorf("%q is not a sort: want %s", q.Sort, strings.Join(SortNames(), ", "))
+	if err := q.Check(); err != nil {
+		return nil, err
 	}
+	key := sortKeys[q.Sort]
 	rows, err := s.db.Query(fmt.Sprintf(`
 WITH RECURSIVE
 -- The Tasks a search is about: the ones whose own words hold the text, and
