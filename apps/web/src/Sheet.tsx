@@ -152,25 +152,25 @@ export function Sheet({
 
       <Choice
         name="Priority"
-        offered={LEVELS}
+        options={LEVELS}
         value={body.priority ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, priority: value }))}
       />
       <Choice
         name="Impact"
-        offered={LEVELS}
+        options={LEVELS}
         value={body.impact ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, impact: value }))}
       />
       <Choice
         name="Color"
-        offered={offered.colors}
+        options={offered.colors}
         value={body.color ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, color: value }))}
       />
 
       <Snooze
-        offered={offered.snoozes}
+        options={offered.snoozes}
         value={body.snooze}
         onPick={(value) => setBody((was) => ({ ...was, snooze: value }))}
       />
@@ -217,17 +217,17 @@ export function Sheet({
  */
 function Choice({
   name,
-  offered,
+  options,
   value,
   onPick,
 }: {
   name: string
-  offered: string[]
+  options: string[]
   value: string
   onPick: (value: string) => void
 }) {
   const shown =
-    value === '' || offered.includes(value) ? offered : [...offered, value]
+    value === '' || options.includes(value) ? options : [...options, value]
   return (
     <label className="field">
       <span>{name}</span>
@@ -254,11 +254,11 @@ function Choice({
  * string wakes it, which is the only way back from a snooze on this surface.
  */
 function Snooze({
-  offered,
+  options,
   value,
   onPick,
 }: {
-  offered: string[]
+  options: string[]
   value?: string
   onPick: (value: string | undefined) => void
 }) {
@@ -266,9 +266,9 @@ function Snooze({
   // word it did not know: `write.Snooze` takes a plain duration as well as the
   // labels, so one is not a value to drop on the way to the screen.
   const shown =
-    value === undefined || value === '' || offered.includes(value)
-      ? offered
-      : [...offered, value]
+    value === undefined || value === '' || options.includes(value)
+      ? options
+      : [...options, value]
   return (
     <label className="field">
       <span>Snooze</span>
