@@ -9,13 +9,15 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test } from 'vitest'
 
 import { Sheet } from './Sheet'
+import type { Offered } from './state'
 import type { TaskBody } from './write'
 
 afterEach(cleanup)
 
-const OFFERED = {
+const OFFERED: Offered = {
   lists: [{ id: 'l1', name: 'Home', color: 'blue', count: 2 }],
   tags: [{ id: 't1', name: 'errand', color: 'red', count: 1 }],
+  sorts: ['title'],
   colors: ['red', 'blue'],
   snoozes: ['an hour', 'tomorrow'],
 }
@@ -27,7 +29,7 @@ function opened(draft: TaskBody, against?: TaskBody) {
     <Sheet
       draft={draft}
       against={against}
-      {...OFFERED}
+      offered={OFFERED}
       action="Save"
       onSubmit={(body) => {
         sent.push(body)

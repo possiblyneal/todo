@@ -12,7 +12,7 @@ import { useRead } from './read'
 import { Sheet } from './Sheet'
 import {
   fetchSeries,
-  type Collection,
+  type Offered,
   type Series as Repeating,
   type Task,
 } from './state'
@@ -22,19 +22,14 @@ const NONE: Repeating = { repeats: false, occurrences: [] }
 
 export function Series({
   task,
-  lists,
-  tags,
-  colors,
-  snoozes,
+  offered,
   revision,
   onOpen,
   onBack,
 }: {
   task: Task
-  lists: Collection[]
-  tags: Collection[]
-  colors: string[]
-  snoozes: string[]
+  /** What the lift-out sheet picks from. Nothing here is read on the way past. */
+  offered: Offered
   /**
    * The ETag of the read on the screen, which is what this reads again on: a
    * mark made here lands on the next poll and the dates redraw then, the same
@@ -91,10 +86,7 @@ export function Series({
         // Lists and the Tags it is handed rather than a change to what the
         // recurring Task carries, so the ticked sets go whole.
         against={{}}
-        lists={lists}
-        tags={tags}
-        colors={colors}
-        snoozes={snoozes}
+        offered={offered}
         action="Lift out"
         onSubmit={async (body) => {
           // The lift and the corrections are one write, so backing out of this

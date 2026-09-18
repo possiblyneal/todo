@@ -8,24 +8,20 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { Narrow } from './Narrow'
-import { WIDE } from './state'
+import { OFFERED_NOTHING, WIDE, type Offered } from './state'
 
 afterEach(cleanup)
 
-const LISTS = [{ id: 'l1', name: 'Home', color: 'blue', count: 2 }]
-const TAGS = [{ id: 't1', name: 'errand', color: 'red', count: 1 }]
+const OFFERED: Offered = {
+  ...OFFERED_NOTHING,
+  lists: [{ id: 'l1', name: 'Home', color: 'blue', count: 2 }],
+  tags: [{ id: 't1', name: 'errand', color: 'red', count: 1 }],
+  sorts: ['title', 'deadline'],
+}
 
 function shown(narrowing = WIDE) {
   const onChange = vi.fn()
-  render(
-    <Narrow
-      narrowing={narrowing}
-      lists={LISTS}
-      tags={TAGS}
-      sorts={['title', 'deadline']}
-      onChange={onChange}
-    />,
-  )
+  render(<Narrow narrowing={narrowing} offered={OFFERED} onChange={onChange} />)
   return onChange
 }
 

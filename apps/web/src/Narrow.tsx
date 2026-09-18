@@ -5,22 +5,22 @@
 // and the next poll asks the API again, so the list on the screen is always a
 // list the store described rather than one this side sifted.
 
-import type { Collection, Narrowing } from './state'
+import type { Collection, Narrowing, Offered } from './state'
 
 export function Narrow({
   narrowing,
-  lists,
-  tags,
-  sorts,
+  offered,
   onChange,
 }: {
   narrowing: Narrowing
-  lists: Collection[]
-  tags: Collection[]
-  // What `?sort=` accepts, as `GET /api/state` answered it. The client keeps no
-  // list of its own, so a sort added to the store is offered here the day it
-  // lands and one this side invented cannot be offered at all.
-  sorts: string[]
+  /**
+   * The Lists, the Tags and the sorts to narrow and order by, as
+   * `GET /api/state` answered them. The client keeps no list of its own, so a
+   * sort added to the store is offered here the day it lands and one this side
+   * invented cannot be offered at all. The colors and the snoozes travel in the
+   * same type and are the sheet's rather than these controls'.
+   */
+  offered: Offered
   onChange: (narrowing: Narrowing) => void
 }) {
   return (
@@ -46,7 +46,7 @@ export function Narrow({
         }
       >
         <option value="">Oldest first</option>
-        {sorts.map((sort) => (
+        {offered.sorts.map((sort) => (
           <option key={sort} value={sort}>
             By {sort}
           </option>
@@ -56,7 +56,7 @@ export function Narrow({
       <Picker
         name="List"
         every="Every list"
-        all={lists}
+        all={offered.lists}
         value={narrowing.list}
         onPick={(list) => onChange({ ...narrowing, list })}
       />
@@ -64,7 +64,7 @@ export function Narrow({
       <Picker
         name="Tag"
         every="Every tag"
-        all={tags}
+        all={offered.tags}
         value={narrowing.tag}
         onPick={(tag) => onChange({ ...narrowing, tag })}
       />

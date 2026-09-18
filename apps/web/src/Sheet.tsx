@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 
-import type { Collection } from './state'
+import type { Collection, Offered } from './state'
 import { memberships, type TaskBody } from './write'
 
 /** The attributes this sheet takes as text, which is every one it shows. */
@@ -25,10 +25,7 @@ const LEVELS = ['low', 'med', 'high']
 export function Sheet({
   draft,
   against,
-  lists,
-  tags,
-  colors,
-  snoozes,
+  offered,
   action,
   onSubmit,
   onCancel,
@@ -42,15 +39,14 @@ export function Sheet({
    * difference and write a Task belonging to no List the sheet drew ticked.
    */
   against?: TaskBody
-  lists: Collection[]
-  tags: Collection[]
   /**
-   * The colors a Task may carry and the snoozes on offer, as
-   * `GET /api/state` answered them. The client keeps no list of either, so it
-   * cannot offer a color the store would refuse.
+   * The Lists and Tags to file the Task under, the colors it may carry and the
+   * snoozes on offer, as `GET /api/state` answered them. The client keeps no
+   * list of any of them, so it cannot offer a value the store would refuse.
+   * The sorts travel in the same type and are the controls' rather than this
+   * form's.
    */
-  colors: string[]
-  snoozes: string[]
+  offered: Offered
   /** The word on the button, which is what submitting it does. */
   action: string
   onSubmit: (body: TaskBody) => Promise<void>
@@ -168,13 +164,13 @@ export function Sheet({
       />
       <Choice
         name="Color"
-        offered={colors}
+        offered={offered.colors}
         value={body.color ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, color: value }))}
       />
 
       <Snooze
-        offered={snoozes}
+        offered={offered.snoozes}
         value={body.snooze}
         onPick={(value) => setBody((was) => ({ ...was, snooze: value }))}
       />
@@ -186,13 +182,13 @@ export function Sheet({
 
       <Ticks
         name="Lists"
-        all={lists}
+        all={offered.lists}
         on={body.intoLists ?? []}
         onToggle={(id) => toggle('intoLists', id)}
       />
       <Ticks
         name="Tags"
-        all={tags}
+        all={offered.tags}
         on={body.addTags ?? []}
         onToggle={(id) => toggle('addTags', id)}
       />
