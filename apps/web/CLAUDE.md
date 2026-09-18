@@ -188,8 +188,14 @@ and adds to this list rather than to the plan.
   narrowed to it would otherwise match no option, so the control would render
   blank over a list that was still narrowed and nothing would say what
   happened. `Tags` keeps an unnamed id on screen for the same reason: a switch
-  nobody can see is a switch nobody can turn off. It is the same rule as the two
-  below.
+  nobody can see is a switch nobody can turn off. The rule has four sites and
+  they stay four: `Picker` and `Tags` here, and `Choice` and `Snooze` in
+  `Sheet.tsx` below. `Picker` and `Tags` share `labelled` for what one option or
+  switch reads — a Collection the store named carries the count it worked out,
+  and an id nothing named carries none, because a zero there would be this side
+  answering a question the store never answered. The membership test itself is
+  written out at each of the four, since the elements differ, and a helper
+  spanning them would be an abstraction over three shapes.
 - **More than one Tag narrows to any of them, not all of them.** `Narrowing.tags`
   is a set, sent as `?tag=` repeated, and a Task carrying any one of them is in
   the list. Turning a second Tag on is somebody widening what they are willing
