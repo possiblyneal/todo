@@ -5,7 +5,7 @@ import { Box } from './Box'
 import { sentence } from './api'
 import { Collections } from './Collections'
 import { Detail } from './Detail'
-import { Narrow } from './Narrow'
+import { Narrow, Search } from './Narrow'
 import { Row } from './Row'
 import {
   fetchState,
@@ -106,10 +106,12 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query])
 
-  // An error sits over the list rather than replacing it. A poll that failed
-  // says nothing about the Tasks already on the screen, and a phone that walked
-  // out of range should not have its list taken away while it walks back.
-  const open = screen.name === 'task' ? find(state, screen.id) : undefined
+  // Selected and open are one state, not two: a tap selects a Task, and which
+  // of the two ways that is drawn is the layout's. `selected` is what somebody
+  // tapped and `open` is the Task the last read still describes; they differ
+  // only while a Task is going away under the selection.
+  const selected = screen.name === 'task'
+  const open = selected ? find(state, screen.id) : undefined
 
   if (screen.name === 'collections') {
     return (
@@ -130,69 +132,57 @@ export function App() {
     )
   }
 
-  // A Task the read no longer names is a Task that went away while it was
-  // open, which is what deleting one from another surface looks like from
-  // here. The list is what is left, rather than a screen about nothing.
-  if (screen.name === 'task' && state && !open) {
-    return (
-      <>
-        <p className="message">That task is not in the list any more.</p>
-        <button type="button" onClick={() => setScreen({ name: 'list' })}>
-          Back
-        </button>
-      </>
-    )
-  }
-
-  if (open && state) {
-    return (
-      <Detail
-        // Keyed on the Task, so opening a Subtask from here starts a screen of
-        // its own rather than reusing this one: the history, the error and the
-        // open sheet all belong to the Task they were about.
-        key={open.id}
-        task={open}
-        subtasks={state.tasks.filter((task) => task.parent === open.id)}
-        offered={state}
-        revision={etag}
-        onOpen={(id) => setScreen({ name: 'task', id })}
-        onBack={() => setScreen({ name: 'list' })}
-      />
-    )
-  }
-
   return (
-    <>
-      {/*
+    <div className={selected ? 'panes showing' : 'panes'}>
+      <div className="pane filters">
+        {/*
+          The controls are drawn before the first read lands, with nothing in
+          the pickers but the everyday view. They are what asks for a list, so a
+          screen that waited for a list before offering them would be waiting on
+          itself.
+        */}
+        <Narrow
+          narrowing={narrowing}
+          offered={state ?? OFFERED_NOTHING}
+          onChange={setNarrowing}
+        />
+      </div>
+
+      <div className="pane middle">
+        {/*
         The box is above the list rather than behind a tap, because a dump is
         the most frequent thing anybody does here and nothing should be stacked
         in front of it. The Lists and Tags it offers on the add sheet are the
         ones the last read named; before the first one there are none to offer
         and the sheet shows none.
       */}
-      <Box
-        offered={state ?? OFFERED_NOTHING}
-        // A question is asked about the Tasks the list asked for, under the
-        // same query string. The two go together or the box starts answering
-        // about a list nobody is looking at.
-        narrowing={narrowing}
-      />
-      {/*
-        The controls are drawn before the first read lands, with nothing in the
-        pickers but the everyday view. They are what asks for a list, so a
-        screen that waited for a list before offering them would be waiting on
-        itself.
+        <Box
+          offered={state ?? OFFERED_NOTHING}
+          // A question is asked about the Tasks the list asked for, under the
+          // same query string. The two go together or the box starts answering
+          // about a list nobody is looking at.
+          narrowing={narrowing}
+        />
+        {/*
+        The box the list is searched in sits over the Tasks and not among the
+        filtering: it is about what is under it, which is the same thing on a
+        phone and in the middle pane at a desk.
       */}
-      <Narrow
-        narrowing={narrowing}
-        offered={state ?? OFFERED_NOTHING}
-        onChange={setNarrowing}
-      />
-      {error && <p className="message">{error}</p>}
-      {!state && !error && <p className="message">Reading the list…</p>}
-      {state && state.tasks.length === 0 && (
-        <p className="message">
-          {/*
+        <Search
+          value={narrowing.search}
+          onChange={(search) => setNarrowing({ ...narrowing, search })}
+        />
+        {/*
+        An error sits over the list rather than replacing it. A poll that
+        failed says nothing about the Tasks already on the screen, and a phone
+        that walked out of range should not have its list taken away while it
+        walks back.
+      */}
+        {error && <p className="message">{error}</p>}
+        {!state && !error && <p className="message">Reading the list…</p>}
+        {state && state.tasks.length === 0 && (
+          <p className="message">
+            {/*
             The List, the Tag and the search are what take Tasks out of a read
             this client asks for, so one of them set is a list narrowed to
             nothing. A sort reorders what came back and cannot empty it, and
@@ -205,35 +195,73 @@ export function App() {
             take a second read, and for a fresh store this is the right
             sentence.
           */}
-          {!drawn.list && drawn.tags.length === 0 && !drawn.search
-            ? 'Nothing here yet.'
-            : 'Nothing matches what the list is narrowed to.'}
-        </p>
-      )}
-      {state && state.tasks.length > 0 && (
-        <ul className="list">
-          {state.tasks.map((task) => (
-            <Row
-              key={task.id}
-              task={task}
-              lists={state.lists}
-              onOpen={(id) => setScreen({ name: 'task', id })}
-            />
-          ))}
-        </ul>
-      )}
-      <div className="buttons">
-        <button type="button" onClick={() => setScreen({ name: 'agents' })}>
-          Activity
-        </button>
-        <button
-          type="button"
-          onClick={() => setScreen({ name: 'collections' })}
-        >
-          Lists and Tags
-        </button>
+            {!drawn.list && drawn.tags.length === 0 && !drawn.search
+              ? 'Nothing here yet.'
+              : 'Nothing matches what the list is narrowed to.'}
+          </p>
+        )}
+        {state && state.tasks.length > 0 && (
+          <ul className="list">
+            {state.tasks.map((task) => (
+              <Row
+                key={task.id}
+                task={task}
+                lists={state.lists}
+                onOpen={(id) => setScreen({ name: 'task', id })}
+              />
+            ))}
+          </ul>
+        )}
+        <div className="buttons">
+          <button type="button" onClick={() => setScreen({ name: 'agents' })}>
+            Activity
+          </button>
+          <button
+            type="button"
+            onClick={() => setScreen({ name: 'collections' })}
+          >
+            Lists and Tags
+          </button>
+        </div>
       </div>
-    </>
+
+      {/*
+        The Task that is selected, which is the same selection whichever width
+        this is drawn at: beside the list at a desk and instead of it on a
+        phone, decided in `index.css` rather than by anything measured here.
+
+        A Task the read no longer names is a Task that went away while it was
+        selected, which is what deleting one from another surface looks like
+        from here. The pane says so rather than disappearing, because the tap
+        that selected it was somebody's and the list is unchanged.
+      */}
+      {selected && state && (
+        <div className="pane opened">
+          {open ? (
+            <Detail
+              // Keyed on the Task, so opening a Subtask from here starts a
+              // screen of its own rather than reusing this one: the history,
+              // the error and the open sheet all belong to the Task they were
+              // about.
+              key={open.id}
+              task={open}
+              subtasks={state.tasks.filter((task) => task.parent === open.id)}
+              offered={state}
+              revision={etag}
+              onOpen={(id) => setScreen({ name: 'task', id })}
+              onBack={() => setScreen({ name: 'list' })}
+            />
+          ) : (
+            <>
+              <p className="message">That task is not in the list any more.</p>
+              <button type="button" onClick={() => setScreen({ name: 'list' })}>
+                Back
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

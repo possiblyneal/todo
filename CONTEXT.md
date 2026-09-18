@@ -34,8 +34,12 @@ _Avoid_: Rejected, cancelled, dropped, won't-do
 A Task nested under another Task, to five levels. A Subtask is fixed where it was created: it never moves to a different parent and never leaves the Task it sits under. A top-level Task and everything nested beneath it are written and kept correct as one whole.
 _Avoid_: Child task, step, checklist item
 
+**Collection**:
+Either of the two things a Task is filed under: a List or a Tag. Each is a thing in its own right rather than text on a Task — it is made, named, colored and deleted on its own, it outlives every Task that was filed under it, and deleting one takes nothing off a Task but the filing. The word exists because the two behave identically everywhere except in what somebody means by filing something under one.
+_Avoid_: Group, bucket, folder, category
+
 **List**:
-A named collection a Task belongs to. It exists before any Task is in it and survives after the last one leaves, carries its own name and color, and a Task may belong to more than one.
+A Collection a Task belongs to, standing for where the work sits: a house move, a job, a house. A Task may belong to more than one.
 _Avoid_: Project, folder, category, bucket
 
 **Tag**:
@@ -53,6 +57,10 @@ _Avoid_: Lock, claim, reservation, checkout
 **Attachment**:
 A pointer held on a Task to something living outside the tracker — a file path or a web address. The tracker never holds a copy, so it cannot tell whether what is pointed at still exists.
 _Avoid_: File, upload, document
+
+**Narrowing**:
+What one read of the Tasks asks for: which List, which Tags, what text to match, what order to come back in, and whether the snoozed and the ended are in. It describes a question and never a result, nothing stores one, and every Task that comes back came back because the store answered it — no surface sifts a list it was given. Naming a second Tag widens it rather than narrowing twice: a Task carrying any one of the named Tags is in the read.
+_Avoid_: Filter, query, view, search
 
 **Overdue**:
 A condition true of a Task whose due date has passed, evaluated whenever something reads it. Nothing records the moment it becomes true.

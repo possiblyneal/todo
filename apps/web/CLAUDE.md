@@ -57,10 +57,12 @@ and adds to this list rather than to the plan.
   makes one write of its own, the List or Tag its ticks offer to make; every
   other write is whoever opens it saying what submitting it does.
 - `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tags,
-  the box searched in, and the one toggle that takes in the snoozed, completed,
-  declined and deleted. It sets fields on the Narrowing and narrows nothing
-  itself. The List is a picker and the Tags are switches, because one is picked
-  one at a time and the other is a set.
+  and the one toggle that takes in the snoozed, completed, declined and deleted,
+  plus `Search`, the box the list is searched in, exported apart from them
+  because it belongs over the Tasks rather than among the filtering. It sets
+  fields on the Narrowing and narrows nothing itself. The List is a picker and
+  the Tags are switches, because one is picked one at a time and the other is a
+  set.
 - `src/Row.tsx` — one row of the list: what the Task is called, two lines of
   what it says, when it arrived, when it is due, what it is filed under,
   whether it points anywhere, the tap that opens it, and the press held that
@@ -79,18 +81,21 @@ and adds to this list rather than to the plan.
   Task, with the filter for Actors that name a harness and a model.
 - `src/Log.tsx` — the entries drawn as who, what and when. Both screens draw
   their log through it.
-- `src/App.tsx` — the box above the list, and which screen is open. It draws what the read returned and works nothing out for itself.
+- `src/App.tsx` — the three panes, the poll that fills them, and which screen
+  is open. It draws what the read returned and works nothing out for itself,
+  including how wide the screen is.
 - `src/main.tsx` — the mount, and nothing else.
 - `src/rank.test.ts`, `src/Sheet.test.tsx`, `src/Breakdown.test.tsx`,
-  `src/Narrow.test.tsx`,
-  `src/Collections.test.tsx` — the ranking's draw, and the three components
-  with a grammar: what a pick turns into on the wire, what a
-  picker does with a value it cannot name, and which kind a collection write
-  goes out under. The other components are drawn from what they are handed, so
+  `src/Narrow.test.tsx`, `src/Collections.test.tsx`, `src/App.test.tsx` — the
+  ranking's draw, and the components with a grammar: what a pick turns into on
+  the wire, what a picker does with a value it cannot name, which kind a
+  collection write goes out under, and that a selected Task and the list it was
+  selected from are drawn from one tree. The other components are drawn from what they are handed, so
   there is nothing in them a test would pin that reading them does not.
-- `src/index.css` — the whole of the styling. There is no component-level
-  stylesheet and no CSS-in-JS, so the 44px rule below is checkable by reading
-  one file.
+- `src/index.css` — the whole of the styling, including the one media query
+  there is and therefore the whole of what decides whether this is three panes
+  or one column. There is no component-level stylesheet and no CSS-in-JS, so
+  the 44px rule below is checkable by reading one file.
 - `index.html`, `vite.config.ts`, `tsconfig.json`, `eslint.config.js` — the
   build. The dev server proxies `/api` so development has the one origin
   production has.
@@ -402,7 +407,22 @@ and adds to this list rather than to the plan.
   came.** `Row.tsx` formats through `toLocaleDateString`, and a string no date
   can be read out of is drawn verbatim — the same rule the pickers follow for a
   value they cannot name.
-- **Touch targets no smaller than 44px, one thumb, no hover.**
+- **Three panes at a desk, one column on a phone, and one component tree for
+  both.** `index.css` is the whole of the difference: nothing measures a width
+  here, and the same elements are rendered at every size. The panes are the
+  filtering, the Tasks with the search box over them, and the Task that is
+  selected. Activity and the collections screen are not panes — they are what is
+  on the screen instead of the three, at every width.
+- **Selecting a Task and opening it are one state.** A tap sets the screen to
+  that Task, and the layout decides whether its pane sits beside the list or
+  instead of it; a second piece of state for "selected" would be two things to
+  keep in step over one tap. The pane reads until somebody taps Edit, because it
+  is `Detail` and not `Sheet`. A Task the read stops naming leaves the pane
+  saying so rather than emptying the screen.
+- **Touch targets no smaller than 44px, one thumb, no hover — at every width.**
+  A pointer is not assumed at a desk any more than on a phone, so nothing is
+  reachable only by hovering over it and nothing shrinks below the floor
+  because there is a mouse.
 
 ## Work Guidance
 

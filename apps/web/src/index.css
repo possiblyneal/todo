@@ -354,3 +354,78 @@ button.row {
   flex: 1;
   overflow-wrap: anywhere;
 }
+
+/* Three panes at a desk, one column on a phone, and one component tree for
+   both. Nothing measures a width in JavaScript: what is on the screen is the
+   same elements at every size, and this is the whole of what decides the shape.
+
+   The panes are filtering, the Tasks with the search over them, and the Task
+   that is selected. A Task is selected by tapping it, once, and the selection
+   is what both layouts draw. */
+.panes {
+  display: flex;
+  flex-direction: column;
+}
+
+.pane {
+  min-width: 0;
+}
+
+/* On a phone the selected Task is shown instead of the list rather than beside
+   it: a third of a phone is not a pane. `Detail`'s own Back is what clears the
+   selection, which is the same button at both widths. */
+@media (max-width: 59.99rem) {
+  .panes.showing > .filters,
+  .panes.showing > .middle {
+    display: none;
+  }
+}
+
+/* 60rem is where a third of the screen is still wider than a phone, so a pane
+   is a column somebody can read rather than a squeezed one. */
+@media (min-width: 60rem) {
+  .panes {
+    flex-direction: row;
+    align-items: stretch;
+    height: 100vh;
+  }
+
+  /* Each pane scrolls on its own: the list is long, and the Task beside it
+     should not travel with it. */
+  .pane {
+    overflow-y: auto;
+  }
+
+  .filters {
+    flex: 0 0 16rem;
+    border-right: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  }
+
+  /* The controls stack down the pane instead of wrapping across it, and each
+     takes the width it has rather than the 8rem it claims in a row. */
+  .filters .narrow {
+    flex-direction: column;
+    border-bottom: 0;
+  }
+
+  .filters .control {
+    flex: 0 0 auto;
+  }
+
+  .middle {
+    flex: 1 1 0;
+  }
+
+  .opened {
+    flex: 0 0 26rem;
+    border-left: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  }
+}
+
+/* The search box is the width of what it searches, wherever it is drawn. */
+.control.search {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 0;
+}

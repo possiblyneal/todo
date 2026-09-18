@@ -7,7 +7,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
-import { Narrow } from './Narrow'
+import { Narrow, Search } from './Narrow'
 import { OFFERED_NOTHING, WIDE, type Offered } from './state'
 
 afterEach(cleanup)
@@ -69,11 +69,13 @@ test('picking nothing widens the narrowing back out', () => {
 })
 
 // Each keystroke is a new narrowing, so there is no timer between the box and
-// the read.
+// the read. The box is drawn apart from the rest of the controls, because it
+// belongs over the list rather than among the filtering.
 test('each character typed is its own narrowing', () => {
-  const onChange = shown()
+  const onChange = vi.fn()
+  render(<Search value="" onChange={onChange} />)
   fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'fe' } })
-  expect(onChange).toHaveBeenCalledWith({ ...WIDE, search: 'fe' })
+  expect(onChange).toHaveBeenCalledWith('fe')
 })
 
 test('showing everything is one toggle and not four', () => {
