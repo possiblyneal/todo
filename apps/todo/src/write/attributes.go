@@ -181,9 +181,5 @@ func ColorLabels() string {
 // SnoozeLabels names the offered snoozes, which are not the only ones taken:
 // Snooze reads a plain duration too.
 func SnoozeLabels() string {
-	labels := make([]string, len(store.SnoozeDefaults))
-	for i, s := range store.SnoozeDefaults {
-		labels[i] = s.Label
-	}
-	return strings.Join(labels, ", ")
+	return strings.Join(store.SnoozeNames(), ", ")
 }

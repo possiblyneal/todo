@@ -43,8 +43,10 @@ and adds to this list rather than to the plan.
 - `src/Box.tsx` — the box: a dump or a question, in the same field under the
   same thumb. Neither call writes.
 - `src/Sheet.tsx` — the sheet: a Task open for correction, whether the Broker
-  just read it or it already exists. It makes no write of its own; whoever
-  opens it says what submitting it does.
+  just read it or it already exists. Every attribute a Task has is on it, which
+  is the title, description, why, deadline, estimate, priority, impact, color,
+  snooze, the key/value pairs, and the Lists and Tags it is filed under. It
+  makes no write of its own; whoever opens it says what submitting it does.
 - `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tag,
   the box searched in, and the one toggle that takes in the snoozed, completed,
   declined and deleted. It sets fields on the Narrowing and narrows nothing
@@ -147,7 +149,27 @@ and adds to this list rather than to the plan.
   added to `store.Levels` has to be added here too. Nothing is lost in the
   meantime: a level the client does not recognise is offered as an extra option
   rather than blanked, so the copy going stale costs a missing choice and never
-  a dropped answer.
+  a dropped answer. The nine colors and the four snoozes were the same problem
+  and are not any more: `colors` and `snoozes` arrive with the state, so the
+  picker for each is the store's list and cannot offer a tenth or a fifth.
+- **A picked value the client does not know is offered rather than dropped.**
+  `Choice` in `Sheet.tsx` is one control for the levels and the colors alike,
+  and a value that is none of the offered ones is added to the end of the list:
+  the Broker chose the word, and a picker that silently could not hold it would
+  lose what it said. The API refuses what it refuses, in the sentence the sheet
+  shows.
+- **Snooze is the one attribute the sheet cannot read back.** A Task carries the
+  instant it wakes and the field takes the span to wait, so the control never
+  opens knowing the answer: leaving it alone and waking the Task cannot be the
+  same option, and they are two. Absent leaves a snoozed Task snoozed through an
+  edit about something else, and waking it is the only way back from a snooze on
+  this surface, since a snoozed Task is reached by showing everything the way an
+  ended one is.
+- **A key/value pair is removed by emptying it, and a key is never renamed.**
+  The wire names a pair by its key, so what looks like a rename is a removal and
+  an addition; offering it as one edit would be the sheet describing a write the
+  API does not make. Emptying a value is the store's own rule for removing a
+  pair rather than a delete this side invents.
 - **A membership in the draft is on the screen before it is written.** An id
   the client cannot yet put a name to, which is the window before the first
   poll lands, is ticked under the id itself rather than hidden, because a

@@ -73,7 +73,9 @@ export function Narrow({
         className="control"
         aria-label="Tag"
         value={narrowing.tag}
-        onChange={(event) => onChange({ ...narrowing, tag: event.target.value })}
+        onChange={(event) =>
+          onChange({ ...narrowing, tag: event.target.value })
+        }
       >
         <option value="">Every tag</option>
         {tags.map((tag) => (

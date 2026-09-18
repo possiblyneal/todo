@@ -103,12 +103,29 @@ func checkColor(name string) error {
 	return nil
 }
 
-func colorNames() string {
-	names := make([]string, 0, len(Colors))
-	for _, c := range Colors {
-		names = append(names, c.Name)
+// ColorNames are the nine in the order they are offered. A surface offering a
+// color reads this rather than keeping a list of its own, the way SortNames is
+// what stops a picker offering a sort the store would refuse.
+func ColorNames() []string {
+	names := make([]string, len(Colors))
+	for i, c := range Colors {
+		names[i] = c.Name
 	}
-	return strings.Join(names, ", ")
+	return names
+}
+
+// SnoozeNames are the four offered snoozes, which are not the only ones taken:
+// write.Snooze reads a plain duration too.
+func SnoozeNames() []string {
+	labels := make([]string, len(SnoozeDefaults))
+	for i, s := range SnoozeDefaults {
+		labels[i] = s.Label
+	}
+	return labels
+}
+
+func colorNames() string {
+	return strings.Join(ColorNames(), ", ")
 }
 
 // Snooze is one of the offered ways to hide a Task for a while.

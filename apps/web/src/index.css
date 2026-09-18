@@ -158,6 +158,25 @@ button.row {
   height: 1.25rem;
 }
 
+/* One key/value pair, and the blank row that adds another. Both are the same
+   row so the thing being added lines up under the things already there. */
+.pair {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+
+.pair input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pair > span {
+  flex: 0 0 35%;
+  overflow-wrap: anywhere;
+}
+
 /* The detail and activity screens. Both are a column of a phone's width with
    nothing beside it, which is what one thumb has room for. */
 .detail {

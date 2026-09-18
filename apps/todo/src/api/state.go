@@ -60,6 +60,9 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 		Lists: make([]collection, 0, len(lists)),
 		Tags:  make([]collection, 0, len(tags)),
 		Sorts: store.SortNames(),
+
+		Colors:  store.ColorNames(),
+		Snoozes: store.SnoozeNames(),
 	}
 	for _, t := range tasks {
 		out.Tasks = append(out.Tasks, newTask(t))
@@ -144,6 +147,20 @@ type stateBody struct {
 	// store refuses an unknown sort against, which is what stops a picker
 	// offering one the store would turn away.
 	Sorts []string `json:"sorts"`
+
+	// Colors is store.Colors by name, for the same reason Sorts is here: a
+	// color is one of nine or it is refused, so a surface offering the choice
+	// would otherwise keep a second copy of the nine and offer a tenth the day
+	// one is added here and not there. The ANSI code each carries does not
+	// cross: it is what a terminal paints with, and the name is the whole of
+	// what is stored.
+	Colors []string `json:"colors"`
+
+	// Snoozes is store.SnoozeDefaults by label, which is what the offered
+	// snoozes are called rather than all a snooze can be: write.Snooze reads a
+	// plain duration too, so a surface may send one of these or a duration of
+	// its own.
+	Snoozes []string `json:"snoozes"`
 }
 
 // collection is a List or a Tag as the client reads it. The two are the same

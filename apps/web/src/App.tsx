@@ -141,6 +141,8 @@ export function App() {
         subtasks={state.tasks.filter((task) => task.parent === open.id)}
         lists={state.lists}
         tags={state.tags}
+        colors={state.colors}
+        snoozes={state.snoozes}
         revision={etag}
         onOpen={(id) => setScreen({ name: 'task', id })}
         onBack={() => setScreen({ name: 'list' })}
@@ -160,6 +162,8 @@ export function App() {
       <Box
         lists={state?.lists ?? []}
         tags={state?.tags ?? []}
+        colors={state?.colors ?? []}
+        snoozes={state?.snoozes ?? []}
         // A question is asked about the Tasks the list asked for, under the
         // same query string. The two go together or the box starts answering
         // about a list nobody is looking at.

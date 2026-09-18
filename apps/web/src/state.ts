@@ -47,6 +47,14 @@ export type State = {
   // it arrives: a sort added to `store.Sorts` is in the picker the day it
   // lands, and this client cannot offer one the store would refuse.
   sorts: string[]
+  // The nine colors a Task may carry, by name, and the four offered snoozes,
+  // by label. Both are here for the reason the sorts are: the store refuses a
+  // color that is not one of the nine, so a client keeping its own list would
+  // offer a tenth the day one is added on the other side and not on this one.
+  // A snooze is not confined to the four, which is why the sheet takes what
+  // the Broker said as well as what is offered here.
+  colors: string[]
+  snoozes: string[]
 }
 
 /**
@@ -87,7 +95,13 @@ export const WIDE: Narrowing = {
  * An empty value is left out rather than sent empty, so the everyday view is
  * the bare path and the ETag it is cached under does not change shape.
  */
-export function queryString({ all, list, tag, search, sort }: Narrowing): string {
+export function queryString({
+  all,
+  list,
+  tag,
+  search,
+  sort,
+}: Narrowing): string {
   const query = new URLSearchParams()
   if (all) query.set('all', 'true')
   if (list) query.set('list', list)

@@ -18,10 +18,25 @@ export type TaskBody = {
   title?: string
   description?: string
   why?: string
+  color?: string
   deadline?: string
   estimate?: string
   priority?: string
   impact?: string
+  /**
+   * How long to hide the Task for, which the API reads from now: one of the
+   * offered labels or a plain duration. It is the one attribute a Task cannot
+   * be read back into, since what it carries is the instant it wakes rather
+   * than the span somebody asked for, so an absent one leaves the Task as it
+   * is and an empty one wakes it.
+   */
+  snooze?: string
+  /**
+   * The key/value pairs, sent whole. A key mapped to the empty string removes
+   * it and a key left out is left alone, which is the store's rule rather than
+   * a second one written here.
+   */
+  fields?: Record<string, string>
   parent?: string
   intoLists?: string[]
   outOfLists?: string[]
@@ -118,10 +133,12 @@ export function draftOf(task: Task): TaskBody {
     title: task.title,
     description: task.description,
     why: task.why,
+    color: task.color,
     deadline: task.deadline,
     estimate: estimate(task.estimateSeconds),
     priority: task.priority,
     impact: task.impact,
+    fields: task.fields,
     intoLists: task.lists ?? [],
     addTags: task.tags ?? [],
   }

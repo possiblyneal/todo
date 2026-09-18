@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -374,5 +375,38 @@ func TestStateNarrowsByTagAndBySearch(t *testing.T) {
 	body = decodeState(t, get(t, s, "/api/state?search=fence", nil))
 	if len(body.Tasks) != 1 || body.Tasks[0].ID != fence {
 		t.Errorf("search gave %d tasks, want only the one whose words hold it", len(body.Tasks))
+	}
+}
+
+// The colors and the snoozes are the store's own lists, served for the same
+// reason the sorts are: a surface offering either would otherwise keep a second
+// copy and go on offering what the store stopped taking. Each is checked
+// against the store's list rather than against nine and four written out here,
+// which would be this test keeping the copy instead.
+func TestStateOffersTheStoresColorsAndSnoozes(t *testing.T) {
+	s := openTemp(t)
+	id := add(t, s, "Paint the fence")
+	state := decodeState(t, get(t, s, "/api/state", nil))
+
+	if got, want := state.Colors, store.ColorNames(); !slices.Equal(got, want) {
+		t.Errorf("colors = %v, want %v", got, want)
+	}
+	if got, want := state.Snoozes, store.SnoozeNames(); !slices.Equal(got, want) {
+		t.Errorf("snoozes = %v, want %v", got, want)
+	}
+
+	// Every one offered is one a write takes, which is what stops the lists
+	// being a menu with entries the store turns away.
+	for _, color := range state.Colors {
+		w := do(t, s, http.MethodPatch, "/api/tasks/"+id, `{"color": "`+color+`"}`)
+		if w.Code != http.StatusOK {
+			t.Errorf("color %s = %d, want 200 (%s)", color, w.Code, w.Body.String())
+		}
+	}
+	for _, snooze := range state.Snoozes {
+		w := do(t, s, http.MethodPatch, "/api/tasks/"+id, `{"snooze": "`+snooze+`"}`)
+		if w.Code != http.StatusOK {
+			t.Errorf("snooze %s = %d, want 200 (%s)", snooze, w.Code, w.Body.String())
+		}
 	}
 }
