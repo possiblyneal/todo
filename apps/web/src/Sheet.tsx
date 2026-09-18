@@ -8,8 +8,9 @@
 
 import { useState } from 'react'
 
+import { sentence } from './api'
 import type { Collection, Offered } from './state'
-import { memberships, type TaskBody } from './write'
+import { addCollection, type Kind, memberships, type TaskBody } from './write'
 
 /** The attributes this sheet takes as text, which is every one it shows. */
 type Said = 'title' | 'description' | 'why' | 'deadline' | 'estimate'
@@ -182,15 +183,19 @@ export function Sheet({
 
       <Ticks
         name="Lists"
+        kind="lists"
         all={offered.lists}
         on={body.intoLists ?? []}
         onToggle={(id) => toggle('intoLists', id)}
+        onFail={setError}
       />
       <Ticks
         name="Tags"
+        kind="tags"
         all={offered.tags}
         on={body.addTags ?? []}
         onToggle={(id) => toggle('addTags', id)}
+        onFail={setError}
       />
 
       <div className="buttons">
@@ -353,30 +358,74 @@ function Fields({
 }
 
 /**
- * The Lists or Tags the Task is filed under, ticked by id.
+ * The Lists or Tags the Task is filed under, ticked by id, with the row that
+ * makes one more.
  *
  * An id the draft carries that the client cannot name is shown anyway, under
  * the id itself. That happens in the window before the first poll lands, and
  * the alternative is a membership submitted without ever being on the screen,
  * which is not what the sheet being the gate means.
+ *
+ * Making one is the sheet's one exception to nothing here writing, and it is
+ * not really an exception: a List is an aggregate of its own, and the one made
+ * here exists on the same terms as one made on the collections screen. It
+ * outlives a sheet backed out of, so the row says so rather than letting
+ * somebody discover it later. A blank set still draws, because a tracker with
+ * no Lists is exactly where somebody needs to make the first one.
+ *
+ * The made one is held here until the poll names it, so it ticks under the word
+ * that was typed rather than under its id for the second it takes to come back.
+ * It is ticked on arrival: making a List from the form that files a Task under
+ * one is somebody saying which List, not adding to a catalogue.
  */
 function Ticks({
   name,
+  kind,
   all,
   on,
   onToggle,
+  onFail,
 }: {
   name: string
+  kind: Kind
   all: Collection[]
   on: string[]
   onToggle: (id: string) => void
+  /** Where a refused creation is said, which is the sheet's own one place. */
+  onFail: (sentence: string) => void
 }) {
+  const [made, setMade] = useState<Collection[]>([])
+  const [naming, setNaming] = useState('')
+  const [making, setMaking] = useState(false)
+
   const named = new Set(all.map((one) => one.id))
+  const held = made.filter((one) => !named.has(one.id))
   const shown = [
     ...all,
-    ...on.filter((id) => !named.has(id)).map((id) => ({ id, name: id })),
+    ...held,
+    ...on
+      .filter((id) => !named.has(id) && !held.some((one) => one.id === id))
+      .map((id) => ({ id, name: id })),
   ]
-  if (shown.length === 0) return null
+
+  // The singular, because the row is about making one. The plural is the
+  // legend above the ticks and says what the set is.
+  const one = kind === 'lists' ? 'List' : 'Tag'
+
+  const make = async () => {
+    setMaking(true)
+    try {
+      const id = await addCollection(kind, { name: naming })
+      setMade((was) => [...was, { id, name: naming, color: '', count: 0 }])
+      onToggle(id)
+      setNaming('')
+    } catch (caught) {
+      onFail(sentence(caught))
+    } finally {
+      setMaking(false)
+    }
+  }
+
   return (
     <fieldset className="field">
       <legend>{name}</legend>
@@ -390,6 +439,25 @@ function Ticks({
           <span>{one.name}</span>
         </label>
       ))}
+      <div className="pair">
+        <input
+          aria-label={`New ${one}`}
+          placeholder={`new ${one.toLowerCase()}`}
+          value={naming}
+          onChange={(event) => setNaming(event.target.value)}
+        />
+        <button
+          type="button"
+          aria-label={`Add ${one}`}
+          onClick={() => void make()}
+          disabled={making || naming === ''}
+        >
+          Add
+        </button>
+      </div>
+      <span className="aside">
+        Made when you tap Add, and kept even if this sheet is cancelled.
+      </span>
     </fieldset>
   )
 }

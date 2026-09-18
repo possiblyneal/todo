@@ -6,10 +6,11 @@
 // write nobody sees go wrong.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, test } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 
 import { Sheet } from './Sheet'
 import type { Offered } from './state'
+import * as write from './write'
 import type { TaskBody } from './write'
 
 afterEach(cleanup)
@@ -161,4 +162,37 @@ test('a pair added on the blank row is sent with the rest', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Add' }))
   const body = sheet.submit()
   expect(body.fields).toEqual({ url: 'example.com', aisle: '7' })
+})
+
+// Making a List from here is a write of its own, and the point of it is that
+// the Task lands in the List somebody just named. Ticking it separately would
+// be the same two taps that leaving the sheet costs.
+test('a Tag made here is ticked and comes back as a membership', async () => {
+  const made = vi.spyOn(write, 'addCollection').mockResolvedValue('t9')
+  const sheet = opened({ title: 'Buy milk' })
+  fireEvent.change(screen.getByLabelText('New Tag'), {
+    target: { value: 'shopping' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Add Tag' }))
+  // Under the word that was typed, not under the id: the poll that would name
+  // it has not run, and an id on the screen is nothing anybody recognises.
+  await screen.findByText('shopping')
+  expect(made).toHaveBeenCalledWith('tags', { name: 'shopping' })
+  expect(sheet.submit().addTags).toEqual(['t9'])
+})
+
+// A refusal is said in the sheet's own one place, and nothing is ticked: a
+// membership to an id the store never minted would be submitted and refused
+// again, with the first sentence gone by then.
+test('a refused creation says so and ticks nothing', async () => {
+  vi.spyOn(write, 'addCollection').mockRejectedValue(
+    new Error('that name is taken'),
+  )
+  const sheet = opened({ title: 'Buy milk' })
+  fireEvent.change(screen.getByLabelText('New List'), {
+    target: { value: 'Home' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Add List' }))
+  await screen.findByText('that name is taken')
+  expect(sheet.submit().intoLists).toEqual([])
 })

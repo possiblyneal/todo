@@ -51,7 +51,8 @@ and adds to this list rather than to the plan.
   just read it or it already exists. Every attribute a Task has is on it, which
   is the title, description, why, deadline, estimate, priority, impact, color,
   snooze, the key/value pairs, and the Lists and Tags it is filed under. It
-  makes no write of its own; whoever opens it says what submitting it does.
+  makes one write of its own, the List or Tag its ticks offer to make; every
+  other write is whoever opens it saying what submitting it does.
 - `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tags,
   the box searched in, and the one toggle that takes in the snoozed, completed,
   declined and deleted. It sets fields on the Narrowing and narrows nothing
@@ -190,6 +191,12 @@ and adds to this list rather than to the plan.
   happened. `Tags` keeps an unnamed id on screen for the same reason: a switch
   nobody can see is a switch nobody can turn off. It is the same rule as the two
   below.
+- **A List or a Tag made on the sheet is made then, not on submit.** `Ticks` in
+  `Sheet.tsx` posts it, holds the name until the poll answers with it, and ticks
+  it. A Collection is an aggregate of its own, so it exists on the same terms as
+  one made on the collections screen and outlives a sheet backed out of; the row
+  says that on the screen rather than leaving it to be discovered. The ticks
+  draw over an empty set for this reason, where they used to draw nothing.
 - **More than one Tag narrows to any of them, not all of them.** `Narrowing.tags`
   is a set, sent as `?tag=` repeated, and a Task carrying any one of them is in
   the list. Turning a second Tag on is somebody widening what they are willing
