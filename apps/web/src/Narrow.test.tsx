@@ -40,7 +40,7 @@ test('a List deleted elsewhere stays on the picker under its own id', () => {
 // by something with nothing on the screen to undo it.
 test('a Tag deleted elsewhere stays on as a switch under its own id', () => {
   shown({ ...WIDE, tags: ['gone'] })
-  const gone = screen.getByRole('button', { name: 'gone (0)' })
+  const gone = screen.getByRole('button', { name: 'gone' })
   expect(gone.getAttribute('aria-pressed')).toBe('true')
 })
 

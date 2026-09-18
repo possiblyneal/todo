@@ -162,27 +162,25 @@ function Tags({
 }) {
   const named = new Set(all.map((one) => one.id))
   const shown = [
-    ...all,
-    ...on
-      .filter((id) => !named.has(id))
-      .map((id) => ({ id, name: id, color: '', count: 0 })),
+    ...all.map((one) => one.id),
+    ...on.filter((id) => !named.has(id)),
   ]
   if (shown.length === 0) return null
   return (
     <div className="tags" role="group" aria-label="Tags">
-      {shown.map((tag) => {
-        const lit = on.includes(tag.id)
+      {shown.map((id) => {
+        const lit = on.includes(id)
         return (
           <button
-            key={tag.id}
+            key={id}
             type="button"
             className={lit ? 'control on' : 'control'}
             aria-pressed={lit}
             onClick={() =>
-              onToggle(lit ? on.filter((id) => id !== tag.id) : [...on, tag.id])
+              onToggle(lit ? on.filter((one) => one !== id) : [...on, id])
             }
           >
-            {tag.name} ({tag.count})
+            {labelled(all, id)}
           </button>
         )
       })}
@@ -236,11 +234,11 @@ function Picker({
 }
 
 /**
- * What one option reads. A Collection the last read named carries the count the
+ * What one option or button reads. A Collection the last read named carries the count the
  * store worked out; an id nothing named reads as itself and carries no count at
  * all, because a zero here would be the client answering a question the store
- * never answered — the List may well have Tasks in it, and this side has no way
- * to know.
+ * never answered — the Collection may well have Tasks under it, and this side
+ * has no way to know.
  */
 function labelled(all: Collection[], id: string) {
   const named = all.find((one) => one.id === id)
