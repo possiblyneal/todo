@@ -54,8 +54,10 @@ and adds to this list rather than to the plan.
   declined and deleted. It sets fields on the Narrowing and narrows nothing
   itself. The List and the Tag are one picker, because a Collection is the same
   shape either way.
-- `src/Row.tsx` — one row of the list: the tap that opens the Task and the
-  press held that puts the four verbs under it.
+- `src/Row.tsx` — one row of the list: what the Task is called, two lines of
+  what it says, when it arrived, when it is due, what it is filed under,
+  whether it points anywhere, the tap that opens it, and the press held that
+  puts the four verbs under it.
 - `src/Series.tsx` — the Series screen: the rule, the dates it produces next,
   and the four things done to one of them. It works out no date of its own.
 - `src/Breakdown.tsx` — the breakdown screen: the turn with the Broker, the
@@ -332,6 +334,19 @@ and adds to this list rather than to the plan.
   body the sheet submits and is written as it came, so an estimate this side
   cannot read is the API's to refuse in its own words rather than this screen's
   to drop.
+- **A paperclip is the row's own count, not a mark the store keeps.**
+  `store.Task.Marks` is the store's vocabulary for what a Task *is*, and
+  holding a pointer is not a state it is in. The row reads
+  `attachments.length` instead, which is the one thing it works out — and it
+  works it out from what the read already carried rather than asking.
+- **Two lines of description is CSS, never a count of characters.** `line-clamp`
+  in `index.css` is what clips it. A truncation computed in the component would
+  be guessing at a width it cannot see, and would guess wrong on every screen
+  but the one it was written against.
+- **A date is drawn as the day it falls on where the reader is, or as it
+  came.** `Row.tsx` formats through `toLocaleDateString`, and a string no date
+  can be read out of is drawn verbatim — the same rule the pickers follow for a
+  value they cannot name.
 - **Touch targets no smaller than 44px, one thumb, no hover.**
 
 ## Work Guidance

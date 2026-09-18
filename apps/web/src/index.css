@@ -26,6 +26,53 @@ body {
   border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
 }
 
+/* A row in the list stacks what it says instead: the title across the top, then
+   the description, then the facts. It is still one tap target, and taller than
+   44px rather than shorter. */
+button.row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* The title, with the marks pushed to the end of the same line. */
+.said {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.titled {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Two lines of the description and then clipped. `line-clamp` is what does it;
+   the `-webkit-` pair beside it is the same property under the name every
+   browser still requires to honour it. */
+.lines {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  opacity: 0.75;
+  font-size: 0.85rem;
+}
+
+/* When it arrived, when it is due, what it is filed under, and the clip. They
+   wrap rather than shrink, the way the controls above the list do. */
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  opacity: 0.6;
+  font-size: 0.75rem;
+}
+
 /* A row is a tap that opens the Task, so it is a button: the tap target is the
    whole row rather than the words in it, and a keyboard reaches it. */
 button.row {

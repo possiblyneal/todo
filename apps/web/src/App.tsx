@@ -216,6 +216,7 @@ export function App() {
             <Row
               key={task.id}
               task={task}
+              lists={state.lists}
               onOpen={(id) => setScreen({ name: 'task', id })}
             />
           ))}
