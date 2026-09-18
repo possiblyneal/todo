@@ -264,10 +264,10 @@ and adds to this list rather than to the plan.
   describes as not knowing whether anything changed.
 - **A verb is offered whatever state the Task is in.** Which of the four the
   store refuses is the store's to say, and it says it in a sentence. Reopen is
-  offered on a deleted Task and undoes the deletion, which is why the rule holds
-  on the one Task that showing everything is the only way to reach. A screen
-  that greyed out the wrong one would be a second copy of a rule that already
-  exists. Reopen is reached through show everything: the everyday poll asks for the
+  offered on a deleted Task and refused there, in the store's own sentence,
+  which is the rule working rather than failing: a screen that greyed the verb
+  out would be a second copy of a rule that already exists, and would be wrong
+  the day the store's answer changed. Reopen is reached through show everything: the everyday poll asks for the
   open Tasks, so an ended one is in the list to be tapped only under
   `?all=true`.
 - **The four verbs are the second thing the client keeps a copy of.**

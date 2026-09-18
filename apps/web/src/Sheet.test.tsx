@@ -81,6 +81,17 @@ test('an offered snooze is sent under its own label', () => {
   expect(body.snooze).toBe('tomorrow')
 })
 
+// The third carrier of the unknown-value rule, and the one whose fallback has
+// two extra arms: `undefined` and `''` are the sentinels the grammar above
+// reads, so neither may be drawn as a snooze the Broker said. A duration
+// `write.Snooze` takes but this side was never offered has to survive the trip
+// to the screen, or the Broker's word is blanked on the way.
+test('a snooze the client was not offered is kept and sent as it came', () => {
+  const sheet = opened({ title: 'Buy milk', snooze: '90m' })
+  expect(screen.getByLabelText('Snooze')).toHaveProperty('value', '90m')
+  expect(sheet.submit().snooze).toBe('90m')
+})
+
 test('a snooze picked and then put back is absent again', () => {
   const sheet = opened({ title: 'Buy milk' })
   sheet.pick('Snooze', 'tomorrow')
