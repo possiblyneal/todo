@@ -51,6 +51,27 @@ test('a rename and a recolor go out as one write', () => {
   })
 })
 
+// Absent is what tells the store to leave an attribute alone, so a rename
+// carries no color and a recolor carries no name. A body that always sent both
+// would put back whatever another Actor changed while the row sat open.
+test('a rename carries the name alone', () => {
+  const wrote = opened()
+  fireEvent.change(screen.getByLabelText('Home name'), {
+    target: { value: 'House' },
+  })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]!)
+  expect(wrote.describe).toHaveBeenCalledWith('lists', 'l1', { name: 'House' })
+})
+
+test('a recolor carries the color alone', () => {
+  const wrote = opened()
+  fireEvent.change(screen.getByLabelText('Home color'), {
+    target: { value: 'red' },
+  })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]!)
+  expect(wrote.describe).toHaveBeenCalledWith('lists', 'l1', { color: 'red' })
+})
+
 test('a row nobody touched cannot be saved', () => {
   opened()
   const save = screen.getAllByRole('button', { name: 'Save' })[0]!

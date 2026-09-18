@@ -14,6 +14,7 @@ import { sentence } from './api'
 import type { Collection, Offered } from './state'
 import {
   addCollection,
+  type CollectionBody,
   describeCollection,
   dropCollection,
   type Kind,
@@ -137,12 +138,14 @@ function Row({
   one: Collection
   colors: string[]
   working: boolean
-  onDescribe: (body: { name: string; color: string }) => void
+  onDescribe: (body: CollectionBody) => void
   onDrop: () => void
 }) {
   const [name, setName] = useState(one.name)
   const [color, setColor] = useState(one.color)
-  const changed = name !== one.name || color !== one.color
+  const renamed = name !== one.name
+  const recolored = color !== one.color
+  const changed = renamed || recolored
 
   return (
     <li className="row">
@@ -164,7 +167,16 @@ function Row({
         // Nothing to write is nothing to submit, which is also what keeps a row
         // nobody touched from appending an entry that changed nothing.
         disabled={working || !changed}
-        onClick={() => onDescribe({ name, color })}
+        onClick={() =>
+          // Only what this row changed. The body's absent attribute is what
+          // tells the store to leave the other one alone, so a rename that
+          // carried the color it opened on would put back a recolor another
+          // Actor made while the row sat here.
+          onDescribe({
+            ...(renamed && { name }),
+            ...(recolored && { color }),
+          })
+        }
       >
         Save
       </button>
