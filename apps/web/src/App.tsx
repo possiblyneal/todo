@@ -153,6 +153,9 @@ export function App() {
         key={open.id}
         task={open}
         subtasks={state.tasks.filter((task) => task.parent === open.id)}
+        // A State is an Offered with the Tasks on it, and the guard above has
+        // already said there is one, so this site does not need the empty
+        // stand-in the two below do.
         offered={state}
         revision={etag}
         onOpen={(id) => setScreen({ name: 'task', id })}
