@@ -1,5 +1,11 @@
 // The controls over the list: which Tasks it asks for and what order they come
-// back in. They sit above the list, where a thumb reaches them.
+// back in. On a phone they sit above the list, where a thumb reaches them; at a
+// desk they are the pane to its left. Which of the two is CSS's to decide, and
+// this file draws the same controls either way.
+//
+// The box the list is searched in is here too, as `Search`, and it is drawn
+// apart from the rest: it belongs over the Tasks rather than among the
+// filtering, which is what puts it in the middle pane at a desk.
 //
 // Nothing here filters anything. Each control sets one field of the Narrowing
 // and the next poll asks the API again, so the list on the screen is always a
@@ -75,28 +81,6 @@ export function Narrow({
         all={tags}
         on={narrowing.tags}
         onToggle={(tags) => onChange({ ...narrowing, tags })}
-      />
-
-      {/*
-        Typing asks again: each keystroke is a new narrowing and so a new read,
-        which on a LAN is a request the store answers off one query. Holding
-        the text back until somebody stops typing would mean a list that lags
-        the box it is being searched from, and a timer here to decide when
-        typing stopped.
-
-        The store is what matches, so this sends the text and nothing else. It
-        searches a Task's own Title, Description and Why, which the store
-        decides and this side does not restate on the screen.
-      */}
-      <input
-        className="control"
-        type="search"
-        aria-label="Search"
-        placeholder="Search"
-        value={narrowing.search}
-        onChange={(event) =>
-          onChange({ ...narrowing, search: event.target.value })
-        }
       />
 
       {/*
@@ -225,6 +209,39 @@ function Picker({
         </option>
       ))}
     </select>
+  )
+}
+
+/**
+ * The box the list is searched in. It sits above the Tasks rather than among
+ * the filtering controls, because it is about the list it is over: at a desk
+ * the two are in different panes, and on a phone they are the same column.
+ *
+ * Typing asks again: each keystroke is a new Narrowing and so a new read, which
+ * on a LAN is a request the store answers off one query. Holding the text back
+ * until somebody stops typing would mean a list that lags the box it is being
+ * searched from, and a timer here to decide when typing stopped.
+ *
+ * The store is what matches, so this sends the text and nothing else. It
+ * searches a Task's own Title, Description and Why, which the store decides and
+ * this side does not restate on the screen.
+ */
+export function Search({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (search: string) => void
+}) {
+  return (
+    <input
+      className="control search"
+      type="search"
+      aria-label="Search"
+      placeholder="Search"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
   )
 }
 
