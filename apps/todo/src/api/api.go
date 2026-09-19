@@ -32,6 +32,7 @@ import (
 // authentication here and so nobody to name per request: `todo api` resolves
 // its Actor once, the same way a verb resolves one, and the whole listener
 // writes as that. A browser on the LAN is the person who started it.
+//
 // Browse is the directory the file picker lists from and will not look above.
 // Empty is the home directory of the user running `todo api`, which is the
 // machine a pointer's relative path resolves against.

@@ -372,6 +372,49 @@ test('a refused listing is drawn in the API’s own words', async () => {
   ).toBeDefined()
 })
 
+// A refusal on the way down is one tap from where somebody already was, so the
+// directory they were in stays drawn under the sentence. Replacing the picker
+// with it takes the Up button away with it, and the only way back out is Close,
+// which starts again at the root.
+test('a refused listing leaves the directory it was refused from drawn', async () => {
+  const listing = vi.spyOn(state, 'fetchFiles').mockResolvedValue({
+    path: '/home/neal',
+    parent: '',
+    entries: [
+      { name: 'papers', dir: true },
+      { name: 'note.txt', dir: false },
+    ],
+  })
+  opened({ title: 'Move house' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+  expect(await screen.findByRole('button', { name: 'note.txt' })).toBeDefined()
+
+  listing.mockRejectedValue(new Error('cannot list /home/neal/papers'))
+  fireEvent.click(screen.getByRole('button', { name: 'papers/' }))
+
+  expect(await screen.findByText('cannot list /home/neal/papers')).toBeDefined()
+  expect(screen.getByRole('button', { name: 'note.txt' })).toBeDefined()
+})
+
+// The root is the one path that already ends in the separator, and what the
+// join produces is what somebody reads in the box.
+test('a file picked at the root of the machine has one separator', async () => {
+  vi.spyOn(state, 'fetchFiles').mockResolvedValue({
+    path: '/',
+    parent: '',
+    entries: [{ name: 'swap', dir: false }],
+  })
+  opened({ title: 'Move house' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'swap' }))
+
+  expect(
+    (screen.getByLabelText('New attachment') as HTMLInputElement).value,
+  ).toBe('/swap')
+})
+
 // The same pointer twice is one pointer. It is also what keeps the rows keyed
 // apart, since a row is keyed by the pointer it draws, and Remove filters by
 // that same text: two rows of `/one` would be one key and one tap taking both.

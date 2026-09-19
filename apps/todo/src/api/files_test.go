@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -137,5 +138,51 @@ func TestBrowsingARootReachedThroughASymlink(t *testing.T) {
 	}
 	if body.Parent != root {
 		t.Errorf("parent = %q, want %q", body.Parent, root)
+	}
+}
+
+// A symlink says it is a symlink rather than what it points at, and a home
+// directory holds enough of them that a picker treating one as a file cannot
+// reach half the machine. A dangling one is a file: there is nothing to open.
+func TestBrowsingFollowsASymlinkToSayWhetherItIsADirectory(t *testing.T) {
+	root := tree(t)
+	if err := os.Symlink(filepath.Join(root, "notes"), filepath.Join(root, "to-notes")); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(root, "gone"), filepath.Join(root, "dangling")); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	dirs := map[string]bool{}
+	for _, one := range decodeFiles(t, browsed(t, root, "")).Entries {
+		dirs[one.Name] = one.Dir
+	}
+	if !dirs["to-notes"] {
+		t.Errorf("to-notes = file, want a directory: a link to one is somewhere to go")
+	}
+	if dirs["dangling"] {
+		t.Errorf("dangling = directory, want a file: there is nothing to go into")
+	}
+}
+
+// Everything outside the root is refused in one sentence. Two of them would
+// answer whether an arbitrary path on the host exists to anybody who can reach
+// the route.
+func TestBrowsingSaysTheSameThingAboutEveryPathOutsideTheRoot(t *testing.T) {
+	root := tree(t)
+	outside := t.TempDir()
+
+	there := browsed(t, root, "?path="+outside)
+	absent := browsed(t, root, "?path="+filepath.Join(outside, "nothing-here"))
+	if there.Code != http.StatusBadRequest || absent.Code != http.StatusBadRequest {
+		t.Fatalf("statuses = %d and %d, want 400 each", there.Code, absent.Code)
+	}
+	// The path asked for is in each sentence, so they differ by that and by
+	// nothing else: what is compared is the sentence with it taken out.
+	said := func(w *httptest.ResponseRecorder, asked string) string {
+		return strings.Replace(w.Body.String(), asked, "<asked>", 1)
+	}
+	if said(there, outside) != said(absent, filepath.Join(outside, "nothing-here")) {
+		t.Errorf("a path that is there says %s; one that is not says %s", there.Body, absent.Body)
 	}
 }

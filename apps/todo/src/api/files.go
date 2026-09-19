@@ -1,29 +1,19 @@
 package api
 
-// The one route that reads anything outside the store, and the narrowest one
-// that could answer the question it exists for.
-//
-// A pointer naming a file names it on the machine `todo api` runs on, because
-// that is the machine `store.pointer` resolves a relative path against. A
-// browser's own file input cannot help with that: it answers with a bare
-// filename and no directory, so a file chosen on a phone is a path the host
-// cannot resolve and one chosen at the desk resolves only by luck. So the
-// picker browses the host, and this is what it reads.
-//
-// It lists and never opens. The tracker holds pointers and keeps no copy of
-// what they point at, and a route serving file contents would be the second
-// thing this repo has said it does not do.
-
 import (
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
 // browse answers the entries of one directory under the root, or says why not.
+// It is the one route reading anything outside the store, and it lists rather
+// than opens: the tracker holds pointers and keeps no copy of what they point
+// at, so a route serving file contents would be the second thing this repo has
+// said it does not do.
 func browse(root string, w http.ResponseWriter, r *http.Request) {
 	if root == "" {
 		fail(w, fmt.Errorf("this listener cannot browse: it could not find a home directory to browse from"))
@@ -61,20 +51,32 @@ func browse(root string, w http.ResponseWriter, r *http.Request) {
 	// Directories first, so somewhere to go is not mixed in with somewhere to
 	// stop. Nothing is hidden: a dotfile left out is a picker that cannot reach
 	// a config directory, and this is somebody browsing their own machine.
-	sort.SliceStable(out.Entries, func(i, j int) bool {
-		if out.Entries[i].Dir != out.Entries[j].Dir {
-			return out.Entries[i].Dir
+	slices.SortStableFunc(out.Entries, func(a, b listed) int {
+		if a.Dir != b.Dir {
+			if a.Dir {
+				return -1
+			}
+			return 1
 		}
-		return out.Entries[i].Name < out.Entries[j].Name
+		return strings.Compare(a.Name, b.Name)
 	})
 
 	send(w, http.StatusOK, out)
 }
 
 // within resolves what was asked for against the root and refuses anything
-// outside it. Symlinks are followed first: a path is judged by where it lands
-// rather than by how it is spelled, so looking for `..` in the text would miss
-// a link out of the root and turn down a directory honestly named `..foo`.
+// outside it. It is judged twice: on how it is spelled, and then on where it
+// lands, because looking for `..` in the text alone would miss a link out of
+// the root and would turn down a directory honestly named `..foo`.
+//
+// The spelling is judged first so that a path outside the root is refused
+// before the machine is touched. Resolving it first and reporting what that
+// said would answer whether an arbitrary absolute path exists, and whether its
+// parent can be read, to anybody who can reach this route — which is a
+// question about the host rather than about the tracker. Everything outside
+// gets the one sentence, whether it is there or not. Inside the root, why a
+// path cannot be listed is said plainly: that is a directory the caller could
+// have listed anyway.
 func within(root, asked string) (string, error) {
 	if strings.TrimSpace(asked) == "" {
 		return root, nil
@@ -82,15 +84,30 @@ func within(root, asked string) (string, error) {
 	if !filepath.IsAbs(asked) {
 		asked = filepath.Join(root, asked)
 	}
-	at, err := filepath.EvalSymlinks(filepath.Clean(asked))
+	clean := filepath.Clean(asked)
+	if !under(root, clean) {
+		return "", outside(asked, root)
+	}
+	at, err := filepath.EvalSymlinks(clean)
 	if err != nil {
 		return "", usage{fmt.Errorf("cannot list %s: %w", asked, err)}
 	}
-	rel, err := filepath.Rel(root, at)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", usage{fmt.Errorf("%s is outside %s, which is as far as this listener will look", asked, root)}
+	if !under(root, at) {
+		return "", outside(asked, root)
 	}
 	return at, nil
+}
+
+// under is the containment comparison, on the path boundary rather than on the
+// characters: a root of `/home/ne` does not contain `/home/neal`.
+func under(root, at string) bool {
+	rel, err := filepath.Rel(root, at)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// outside is the one sentence every path the listener will not look at gets.
+func outside(asked, root string) error {
+	return usage{fmt.Errorf("%s is outside %s, which is as far as this listener will look", asked, root)}
 }
 
 // rooted resolves the root the same way `within` resolves what it judges.
