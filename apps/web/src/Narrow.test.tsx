@@ -4,7 +4,13 @@
 // narrowing the client cannot name, rather than rendering blank over a list
 // that is still narrowed to it.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { Narrow } from './Narrow'
@@ -125,10 +131,12 @@ test('the Tag order survives the controls being unmounted', () => {
   }
   const order = () => {
     render(<Narrow narrowing={WIDE} offered={many} onChange={vi.fn()} />)
-    const picker = screen.getByLabelText('Tag') as HTMLSelectElement
-    const values = [...picker.options].map((one) => one.value)
+    const group = screen.getByRole('group', { name: 'Tags' })
+    const names = within(group)
+      .getAllByRole('button')
+      .map((one) => one.textContent)
     cleanup()
-    return values
+    return names
   }
   expect(order()).toEqual(order())
 })
