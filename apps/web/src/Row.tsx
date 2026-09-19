@@ -1,10 +1,11 @@
 // A row in the list, and the verbs a press held on it opens.
 //
 // Enough of the Task to tell it from the one under it without opening either:
-// what it is called, the start of what it says, when it arrived, when it is
-// due, what it is filed under, and whether it points anywhere. All of it came
-// with the read, so nothing here fetches and nothing here is worked out that
-// the store already did.
+// what it is called, the start of what it says, when it was created, its
+// Deadline, the Lists it is filed under, and whether it points anywhere. The
+// Tags are not here: they are the split down the side of the list, which is
+// where a Tag is reached. All of it came with the read, so nothing here
+// fetches and nothing here is worked out that the store already did.
 //
 // A tap opens the Task. A press held puts the four lifecycle verbs where the
 // thumb already is: the same writes, reached without opening the Task first.
@@ -14,7 +15,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { sentence } from './api'
-import type { Collection, Task } from './state'
+import { nameOf, type Collection, type Task } from './state'
 import { lifecycle, VERBS } from './write'
 
 /** How long a press is held before it is a press rather than a tap. */
@@ -31,15 +32,6 @@ const STILL_PX = 10
 function day(instant: string): string {
   const at = new Date(instant)
   return Number.isNaN(at.getTime()) ? instant : at.toLocaleDateString()
-}
-
-/**
- * The Lists a Task is filed under, by name. An id the read did not name is
- * drawn as the id, for the reason the detail screen does it: a filing nobody
- * can see is one nobody thinks to change.
- */
-function filed(ids: string[] | undefined, all: Collection[]): string[] {
-  return (ids ?? []).map((id) => all.find((one) => one.id === id)?.name ?? id)
 }
 
 export function Row({
@@ -137,10 +129,15 @@ export function Row({
         */}
         {task.description && <span className="lines">{task.description}</span>}
         <span className="facts">
-          <span>Added {day(task.createdAt)}</span>
-          {task.deadline && <span>Due {day(task.deadline)}</span>}
-          {filed(task.lists, lists).map((name) => (
-            <span key={name}>{name}</span>
+          <span>Created {day(task.createdAt)}</span>
+          {task.deadline && <span>Deadline {day(task.deadline)}</span>}
+          {/*
+            Keyed on the id and not the name: nothing stops two Lists sharing
+            one, and `nameOf` falls back to the id, so a name is not unique
+            twice over. The ids are what the store keeps unique.
+          */}
+          {(task.lists ?? []).map((id) => (
+            <span key={id}>{nameOf(lists, id)}</span>
           ))}
           {/*
             An attachment is not one of `store.Task.Marks`: the marks are the
@@ -149,7 +146,9 @@ export function Row({
             growing a mark nothing else would read.
           */}
           {(task.attachments?.length ?? 0) > 0 && (
-            <span aria-label="Has attachments">📎</span>
+            <span role="img" aria-label="Has attachments">
+              📎
+            </span>
           )}
         </span>
       </button>
