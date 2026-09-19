@@ -72,10 +72,11 @@ body {
 }
 
 /* A row is a tap that opens the Task, so it is a button: the tap target is the
-   whole row rather than the words in it, and a keyboard reaches it. It stacks
-   what it says: the title across the top, then the description, then the
-   facts. It is still one tap target, and taller than 44px rather than
-   shorter. */
+   whole row rather than the words in it, and a keyboard reaches it.
+
+   It stacks what it says rather than sitting on one line: the title across the
+   top, then the description, then the facts. Still one tap target, and taller
+   than 44px rather than shorter. */
 button.row {
   flex-direction: column;
   align-items: stretch;
@@ -157,8 +158,24 @@ button.row {
   font: inherit;
 }
 
+/* The Tags, each a switch. They take a line of their own below the rest of the
+   controls because there may be many and they wrap; a Tag is a word and does
+   not want the 8rem the pickers beside it claim. */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex-basis: 100%;
+}
+
+.tags .control {
+  flex: 0 0 auto;
+  padding: 0.5rem 0.75rem;
+}
+
 /* Show everything is a toggle, and there is no hover to say which way it is
-   set, so it is filled in when it is on. aria-pressed says it to a reader. */
+   set, so it is filled in when it is on. aria-pressed says it to a reader.
+   The Tag switches are the same, and read the same way. */
 .control.on {
   background: currentColor;
   color: Canvas;

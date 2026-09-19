@@ -129,11 +129,17 @@ test('each narrowing is sent under the name the route reads it by', () => {
     queryString({
       all: true,
       list: 'l1',
-      tag: 't1',
+      tags: ['t1'],
       search: 'paint',
       sort: 'deadline',
     }),
   ).toBe('?all=true&list=l1&tag=t1&search=paint&sort=deadline')
+})
+
+// Repeated and not joined. A separator would be one this side invented, and
+// the route reads `?tag=` the way a query string already means several values.
+test('several tags are sent as the parameter repeated', () => {
+  expect(queryString({ ...WIDE, tags: ['t1', 't2'] })).toBe('?tag=t1&tag=t2')
 })
 
 // `all` is one flag over four states, because that is what the route does with

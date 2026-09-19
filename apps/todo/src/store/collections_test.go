@@ -478,7 +478,7 @@ func TestTasksNarrowToATag(t *testing.T) {
 		t.Fatalf("AttachTag: %v", err)
 	}
 
-	tasks, err := s.Tasks(Query{Tag: urgent})
+	tasks, err := s.Tasks(Query{Tags: []string{urgent}})
 	if err != nil {
 		t.Fatalf("Tasks: %v", err)
 	}
@@ -590,6 +590,108 @@ func ids(tasks []Task) []string {
 		out = append(out, t.ID)
 	}
 	return out
+}
+
+// Any of them, not all of them. Clicking a second Tag widens what somebody is
+// willing to look at; an intersection would empty the list on the second click
+// far more often than it would narrow it usefully.
+func TestNarrowingToSeveralTagsTakesATaskCarryingAnyOfThem(t *testing.T) {
+	s := openTemp(t)
+	urgent, err := s.AddTag("alice", "urgent", "")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+	errand, err := s.AddTag("alice", "errand", "")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+
+	first := leased(t, s, "alice", Attributes{Title: Set("Fix the leak")})
+	second := leased(t, s, "alice", Attributes{Title: Set("Buy stamps")})
+	leased(t, s, "alice", Attributes{Title: Set("Read a book")})
+	for id, tag := range map[string]string{first: urgent, second: errand} {
+		if err := s.WithLease("alice", id, WriteTTL, func() error {
+			return s.AttachTag("alice", id, tag)
+		}); err != nil {
+			t.Fatalf("AttachTag: %v", err)
+		}
+	}
+
+	tasks, err := s.Tasks(Query{Tags: []string{urgent, errand}})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Errorf("narrowed to two tags the answer is %v, want the two carrying one each", ids(tasks))
+	}
+}
+
+// A Task carrying both is one Task in the answer. The membership test is an
+// EXISTS, so it says whether rather than how many, and a Task wearing every
+// named Tag cannot arrive once per Tag.
+func TestATaskCarryingEveryNamedTagIsListedOnce(t *testing.T) {
+	s := openTemp(t)
+	urgent, err := s.AddTag("alice", "urgent", "")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+	errand, err := s.AddTag("alice", "errand", "")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+
+	both := leased(t, s, "alice", Attributes{Title: Set("Post the forms")})
+	if err := s.WithLease("alice", both, WriteTTL, func() error {
+		if err := s.AttachTag("alice", both, urgent); err != nil {
+			return err
+		}
+		return s.AttachTag("alice", both, errand)
+	}); err != nil {
+		t.Fatalf("AttachTag: %v", err)
+	}
+
+	tasks, err := s.Tasks(Query{Tags: []string{urgent, errand}})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Errorf("the answer is %v, want the one Task once", ids(tasks))
+	}
+}
+
+// No Tags named is no narrowing, which is what the everyday view asks for. An
+// empty slice and a nil one are the same question.
+func TestNamingNoTagsNarrowsNothing(t *testing.T) {
+	s := openTemp(t)
+	leased(t, s, "alice", Attributes{Title: Set("Read a book")})
+
+	// An id with nothing in it is named no Tag, the way an empty List is. A
+	// caller that built the query out of a variable nobody set asks for the
+	// list rather than for silence, and an Agent reaching the store through
+	// the API gets the same answer a person typing the verb does.
+	for _, tags := range [][]string{nil, {}, {""}, {"  "}, {"", "\t"}} {
+		tasks, err := s.Tasks(Query{Tags: tags})
+		if err != nil {
+			t.Fatalf("Tasks(%v): %v", tags, err)
+		}
+		if len(tasks) != 1 {
+			t.Errorf("Tags %v gives %v, want the whole list", tags, ids(tasks))
+		}
+	}
+
+	// And an empty id beside a real one is the real one asked for on its own,
+	// rather than a set nothing can match.
+	tag, err := s.AddTag("alice", "errand", "green")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+	tasks, err := s.Tasks(Query{Tags: []string{"", tag}})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Errorf("an empty id beside a real one gives %v, want only what carries the tag", ids(tasks))
+	}
 }
 
 // A word with a space after it is the word. `instr` reads the space, so a

@@ -1228,10 +1228,16 @@ type Query struct {
 
 	// List narrows to the Tasks in one List, named by its id.
 	List string
-	// Tag narrows to the Tasks carrying one Tag, named by its id. It is the
-	// same shape as List because a Tag is the same shape as a List: the two
-	// differ in what they mean and not in how a Task belongs to one.
-	Tag string
+	// Tags narrows to the Tasks carrying any one of these Tags, by id. Any
+	// and not all: somebody clicking a second Tag is widening what they are
+	// willing to look at, and an intersection would usually empty the list on
+	// the second click.
+	//
+	// It is a slice where List is a string because the two are asked
+	// differently, not because a Tag is a different shape from a List. A Task
+	// is filed in a List and that is where it lives; a Task carries Tags and
+	// what somebody wants is everything wearing any of them.
+	Tags []string
 	// Search narrows to the Tasks whose own words hold this text, matched in
 	// the Title, the Description and the Why. The comparison is
 	// case-insensitive over ASCII, which is `lower()`'s reach without an
@@ -1293,6 +1299,27 @@ func (s *Store) Tasks(q Query) ([]Task, error) {
 		return nil, err
 	}
 	key := sortKeys[q.Sort]
+	// The Tags travel as one JSON array rather than as a placeholder each, so
+	// the argument list stays the shape the query is written against however
+	// many Tags are named. json_each is what reads them back out.
+	//
+	// An id with nothing in it is dropped rather than asked about, so naming
+	// no Tag and naming an empty one are the same thing. That is what List
+	// does with an empty string, and a caller who built a query out of a
+	// variable nobody set should get the list rather than silence.
+	//
+	// The copy into a fresh slice is what makes a nil one marshal as `[]`
+	// instead of `null`: json_array_length(null) is NULL, which would fail the
+	// guard below rather than pass it and empty every list.
+	named := []string{}
+	for _, id := range q.Tags {
+		if strings.TrimSpace(id) != "" {
+			named = append(named, id)
+		}
+	}
+	// A []string cannot fail to marshal, so the error is dropped rather than
+	// wrapped into a path nothing reaches.
+	tags, _ := json.Marshal(named)
 	rows, err := s.db.Query(fmt.Sprintf(`
 WITH RECURSIVE
 -- The Tasks a search is about: the ones whose own words hold the text, and
@@ -1318,7 +1345,9 @@ depth_first(id, path) AS (
 	SELECT id, %[1]s || '/' || id FROM task
 	WHERE parent_id IS NULL
 	  AND (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = task.id AND m.list_id = ?))
-	  AND (? = '' OR EXISTS (SELECT 1 FROM task_tag m WHERE m.task_id = task.id AND m.tag_id = ?))
+	  AND (json_array_length(?) = 0 OR EXISTS (
+	        SELECT 1 FROM task_tag m WHERE m.task_id = task.id
+	          AND m.tag_id IN (SELECT value FROM json_each(?))))
 	  AND (? = '' OR id IN (SELECT id FROM searched))
 	  AND (? OR deleted_at IS NULL)
 	  AND (? OR completed_at IS NULL)
@@ -1328,7 +1357,9 @@ depth_first(id, path) AS (
 	SELECT t.id, d.path || '/' || %[1]s || '/' || t.id
 	FROM task t JOIN depth_first d ON t.parent_id = d.id
 	WHERE (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = t.id AND m.list_id = ?))
-	  AND (? = '' OR EXISTS (SELECT 1 FROM task_tag m WHERE m.task_id = t.id AND m.tag_id = ?))
+	  AND (json_array_length(?) = 0 OR EXISTS (
+	        SELECT 1 FROM task_tag m WHERE m.task_id = t.id
+	          AND m.tag_id IN (SELECT value FROM json_each(?))))
 	  AND (? = '' OR t.id IN (SELECT id FROM searched))
 	  AND (? OR t.deleted_at IS NULL)
 	  AND (? OR t.completed_at IS NULL)
@@ -1349,9 +1380,9 @@ SELECT
 FROM task t JOIN depth_first d ON d.id = t.id
 ORDER BY d.path`, key),
 		q.Search, q.Search, q.Search, q.Search,
-		q.List, q.List, q.Tag, q.Tag, q.Search,
+		q.List, q.List, tags, tags, q.Search,
 		q.IncludeDeleted, q.IncludeCompleted, q.IncludeDeclined, q.IncludeSnoozed, at,
-		q.List, q.List, q.Tag, q.Tag, q.Search,
+		q.List, q.List, tags, tags, q.Search,
 		q.IncludeDeleted, q.IncludeCompleted, q.IncludeDeclined, q.IncludeSnoozed, at,
 		at)
 	if err != nil {

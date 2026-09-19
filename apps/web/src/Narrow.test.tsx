@@ -4,7 +4,13 @@
 // narrowing the client cannot name, rather than rendering blank over a list
 // that is still narrowed to it.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { Narrow } from './Narrow'
@@ -49,9 +55,28 @@ test('a List deleted elsewhere stays on the picker under its own id', () => {
   expect([...picker.options].map((o) => o.textContent)).toContain('gone')
 })
 
-test('a Tag deleted elsewhere stays on its picker too', () => {
-  shown({ ...WIDE, tag: 'gone' })
-  expect((screen.getByLabelText('Tag') as HTMLSelectElement).value).toBe('gone')
+// The Tags are switches rather than a picker, and the rule is the same one: a
+// Tag that went away while the list was narrowed to it is still the thing to
+// turn off, so it is drawn under its id rather than leaving the list narrowed
+// by something with nothing on the screen to undo it.
+test('a Tag deleted elsewhere stays on as a switch under its own id', () => {
+  shown({ ...WIDE, tags: ['gone'] })
+  const gone = screen.getByRole('button', { name: 'gone' })
+  expect(gone.getAttribute('aria-pressed')).toBe('true')
+})
+
+// Any of them, not another narrowing on top: a Tag switched on is added to the
+// set the route is asked under rather than replacing what is already there.
+test('a Tag switched on is added to the set rather than replacing it', () => {
+  const onChange = shown({ ...WIDE, tags: ['other'] })
+  fireEvent.click(screen.getByRole('button', { name: 'errand (1)' }))
+  expect(onChange).toHaveBeenCalledWith({ ...WIDE, tags: ['other', 't1'] })
+})
+
+test('a Tag switched off leaves the others on', () => {
+  const onChange = shown({ ...WIDE, tags: ['other', 't1'] })
+  fireEvent.click(screen.getByRole('button', { name: 'errand (1)' }))
+  expect(onChange).toHaveBeenCalledWith({ ...WIDE, tags: ['other'] })
 })
 
 test('a picker offers each Collection once and no more', () => {
@@ -106,10 +131,12 @@ test('the Tag order survives the controls being unmounted', () => {
   }
   const order = () => {
     render(<Narrow narrowing={WIDE} offered={many} onChange={vi.fn()} />)
-    const picker = screen.getByLabelText('Tag') as HTMLSelectElement
-    const values = [...picker.options].map((one) => one.value)
+    const group = screen.getByRole('group', { name: 'Tags' })
+    const names = within(group)
+      .getAllByRole('button')
+      .map((one) => one.textContent)
     cleanup()
-    return values
+    return names
   }
   expect(order()).toEqual(order())
 })

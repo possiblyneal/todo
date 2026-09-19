@@ -119,9 +119,12 @@ func query(r *http.Request) store.Query {
 		IncludeSnoozed:   all,
 		IncludeDeleted:   all,
 		List:             r.URL.Query().Get("list"),
-		Tag:              r.URL.Query().Get("tag"),
-		Search:           r.URL.Query().Get("search"),
-		Sort:             store.Sort(r.URL.Query().Get("sort")),
+		// Repeated rather than separated: `?tag=a&tag=b` is what a set of
+		// values looks like in a query string, and reading it this way means
+		// no separator this side invented and no tag id that cannot hold one.
+		Tags:   r.URL.Query()["tag"],
+		Search: r.URL.Query().Get("search"),
+		Sort:   store.Sort(r.URL.Query().Get("sort")),
 	}
 }
 

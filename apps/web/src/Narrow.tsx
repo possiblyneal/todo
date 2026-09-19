@@ -71,19 +71,10 @@ export function Narrow({
         onPick={(list) => onChange({ ...narrowing, list })}
       />
 
-      {/*
-        The Lists are offered as the read listed them and the Tags are not.
-        A List is somewhere a Task is filed and there are few of them, so a
-        stable order is what makes one easy to reach; Tags accumulate, and an
-        order by count alone would bury an old one forever. `rank.ts` is where
-        that difference is argued.
-      */}
-      <Picker
-        name="Tag"
-        every="Every tag"
+      <Tags
         all={tags}
-        value={narrowing.tag}
-        onPick={(tag) => onChange({ ...narrowing, tag })}
+        on={narrowing.tags}
+        onToggle={(tags) => onChange({ ...narrowing, tags })}
       />
 
       {/*
@@ -136,9 +127,65 @@ export function Narrow({
 }
 
 /**
- * The List picker and the Tag picker, which are one control: a Collection is
- * the same shape either way and the two narrow the same list by the same kind
- * of id.
+ * The Tags, each a switch. More than one can be on, and a Task carrying any of
+ * them is in the list: clicking a second Tag is somebody widening what they
+ * are willing to look at, not narrowing twice.
+ *
+ * Switches rather than the `<select>` the List uses. A multiple `<select>` is
+ * the platform's control for this and it is a drag on a phone, where the rule
+ * is one thumb: these are 44px each and one tap turns one on. It is also the
+ * shape the filtering pane wants, which is where these are headed.
+ *
+ * The Lists are offered as the read listed them and these are not. A List is
+ * somewhere a Task is filed and there are few of them, so a stable order is
+ * what makes one easy to reach; Tags accumulate, and an order by count alone
+ * would bury an old one forever. `rank.ts` is where that difference is argued.
+ *
+ * A Tag the client cannot name is still drawn, under its id, for the reason
+ * `Picker` keeps one: a Tag deleted from another surface while the list is
+ * narrowed to it would otherwise leave the list narrowed with nothing on the
+ * screen to turn off.
+ */
+function Tags({
+  all,
+  on,
+  onToggle,
+}: {
+  all: Collection[]
+  on: string[]
+  onToggle: (tags: string[]) => void
+}) {
+  const named = new Set(all.map((one) => one.id))
+  const shown = [
+    ...all.map((one) => one.id),
+    ...on.filter((id) => !named.has(id)),
+  ]
+  if (shown.length === 0) return null
+  return (
+    <div className="tags" role="group" aria-label="Tags">
+      {shown.map((id) => {
+        const lit = on.includes(id)
+        return (
+          <button
+            key={id}
+            type="button"
+            className={lit ? 'control on' : 'control'}
+            aria-pressed={lit}
+            onClick={() =>
+              onToggle(lit ? on.filter((one) => one !== id) : [...on, id])
+            }
+          >
+            {labelled(all, id)}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * The List picker. A Collection is the same shape whichever set it comes from,
+ * and this is the one that is picked one at a time.
  *
  * An id the client cannot name is offered under the id itself rather than left
  * matching nothing. A Collection deleted from another surface while the list is
@@ -182,11 +229,11 @@ function Picker({
 }
 
 /**
- * What one option reads. A Collection the last read named carries the count the
- * store worked out; an id nothing named reads as itself and carries no count at
- * all, because a zero here would be the client answering a question the store
- * never answered — the List may well have Tasks in it, and this side has no way
- * to know.
+ * What one option or button reads. A Collection the last read named carries
+ * the count the store worked out; an id nothing named reads as itself and
+ * carries no count at all, because a zero here would be the client answering a
+ * question the store never answered — the Collection may well have Tasks under
+ * it, and this side has no way to know.
  */
 function labelled(all: Collection[], id: string) {
   const named = all.find((one) => one.id === id)
