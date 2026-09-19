@@ -665,7 +665,11 @@ func TestNamingNoTagsNarrowsNothing(t *testing.T) {
 	s := openTemp(t)
 	leased(t, s, "alice", Attributes{Title: Set("Read a book")})
 
-	for _, tags := range [][]string{nil, {}} {
+	// An id with nothing in it is named no Tag, the way an empty List is. A
+	// caller that built the query out of a variable nobody set asks for the
+	// list rather than for silence, and an Agent reaching the store through
+	// the API gets the same answer a person typing the verb does.
+	for _, tags := range [][]string{nil, {}, {""}, {"  "}, {"", "\t"}} {
 		tasks, err := s.Tasks(Query{Tags: tags})
 		if err != nil {
 			t.Fatalf("Tasks(%v): %v", tags, err)
@@ -673,5 +677,19 @@ func TestNamingNoTagsNarrowsNothing(t *testing.T) {
 		if len(tasks) != 1 {
 			t.Errorf("Tags %v gives %v, want the whole list", tags, ids(tasks))
 		}
+	}
+
+	// And an empty id beside a real one is the real one asked for on its own,
+	// rather than a set nothing can match.
+	tag, err := s.AddTag("alice", "errand", "green")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+	tasks, err := s.Tasks(Query{Tags: []string{"", tag}})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Errorf("an empty id beside a real one gives %v, want only what carries the tag", ids(tasks))
 	}
 }

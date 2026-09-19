@@ -407,6 +407,22 @@ func TestStateNarrowsByEveryTagNamed(t *testing.T) {
 	}
 }
 
+// `?tag=` with nothing after it is no Tag named, the way `?list=` is. An Agent
+// building a query out of a variable nobody set asks for the list rather than
+// for silence, which is the contract this route owes it and owes a person.
+func TestAnEmptyNarrowingParameterNarrowsNothing(t *testing.T) {
+	s := openTemp(t)
+	add(t, s, "Paint the fence")
+	add(t, s, "Read a book")
+
+	for _, path := range []string{"/api/state", "/api/state?tag=", "/api/state?list=", "/api/state?tag=&tag="} {
+		body := decodeState(t, get(t, s, path, nil))
+		if len(body.Tasks) != 2 {
+			t.Errorf("%s gave %d tasks, want the whole list", path, len(body.Tasks))
+		}
+	}
+}
+
 // The colors and the snoozes are the store's own lists, served for the same
 // reason the sorts are: a surface offering either would otherwise keep a second
 // copy and go on offering what the store stopped taking. Each is checked
