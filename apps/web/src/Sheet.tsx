@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 
-import type { Collection } from './state'
+import type { Collection, Offered } from './state'
 import { memberships, type TaskBody } from './write'
 
 /** The attributes this sheet takes as text, which is every one it shows. */
@@ -25,10 +25,7 @@ const LEVELS = ['low', 'med', 'high']
 export function Sheet({
   draft,
   against,
-  lists,
-  tags,
-  colors,
-  snoozes,
+  offered,
   action,
   onSubmit,
   onCancel,
@@ -42,15 +39,14 @@ export function Sheet({
    * difference and write a Task belonging to no List the sheet drew ticked.
    */
   against?: TaskBody
-  lists: Collection[]
-  tags: Collection[]
   /**
-   * The colors a Task may carry and the snoozes on offer, as
-   * `GET /api/state` answered them. The client keeps no list of either, so it
-   * cannot offer a color the store would refuse.
+   * The Lists and Tags to file the Task under, the colors it may carry and the
+   * snoozes on offer, as `GET /api/state` answered them. The client keeps no
+   * list of any of them, so it cannot offer a value the store would refuse.
+   * The sorts travel in the same type and are the controls' rather than this
+   * form's.
    */
-  colors: string[]
-  snoozes: string[]
+  offered: Offered
   /** The word on the button, which is what submitting it does. */
   action: string
   onSubmit: (body: TaskBody) => Promise<void>
@@ -156,25 +152,25 @@ export function Sheet({
 
       <Choice
         name="Priority"
-        offered={LEVELS}
+        options={LEVELS}
         value={body.priority ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, priority: value }))}
       />
       <Choice
         name="Impact"
-        offered={LEVELS}
+        options={LEVELS}
         value={body.impact ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, impact: value }))}
       />
       <Choice
         name="Color"
-        offered={colors}
+        options={offered.colors}
         value={body.color ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, color: value }))}
       />
 
       <Snooze
-        offered={snoozes}
+        options={offered.snoozes}
         value={body.snooze}
         onPick={(value) => setBody((was) => ({ ...was, snooze: value }))}
       />
@@ -186,13 +182,13 @@ export function Sheet({
 
       <Ticks
         name="Lists"
-        all={lists}
+        all={offered.lists}
         on={body.intoLists ?? []}
         onToggle={(id) => toggle('intoLists', id)}
       />
       <Ticks
         name="Tags"
-        all={tags}
+        all={offered.tags}
         on={body.addTags ?? []}
         onToggle={(id) => toggle('addTags', id)}
       />
@@ -221,17 +217,17 @@ export function Sheet({
  */
 function Choice({
   name,
-  offered,
+  options,
   value,
   onPick,
 }: {
   name: string
-  offered: string[]
+  options: string[]
   value: string
   onPick: (value: string) => void
 }) {
   const shown =
-    value === '' || offered.includes(value) ? offered : [...offered, value]
+    value === '' || options.includes(value) ? options : [...options, value]
   return (
     <label className="field">
       <span>{name}</span>
@@ -258,11 +254,11 @@ function Choice({
  * string wakes it, which is the only way back from a snooze on this surface.
  */
 function Snooze({
-  offered,
+  options,
   value,
   onPick,
 }: {
-  offered: string[]
+  options: string[]
   value?: string
   onPick: (value: string | undefined) => void
 }) {
@@ -272,9 +268,9 @@ function Snooze({
   // rule, so a Task snoozed by that duration from a terminal would otherwise
   // reach this screen with its snooze blanked.
   const shown =
-    value === undefined || value === '' || offered.includes(value)
-      ? offered
-      : [...offered, value]
+    value === undefined || value === '' || options.includes(value)
+      ? options
+      : [...options, value]
   return (
     <label className="field">
       <span>Snooze</span>

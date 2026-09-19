@@ -9,13 +9,15 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test } from 'vitest'
 
 import { Sheet } from './Sheet'
+import type { Offered } from './state'
 import type { TaskBody } from './write'
 
 afterEach(cleanup)
 
-const OFFERED = {
+const OFFERED: Offered = {
   lists: [{ id: 'l1', name: 'Home', color: 'blue', count: 2 }],
   tags: [{ id: 't1', name: 'errand', color: 'red', count: 1 }],
+  sorts: ['title'],
   colors: ['red', 'blue'],
   snoozes: ['an hour', 'tomorrow'],
 }
@@ -27,7 +29,7 @@ function opened(draft: TaskBody, against?: TaskBody) {
     <Sheet
       draft={draft}
       against={against}
-      {...OFFERED}
+      offered={OFFERED}
       action="Save"
       onSubmit={(body) => {
         sent.push(body)
@@ -110,6 +112,22 @@ test('a color the client does not offer is on the picker too', () => {
   opened({ title: 'Ship it', color: 'chartreuse' })
   const picker = screen.getByLabelText('Color') as HTMLSelectElement
   expect(picker.value).toBe('chartreuse')
+})
+
+// Five served sets arrive under one prop, so reading the wrong one off it is a
+// mistake that can be made: the color and the snooze are both lists of strings
+// and the compiler cannot tell them apart. This says which set feeds which.
+test('the color and the snooze each offer their own served set', () => {
+  opened({ title: 'Ship it' })
+  const color = screen.getByLabelText('Color') as HTMLSelectElement
+  expect([...color.options].map((o) => o.value)).toEqual(['', 'red', 'blue'])
+  const snooze = screen.getByLabelText('Snooze') as HTMLSelectElement
+  expect([...snooze.options].map((o) => o.value)).toEqual([
+    'leave',
+    'wake',
+    'an hour',
+    'tomorrow',
+  ])
 })
 
 test('emptying a picker clears the attribute rather than leaving it alone', () => {

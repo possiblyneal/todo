@@ -39,8 +39,21 @@ export type Task = {
   marks: string[]
 }
 
-export type State = {
-  tasks: Task[]
+/**
+ * Everything `GET /api/state` offers a surface to pick from, which is the whole
+ * of the state bar the Tasks themselves.
+ *
+ * It is one type because the sets travel together everywhere: `App` hands it to
+ * the box, the controls and the detail screen, and the box, the detail screen
+ * and the Series screen hand it on to the sheet without reading it. Four props
+ * through three components that never look at them is a fifth prop the day the
+ * route serves a fifth set; a field here is the whole of that change instead.
+ *
+ * Nothing in it is ever the client's own list. Each set is what the store
+ * refuses against, so a picker built from one cannot offer a value the store
+ * would turn away.
+ */
+export type Offered = {
   lists: Collection[]
   tags: Collection[]
   // What `?sort=` accepts, in the order the store lists them. It is drawn as
@@ -55,6 +68,23 @@ export type State = {
   // the Broker said as well as what is offered here.
   colors: string[]
   snoozes: string[]
+}
+
+/**
+ * Nothing on offer, which is the window before the first read lands. The
+ * controls are drawn in it, because they are what asks for a list and a screen
+ * waiting for one before offering them would be waiting on itself.
+ */
+export const OFFERED_NOTHING: Offered = {
+  lists: [],
+  tags: [],
+  sorts: [],
+  colors: [],
+  snoozes: [],
+}
+
+export type State = Offered & {
+  tasks: Task[]
 }
 
 /**

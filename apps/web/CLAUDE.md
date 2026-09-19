@@ -25,7 +25,8 @@ and adds to this list rather than to the plan.
 - `src/state.ts` — the wire shapes and the one call that reads them. It mirrors
   `apps/todo/src/api/state.go`, which is the side that decides them. It also
   holds the Narrowing and the one function that writes it as a query string,
-  which both the list and the question ask under.
+  which both the list and the question ask under, and `Offered`: the served sets
+  a surface picks from, which is the whole of the state bar the Tasks.
 - `src/write.ts` — the wire shapes the write and Broker routes take, and the
   calls that reach them, and the client's one copy of the four lifecycle verbs
   and the three Occurrence marks, plus the fourth thing done to a date, which
@@ -128,6 +129,21 @@ and adds to this list rather than to the plan.
   refuse and a fifth sort appears the day it lands. This is the pattern for a
   set the store owns; the level names, the verbs and the marks are copied only
   because no route answers what they are.
+- **The served sets travel as one prop, never as several.** `Offered` bundles
+  the Lists, the Tags, the sorts, the colors and the snoozes, and `State` is it
+  plus the Tasks. Every component takes `offered` whole, including the three
+  that only hand it on, so a sixth set the route serves is one field here rather
+  than a prop threaded through them again. **What belongs in it is what the
+  route serves, not what one screen reads.** A set used by both the controls and
+  the sheet would have nowhere to live under a bundle shaped by its consumers,
+  and the wire has one shape whatever reads it; the cost is that `Narrow` and
+  `Sheet` each say which fields are not theirs. `Choice`, `Snooze` and `Picker`
+  name their own list `options` or `all` rather than `offered`, so the served
+  bundle and one control's values are never the same word in one file.
+- **A component reading the wrong set off `Offered` is a mistake a test catches.**
+  Five string lists behind one prop makes `offered.sorts` and `offered.colors`
+  interchangeable to the compiler, so `Narrow.test.tsx` pins which set feeds the
+  sort and `Sheet.test.tsx` pins the color and the snooze.
 - **A changed narrowing restarts the poll from no ETag.** The tag and the list
   it describes have to be the same age, so `App` keys the polling effect on the
   query string. The API hashes the query into the tag as well, which means a

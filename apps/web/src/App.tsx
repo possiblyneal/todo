@@ -9,6 +9,7 @@ import { Row } from './Row'
 import {
   fetchState,
   type Narrowing,
+  OFFERED_NOTHING,
   queryString,
   type State,
   WIDE,
@@ -146,10 +147,10 @@ export function App() {
         key={open.id}
         task={open}
         subtasks={state.tasks.filter((task) => task.parent === open.id)}
-        lists={state.lists}
-        tags={state.tags}
-        colors={state.colors}
-        snoozes={state.snoozes}
+        // A State is an Offered with the Tasks on it, and the guard above has
+        // already said there is one, so this site does not need the empty
+        // stand-in the two below do.
+        offered={state}
         revision={etag}
         onOpen={(id) => setScreen({ name: 'task', id })}
         onBack={() => setScreen({ name: 'list' })}
@@ -167,10 +168,7 @@ export function App() {
         and the sheet shows none.
       */}
       <Box
-        lists={state?.lists ?? []}
-        tags={state?.tags ?? []}
-        colors={state?.colors ?? []}
-        snoozes={state?.snoozes ?? []}
+        offered={state ?? OFFERED_NOTHING}
         // A question is asked about the Tasks on the screen, which is the
         // narrowing they were read under and not the one the controls are
         // showing: a question asked between a control moving and its list
@@ -185,9 +183,7 @@ export function App() {
       */}
       <Narrow
         narrowing={narrowing}
-        lists={state?.lists ?? []}
-        tags={state?.tags ?? []}
-        sorts={state?.sorts ?? []}
+        offered={state ?? OFFERED_NOTHING}
         onChange={setNarrowing}
       />
       {error && <p className="message">{error}</p>}

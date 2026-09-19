@@ -10,20 +10,15 @@
 import { useState } from 'react'
 
 import { Sheet } from './Sheet'
-import type { Collection, Narrowing } from './state'
+import type { Narrowing, Offered } from './state'
 import { addTask, ask, capture, type TaskBody } from './write'
 
 export function Box({
-  lists,
-  tags,
-  colors,
-  snoozes,
+  offered,
   narrowing,
 }: {
-  lists: Collection[]
-  tags: Collection[]
-  colors: string[]
-  snoozes: string[]
+  /** What the add sheet picks from. Nothing here is read on the way past. */
+  offered: Offered
   // What the list is narrowed to, so a question is asked about the Tasks on
   // the screen rather than about every open one.
   narrowing: Narrowing
@@ -63,10 +58,7 @@ export function Box({
         // as the baseline they would cancel out and the dump would land filed
         // under nothing.
         against={{}}
-        lists={lists}
-        tags={tags}
-        colors={colors}
-        snoozes={snoozes}
+        offered={offered}
         action="Add"
         // The dump is done with once the Task is written. Backing out of the
         // sheet keeps it, because somebody who changed their mind about the

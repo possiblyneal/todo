@@ -17,6 +17,7 @@ import {
   fetchTaskHistory,
   type Collection,
   type Entry,
+  type Offered,
   type Task,
 } from './state'
 import {
@@ -34,10 +35,7 @@ const NONE: Entry[] = []
 export function Detail({
   task,
   subtasks,
-  lists,
-  tags,
-  colors,
-  snoozes,
+  offered,
   revision,
   onOpen,
   onBack,
@@ -45,10 +43,12 @@ export function Detail({
   task: Task
   /** The Tasks directly under this one, which the list read already returned. */
   subtasks: Task[]
-  lists: Collection[]
-  tags: Collection[]
-  colors: string[]
-  snoozes: string[]
+  /**
+   * What the sheet this screen opens picks from. The Lists and Tags are read
+   * here as well, to name the ones the Task carries; the rest goes straight
+   * past to the sheet.
+   */
+  offered: Offered
   /**
    * The ETag of the read on the screen. The history is fetched again when it
    * changes, so a write made here or made by an Agent elsewhere shows up on the
@@ -96,11 +96,8 @@ export function Detail({
       <Series
         task={task}
         // The Series screen opens the same sheet this one does, for the date
-        // being lifted out, so it needs the same two to tick memberships with.
-        lists={lists}
-        tags={tags}
-        colors={colors}
-        snoozes={snoozes}
+        // being lifted out, so it picks from the same sets.
+        offered={offered}
         revision={revision}
         // A detached date is an ordinary Task now, and opening it is the only
         // thing that names it: nothing else afterwards says where it went.
@@ -118,10 +115,7 @@ export function Detail({
     return (
       <Sheet
         draft={open === 'edit' ? draftOf(task) : {}}
-        lists={lists}
-        tags={tags}
-        colors={colors}
-        snoozes={snoozes}
+        offered={offered}
         action={open === 'edit' ? 'Save' : 'Add'}
         onSubmit={async (body: TaskBody) => {
           if (open === 'edit') await editTask(task.id, body)
@@ -167,8 +161,8 @@ export function Detail({
         <Carried name="Priority" value={task.priority} />
         <Carried name="Impact" value={task.impact} />
         <Carried name="Color" value={task.color} />
-        <Carried name="Lists" value={named(task.lists, lists)} />
-        <Carried name="Tags" value={named(task.tags, tags)} />
+        <Carried name="Lists" value={named(task.lists, offered.lists)} />
+        <Carried name="Tags" value={named(task.tags, offered.tags)} />
         <Carried name="Series" value={task.series} />
         <Carried name="Created" value={task.createdAt} />
         {Object.entries(task.fields ?? {}).map(([name, value]) => (
