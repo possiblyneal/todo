@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
 )
 
 // ErrAbsent is a Task asked for at a position in the Change History where it
@@ -45,6 +44,14 @@ func (s *Store) TaskAsOf(taskID string, seq int64) (Task, error) {
 	if len(entries) == 0 {
 		return Task{}, fmt.Errorf("%w: the Change History holds nothing at or before %d", ErrAbsent, seq)
 	}
+	// A position is an entry's own seq, not a number the log happens to be
+	// shorter than. Past the end, the read above returns the whole log and the
+	// Task would be answered as it stands now under a route that says it is
+	// answering as it stood then, which is the one wrong answer this cannot
+	// give.
+	if last := entries[len(entries)-1].Seq; last != seq {
+		return Task{}, fmt.Errorf("%w: the Change History has no entry %d", ErrAbsent, seq)
+	}
 
 	replica, err := replay(entries)
 	if err != nil {
@@ -76,11 +83,16 @@ func (s *Store) TaskAsOf(taskID string, seq int64) (Task, error) {
 //
 // One connection, not a pool. Each connection to an anonymous in-memory
 // database gets a database of its own, so a pool would insert the entries down
-// one and read an empty schema down the next.
+// one and read an empty schema down the next. It is also why the replica is
+// read inside the call that filled it and thrown away at the end of it: a
+// connection database/sql retires and redials is a fresh empty database, so
+// there is nothing here worth keeping past the read it was built for.
+//
+// The DSN is the store's own, so the replica runs under the settings every
+// other connection in this package runs under rather than a second set written
+// out beside them.
 func replay(entries []Entry) (*Store, error) {
-	q := url.Values{}
-	q.Add("_pragma", "foreign_keys(1)")
-	db, err := sql.Open("sqlite", "file::memory:?"+q.Encode())
+	db, err := sql.Open("sqlite", dsn(":memory:"))
 	if err != nil {
 		return nil, fmt.Errorf("open the replay: %w", err)
 	}

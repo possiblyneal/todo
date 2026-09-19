@@ -95,6 +95,13 @@ func TestAPositionBeforeTheTaskIsNotFound(t *testing.T) {
 	if w := do(t, s, http.MethodGet, "/api/tasks/"+gone+"/at/soon", ""); w.Code != http.StatusBadRequest {
 		t.Errorf("a position that is not a number answered %d, want 400", w.Code)
 	}
+	// Past the end of the log is not the Task as it stands now. The read is of
+	// every entry at or before the position, so a number the log is merely
+	// shorter than takes in all of it, and a route that says "as it stood
+	// then" would be answering "as it stands".
+	if w := do(t, s, http.MethodGet, "/api/tasks/"+gone+"/at/999999", ""); w.Code != http.StatusNotFound {
+		t.Errorf("a position past the end of the log answered %d, want 404: %s", w.Code, w.Body.String())
+	}
 }
 
 // The search reaches the whole log rather than the page, which is what makes a

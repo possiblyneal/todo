@@ -239,7 +239,8 @@ and adds to this list rather than to the plan.
   control is touched, so the sentence under an empty one has to name the
   narrowing that emptied it.
 - **No picker here keeps its own list of what to offer.** The sorts, the
-  colors, the snoozes and now the levels all arrive with the state, so no picker
+  colors, the snoozes, the levels and the kinds a log row opens on all arrive
+  with the state, so no picker
   can miss a value the store offers or go on offering one it dropped. It is the
   narrower claim on purpose: a picker still offers a value the store would
   refuse, because a value already on the Task is added to the options below, and
@@ -445,13 +446,18 @@ and adds to this list rather than to the plan.
   be there to be written to — and it draws its attributes through
   `Attributes.tsx`, the same component the detail screen draws its own
   through, so the two cannot come to describe one Task differently.
-- **Every entry opens, not only the ones that deleted something.** `Log` takes
-  an `onOpen` and wraps each row in a button when it is given one, so "what did
-  this say before that edit" is a question either log answers rather than one a
-  reader works out from the kinds. Without `onOpen` the rows are not buttons: a
-  row that looked pressable and did nothing would be worse than a row that does
-  not. The entry opened is kept whole rather than as a `seq`, because the
-  screen draws what happened above the Task and the entry is what says it.
+- **Every entry about a Task opens, not only the ones that deleted
+  something.** `Log` takes an `onOpen` and wraps a row in a button when it is
+  given one, so "what did this say before that edit" is a question either log
+  answers rather than one a reader works out from the kinds. Which kinds are
+  about a Task is not this client's to decide: `offered.opens` is
+  `store.OnTasks` served on `GET /api/state`, and a kind outside it names a
+  List, a Tag or a Series, so pressing one could only ask for a Task by an id
+  no Task has. Without `onOpen`, or before the first read fills `opens`, the
+  rows are not buttons: a row that looked pressable and 404'd would be worse
+  than a row that does not. The entry opened is kept whole rather than as a
+  `seq`, because the screen draws what happened above the Task and the entry is
+  what says it.
 - **The log is searched by the route, never by the page in hand.** The activity
   screen reaches further back by asking for more, so a match made against what
   has already arrived could only find what was recent enough to be on it, and a

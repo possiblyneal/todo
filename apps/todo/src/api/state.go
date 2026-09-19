@@ -75,6 +75,8 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 
 		Priorities: levels(store.PriorityOffers()),
 		Impacts:    levels(store.ImpactOffers()),
+
+		Opens: store.OnTasks(),
 	}
 	for _, t := range tasks {
 		out.Tasks = append(out.Tasks, newTask(t))
@@ -194,6 +196,14 @@ type stateBody struct {
 	// keeps none of that.
 	Priorities []level `json:"priorities"`
 	Impacts    []level `json:"impacts"`
+
+	// Opens is store.OnTasks: the kinds of entry whose subject is a Task, and
+	// so the ones `GET /api/tasks/{id}/at/{seq}` can answer for. A log drawn
+	// with a tap on each row needs to know which rows have somewhere to go,
+	// and the alternative is a second copy of the kinds on every surface that
+	// draws one -- wrong from the day a kind is added here until each is
+	// caught up.
+	Opens []string `json:"opens"`
 }
 
 // level is one of the three as a client reads it.

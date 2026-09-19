@@ -111,6 +111,7 @@ export function Activity({
         nameOf={(subject) =>
           tasks.find((task) => task.id === subject)?.title ?? subject
         }
+        opens={offered.opens}
         onOpen={setOpened}
       />
       {more && (

@@ -309,14 +309,17 @@ button.row {
 /* An entry that opens the Task it is about. It is a button because pressing it
    is what it is, and it is drawn as the row rather than as a control: the log
    is a record to read down, and forty buttons in a column would read as a
-   menu. The 44px the row already carries is what a thumb needs, so the target
-   is the whole row and not a word in it. */
+   menu. The target is the whole row and not a word in it, so it carries the
+   44px itself: the row's own 44px is the row's, and a flex child laid out on
+   its baseline is as tall as its text rather than as tall as what holds it. */
 .entry-open {
   display: flex;
   flex: 1;
   flex-wrap: wrap;
   align-items: baseline;
+  align-content: center;
   gap: 0.5rem;
+  min-height: 44px;
   padding: 0;
   font: inherit;
   color: inherit;

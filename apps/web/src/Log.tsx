@@ -9,6 +9,7 @@ import type { Entry } from './state'
 export function Log({
   entries,
   nameOf,
+  opens,
   onOpen,
 }: {
   entries: Entry[]
@@ -19,10 +20,19 @@ export function Log({
    */
   nameOf?: (subject: string) => string
   /**
-   * Opening the Task as this entry left it. Given, every row becomes something
-   * to press: an entry is the only way to a deleted Task now that no list read
-   * offers one, and a row that read like a record but did nothing would hide
-   * the one door there is. Left out, the log is a log.
+   * The kinds whose subject is a Task, as `GET /api/state` serves them. A row
+   * of one of these kinds is a door to the Task as that entry left it; the
+   * rest name a List, a Tag or a Series, and pressing one would ask for a Task
+   * by an id no Task has. Empty until the first read lands, which leaves the
+   * log a log for that first second rather than offering a door that 404s.
+   */
+  opens?: string[]
+  /**
+   * Opening the Task as this entry left it. Given, a row whose kind is in
+   * `opens` becomes something to press: an entry is the only way to a deleted
+   * Task now that no list read offers one, and a row that read like a record
+   * but did nothing would hide the one door there is. Left out, the log is a
+   * log.
    */
   onOpen?: (entry: Entry) => void
 }) {
@@ -38,9 +48,10 @@ export function Log({
             <When at={entry.at} />
           </>
         )
+        const open = onOpen && opens?.includes(entry.kind)
         return (
           <li key={entry.seq} className="entry">
-            {onOpen ? (
+            {open ? (
               <button
                 type="button"
                 className="entry-open"

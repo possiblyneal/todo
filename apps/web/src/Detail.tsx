@@ -233,11 +233,12 @@ export function Detail({
 
       <h2 className="heading">History</h2>
       {/*
-        Every entry opens this Task as that entry left it, so "what did this
-        say before that edit" is a question the screen answers rather than one
-        a reader works out from the kinds.
+        Every entry about this Task opens it as that entry left it, so "what
+        did this say before that edit" is a question the screen answers rather
+        than one a reader works out from the kinds. Which kinds are about a
+        Task at all is the store's to say, and it says it in `opens`.
       */}
-      <Log entries={entries} onOpen={setOpened} />
+      <Log entries={entries} opens={offered.opens} onOpen={setOpened} />
     </div>
   )
 }

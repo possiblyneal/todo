@@ -87,6 +87,13 @@ export type Offered = {
   // client keeping the words alone would keep none of it.
   priorities: Level[]
   impacts: Level[]
+  // The kinds of Change History entry whose subject is a Task, from
+  // `store.OnTasks`. A log row is a door to the Task as that entry left it,
+  // and the ones not in here have no Task to open: a List Created names the
+  // List. Served for the reason the rest are -- a kind added on the other side
+  // is drawn correctly here the day it lands, and this client never decides
+  // what a kind is about.
+  opens: string[]
 }
 
 /** One of the three, and what choosing it means. */
@@ -108,6 +115,7 @@ export const OFFERED_NOTHING: Offered = {
   snoozes: [],
   priorities: [],
   impacts: [],
+  opens: [],
 }
 
 export type State = Offered & {

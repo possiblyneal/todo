@@ -37,6 +37,9 @@ import (
 // There is no Lease Expired. Expiry is a condition that becomes true on its
 // own and is read as the clause expires_at > now; breaking is something a
 // writer did, so it is recorded.
+// Every kind the log holds. A kind added here is added to OnTasks below as
+// well, or deliberately left out of it: that set is what says whether an entry
+// names a Task, and a surface reads it rather than deciding for itself.
 const (
 	KindTaskAdded     = "task_added"
 	KindTaskDescribed = "task_described"
@@ -71,6 +74,38 @@ const (
 	KindOccurrenceSkipped  = "occurrence_skipped"
 	KindOccurrenceDetached = "occurrence_detached"
 )
+
+// OnTasks is every kind whose subject is a Task id, which is what makes an
+// entry one a Task can be read at. The rest carry a Collection or a Series
+// instead: a List Created names the List, and looking a Task up by that id
+// would find none.
+//
+// It is here rather than worked out by whoever draws a log, for the reason
+// Sorts and Colors are: a kind added to this package appears wherever the set
+// is served the day it is appended, and a surface keeping its own copy would
+// be wrong until somebody noticed.
+func OnTasks() []string {
+	return []string{
+		KindTaskAdded,
+		KindTaskDescribed,
+		KindTaskCompleted,
+		KindTaskDeclined,
+		KindTaskReopened,
+		KindTaskDeleted,
+		KindTaskListed,
+		KindTaskUnlisted,
+		KindTagAttached,
+		KindTagDetached,
+		KindAttachmentAdded,
+		KindAttachmentRemoved,
+		KindOccurrenceTicked,
+		KindOccurrenceSkipped,
+		KindOccurrenceDetached,
+		KindLeaseTaken,
+		KindLeaseReleased,
+		KindLeaseBroken,
+	}
+}
 
 // ErrRefused is a write with no unexpired Lease held by the writing Actor on
 // the target's top-level root. The store refused it; nothing was applied.
@@ -1498,7 +1533,14 @@ func (s *Store) entries(query string, args ...any) ([]Entry, error) {
 		if err := rows.Scan(&e.Seq, &at, &e.Actor, &e.Kind, &e.Subject, &e.Payload); err != nil {
 			return nil, fmt.Errorf("read entry: %w", err)
 		}
-		e.At, _ = time.Parse(stamp, at)
+		// The parse is not swallowed. An `at` this cannot read is a row
+		// written by something other than this package, and a zero instant
+		// passed on quietly would be replayed into created_at as year one
+		// rather than reported.
+		e.At, err = time.Parse(stamp, at)
+		if err != nil {
+			return nil, fmt.Errorf("read the timestamp on entry %d: %w", e.Seq, err)
+		}
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()

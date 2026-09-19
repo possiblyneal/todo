@@ -24,6 +24,19 @@ const GONE: Entry = {
   subject: 'abc',
 }
 
+// A List Created names the List, not a Task. It is in the same log and it is
+// the reason a row's kind decides whether there is a door.
+const MADE: Entry = {
+  seq: 13,
+  at: '2026-09-19T10:01:00Z',
+  actor: 'neal',
+  kind: 'list_created',
+  subject: 'list-1',
+}
+
+// What `GET /api/state` serves as `opens`, cut to what these need.
+const OPENS = ['task_deleted']
+
 const WAS: Task = {
   id: 'abc',
   depth: 1,
@@ -36,7 +49,7 @@ const WAS: Task = {
 
 test('an entry is something to press when there is somewhere to go', () => {
   const onOpen = vi.fn()
-  render(<Log entries={[GONE]} onOpen={onOpen} />)
+  render(<Log entries={[GONE]} opens={OPENS} onOpen={onOpen} />)
   screen.getByRole('button').click()
   expect(onOpen).toHaveBeenCalledWith(GONE)
 })
@@ -47,6 +60,15 @@ test('an entry is something to press when there is somewhere to go', () => {
 test('an entry is not a button where nothing opens', () => {
   render(<Log entries={[GONE]} />)
   expect(screen.queryByRole('button')).toBeNull()
+})
+
+// An entry naming a List has no Task to open, so pressing it could only ask
+// for a Task by an id no Task has. Which kinds those are is the store's to
+// say, and `opens` is where it says it.
+test('an entry that is not about a Task has no door', () => {
+  render(<Log entries={[GONE, MADE]} opens={OPENS} onOpen={vi.fn()} />)
+  expect(screen.getAllByRole('button')).toHaveLength(1)
+  expect(screen.getByRole('button').textContent).toMatch(/task deleted/i)
 })
 
 test('the entry reads the Task out as it stood at that position', async () => {
