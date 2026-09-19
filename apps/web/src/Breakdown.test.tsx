@@ -11,7 +11,10 @@ import { Breakdown } from './Breakdown'
 import type { Task } from './state'
 import * as write from './write'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 const TASK: Task = {
   id: 'one',
@@ -42,9 +45,10 @@ test('every attribute a proposal would write is drawn beside its tick', async ()
   expect(
     screen.getByText('Nothing else moves until it is booked.'),
   ).toBeDefined()
-  expect(screen.getByText('30m')).toBeDefined()
-  // Labelled, because `high` alone says neither which attribute it is nor that
-  // anybody chose it.
+  // Labelled, because a single word alone says neither which attribute it is
+  // nor that anybody chose it: `30m` reads as much like a deadline as like an
+  // estimate, and `high` says nothing at all.
+  expect(screen.getByText('Estimate 30m')).toBeDefined()
   expect(screen.getByText('Priority high')).toBeDefined()
   expect(screen.getByText('Impact med')).toBeDefined()
 })
@@ -61,4 +65,19 @@ test('a level the store would refuse is drawn as the word the Broker used', asyn
 
   await screen.findByText('Book the van')
   expect(screen.getByText('Priority urgent')).toBeDefined()
+})
+
+// The line under a proposal holds the estimate and the two levels, and the
+// Broker answers none of them on a Subtask it has nothing to say about. Drawn
+// anyway it is an empty strip of nothing under the title, which reads as an
+// attribute that failed to load rather than one nobody set.
+test('the line of single words is not drawn when there are none', async () => {
+  vi.spyOn(write, 'breakdown').mockResolvedValue({
+    questions: [],
+    proposals: [{ title: 'Book the van' }],
+  })
+  const drawn = render(<Breakdown task={TASK} onBack={() => {}} />)
+
+  await screen.findByText('Book the van')
+  expect(drawn.container.querySelector('.facts')).toBeNull()
 })
