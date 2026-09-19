@@ -288,3 +288,28 @@ func TestAddNestsSubtasksAndListDrawsTheTree(t *testing.T) {
 		t.Fatalf("completing the deepest task exited %d: %s", code, errs)
 	}
 }
+
+// Reopening a deleted Task exits 3 and not 1. store.ErrGone is neither
+// ErrRefused nor ErrHeld, so it reaches the exit code only through
+// store.Refused -- the one list of which errors are the store turning a write
+// away. Reported as a failure instead, it would send somebody looking for a
+// fault in a tracker that was working.
+func TestReopeningADeletedTaskExitsAsARefusal(t *testing.T) {
+	storeInTemp(t)
+	t.Setenv("TODO_ACTOR", "alice")
+	id := added(t, "Buy milk")
+
+	if code, _, errs := run(t, "delete", id); code != 0 {
+		t.Fatalf("todo delete exited %d: %s", code, errs)
+	}
+
+	code, _, errs := run(t, "reopen", id)
+	if code != 3 {
+		t.Errorf("todo reopen on a deleted Task exited %d, want 3: %s", code, errs)
+	}
+	// The store's own sentence, asked for rather than repeated here, so the
+	// terminal and the store cannot drift apart about the same refusal.
+	if !strings.Contains(errs, store.ErrGone.Error()) {
+		t.Errorf("the refusal reads %q, want the store's own %q", errs, store.ErrGone)
+	}
+}
