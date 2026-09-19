@@ -288,7 +288,13 @@ and adds to this list rather than to the plan.
   shows the title, description, why, estimate, priority and impact, unparsed and
   in the Broker's words: a tick over attributes nobody is shown is not a gate,
   and a level none of the three is drawn as the word that was used for the store
-  to refuse in its own sentence.
+  to refuse in its own sentence. The description is drawn whole: the two-line
+  clip is the list row's and belongs to a row, which is a way of finding a Task
+  rather than of reading one, so the type is on `.lines` and the clip on the
+  row's own `.lines`. The estimate is labelled alongside the two levels,
+  because `30m` beside `Priority high` reads as much like a deadline as like an
+  estimate. The line holding the three is not drawn at all when the Broker
+  answered none of them.
 - **A deadline is typed, and picked beside being typed.** The box is the field
   and is submitted as typed, which is what keeps a phrase the Broker used from
   being blanked by a control that can hold only what it can parse. The native

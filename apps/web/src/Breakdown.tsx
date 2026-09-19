@@ -188,19 +188,29 @@ export function Breakdown({
 
                   The estimate and the two levels are labelled because they are
                   single words that mean nothing alone — `high` says neither
-                  which attribute it is nor that anybody chose it.
+                  which attribute it is nor that anybody chose it, and `30m` is
+                  as much a deadline as an estimate to anybody reading it cold.
+                  The line holding them is not drawn when the Broker answered
+                  none of the three, the way the description and the why are
+                  not.
                 */}
                 {proposal.description && (
                   <p className="lines">{proposal.description}</p>
                 )}
                 {proposal.why && <p className="marks">{proposal.why}</p>}
-                <p className="facts">
-                  {proposal.estimate && <span>{proposal.estimate}</span>}
-                  {proposal.priority && (
-                    <span>Priority {proposal.priority}</span>
-                  )}
-                  {proposal.impact && <span>Impact {proposal.impact}</span>}
-                </p>
+                {(proposal.estimate ||
+                  proposal.priority ||
+                  proposal.impact) && (
+                  <p className="facts">
+                    {proposal.estimate && (
+                      <span>Estimate {proposal.estimate}</span>
+                    )}
+                    {proposal.priority && (
+                      <span>Priority {proposal.priority}</span>
+                    )}
+                    {proposal.impact && <span>Impact {proposal.impact}</span>}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
