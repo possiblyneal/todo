@@ -73,8 +73,8 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 		Colors:  store.ColorNames(),
 		Snoozes: store.SnoozeNames(),
 
-		Priorities: levels(store.PriorityExamples),
-		Impacts:    levels(store.ImpactExamples),
+		Priorities: levels(store.PriorityOffers()),
+		Impacts:    levels(store.ImpactOffers()),
 	}
 	for _, t := range tasks {
 		out.Tasks = append(out.Tasks, newTask(t))
@@ -196,8 +196,7 @@ type level struct {
 	Example string `json:"example"`
 }
 
-func levels(examples map[store.Level]string) []level {
-	offers := store.LevelOffers(examples)
+func levels(offers []store.LevelOffer) []level {
 	out := make([]level, len(offers))
 	for i, o := range offers {
 		out[i] = level{Name: o.Name, Example: o.Example}
