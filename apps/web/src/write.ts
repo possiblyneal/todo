@@ -326,3 +326,32 @@ export async function dropCollection(kind: Kind, id: string): Promise<void> {
     undefined,
   )
 }
+
+/**
+ * Points a Task at something outside the tracker: a web address, or a path as
+ * the machine running `todo api` would read it. Nothing is uploaded and nothing
+ * is copied -- an Attachment is the text and nothing else, so a pointer typed
+ * on a phone naming a file on that phone points nowhere anybody can follow.
+ */
+export async function attach(id: string, target: string): Promise<void> {
+  await send<{ id: string }>(
+    'POST',
+    `/api/tasks/${encodeURIComponent(id)}/attachments`,
+    { target },
+  )
+}
+
+/**
+ * Takes a pointer off a Task. What it pointed at is not the tracker's to touch,
+ * so nothing else happens.
+ *
+ * The target is in the body rather than the path because it carries its own
+ * slashes, which is the same reason the route takes it there.
+ */
+export async function detach(id: string, target: string): Promise<void> {
+  await send<{ id: string }>(
+    'DELETE',
+    `/api/tasks/${encodeURIComponent(id)}/attachments`,
+    { target },
+  )
+}

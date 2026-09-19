@@ -22,6 +22,8 @@ import {
 } from './state'
 import {
   addSubtask,
+  attach,
+  detach,
   draftOf,
   editTask,
   estimate,
@@ -87,6 +89,28 @@ export function Detail({
       onBack()
     } catch (caught) {
       setRefused(sentence(caught))
+      setWorking(false)
+    }
+  }
+
+  // A pointer added or taken off. Unlike the four verbs, the Task is still here
+  // afterwards and this screen is still the one to be on, so it stays put and
+  // the next poll is what redraws the list.
+  //
+  // It answers whether the write landed, which is what lets the field keep what
+  // was typed through a refusal: nothing was written, so re-tapping is the
+  // right thing to do and retyping the pointer is the whole cost of the feature
+  // on a phone.
+  const point = async (made: Promise<void>) => {
+    setWorking(true)
+    setRefused(null)
+    try {
+      await made
+      return true
+    } catch (caught) {
+      setRefused(sentence(caught))
+      return false
+    } finally {
       setWorking(false)
     }
   }
@@ -168,10 +192,14 @@ export function Detail({
         {Object.entries(task.fields ?? {}).map(([name, value]) => (
           <Carried key={name} name={name} value={value} />
         ))}
-        {(task.attachments ?? []).map((pointer) => (
-          <Carried key={pointer} name="Attachment" value={pointer} />
-        ))}
       </dl>
+
+      <Attachments
+        on={task.attachments ?? []}
+        working={working}
+        onAttach={(target) => point(attach(task.id, target))}
+        onDetach={(target) => point(detach(task.id, target))}
+      />
 
       {/*
         The four are buttons whatever state the Task is in. Which of them the
@@ -240,4 +268,76 @@ function named(ids: string[] | undefined, all: Collection[]): string {
   return (ids ?? [])
     .map((id) => all.find((one) => one.id === id)?.name ?? id)
     .join(', ')
+}
+
+/**
+ * The pointers a Task holds, each with the tap that takes it off, and the row
+ * that adds one.
+ *
+ * An Attachment is text and nothing else: nothing is uploaded here and nothing
+ * is fetched, so a pointer naming a file names it on the machine `todo api`
+ * runs on rather than on the phone it was typed into.
+ */
+function Attachments({
+  on,
+  working,
+  onAttach,
+  onDetach,
+}: {
+  on: string[]
+  working: boolean
+  /** Answers whether the write landed, which is what clears the field. */
+  onAttach: (target: string) => Promise<boolean>
+  onDetach: (target: string) => void
+}) {
+  const [target, setTarget] = useState('')
+
+  return (
+    <>
+      <h2 className="heading">Attachments</h2>
+      {on.length === 0 && <p className="message">None.</p>}
+      <ul className="list">
+        {on.map((pointer) => (
+          <li className="row" key={pointer}>
+            {/*
+              A web address is followable and a path is not, so the pointer is
+              drawn as text either way rather than as a link this screen decides
+              the shape of. The store never looked at what one names and neither
+              does this.
+            */}
+            <span>{pointer}</span>
+            <button
+              type="button"
+              disabled={working}
+              onClick={() => onDetach(pointer)}
+            >
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="row">
+        <input
+          className="control"
+          aria-label="New attachment"
+          placeholder="https://… or /a/path"
+          value={target}
+          onChange={(event) => setTarget(event.target.value)}
+        />
+        <button
+          type="button"
+          disabled={working || target.trim() === ''}
+          onClick={async () => {
+            // Cleared on the write landing and not before. A refusal wrote
+            // nothing, so the pointer has to still be here to tap again;
+            // clearing it either way would make a refused attach cost the
+            // whole target retyped, and disable the button that retries.
+            if (await onAttach(target)) setTarget('')
+          }}
+        >
+          Attach
+        </button>
+      </div>
+    </>
+  )
 }

@@ -62,8 +62,8 @@ and adds to this list rather than to the plan.
 - `src/Breakdown.tsx` — the breakdown screen: the turn with the Broker, the
   questions it still has, and the proposals ticked by position.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
-  Subtasks, its Series, its breakdown, the four lifecycle verbs, and its
-  history.
+  Subtasks, its Series, its breakdown, the four lifecycle verbs, its pointers
+  added and taken off, and its history.
 - `src/Collections.tsx` — the collections screen: the Lists and the Tags
   created, renamed, recolored and deleted. Both sets are drawn by one component
   given the path segment, because a List and a Tag are the same three writes.
@@ -73,11 +73,12 @@ and adds to this list rather than to the plan.
   their log through it.
 - `src/App.tsx` — the box above the list, and which screen is open. It draws what the read returned and works nothing out for itself.
 - `src/main.tsx` — the mount, and nothing else.
-- `src/Sheet.test.tsx`, `src/Narrow.test.tsx`, `src/Collections.test.tsx` — the
-  three components with a grammar: what a pick turns into on the wire, what a
-  picker does with a value it cannot name, and which kind a collection write
-  goes out under. The other components are drawn from what they are handed, so
-  there is nothing in them a test would pin that reading them does not.
+- `src/Sheet.test.tsx`, `src/Narrow.test.tsx`, `src/Collections.test.tsx`,
+  `src/Detail.test.tsx` — the four components with a grammar: what a pick turns
+  into on the wire, what a picker does with a value it cannot name, which kind a
+  collection write goes out under, and whether the field holding a pointer is
+  cleared. The other components are drawn from what they are handed, so there is
+  nothing in them a test would pin that reading them does not.
 - `src/index.css` — the whole of the styling. There is no component-level
   stylesheet and no CSS-in-JS, so the 44px rule below is checkable by reading
   one file.
@@ -96,6 +97,27 @@ and adds to this list rather than to the plan.
   two under Verification below are the decision recorded in #49: the sheet's
   snooze and the pickers' unknown-value rule turn a pick into a different thing
   on the wire, and an inversion there is a wrong write nobody sees happen.
+- **An Attachment is text, and this surface uploads nothing.** The detail
+  screen sends the pointer as typed and draws it as text, a web address and a
+  file path alike: nothing is fetched and nothing is copied in, which is the
+  store's decision from issue #3 rather than a limit of the browser. A path is
+  resolved by whoever runs `todo api`, so one typed on a phone names a file on
+  that host and not on the phone.
+- **The detail screen's attachment field is cleared by the write landing, never
+  by the tap.** The pointer typed there survives a refusal, because nothing was
+  written and re-tapping is the right thing to do: clearing it would cost the
+  whole target retyped on a phone and would disable the button that retries,
+  since an empty target cannot be submitted. `point` answers whether the write
+  landed and the field reads that answer.
+- **A pointer taken off is tappable until the next poll, and the second tap is
+  an entry that did not happen.** The screen draws the pointers the read
+  returned, so a landed detach leaves the row for up to a second and a second
+  tap appends a second `attachment_removed` against one pointer removed once.
+  The folded state stays right either way. Nothing here filters the read to hide
+  it: a screen keeping which pointers it thinks are gone would be a second
+  description of the store, which is the thing this client does not do, and the
+  window is bounded by the poll rather than open. The fix belongs in the store,
+  where it would hold for every surface and every Actor; issue #77 is that.
 - **The client works nothing out that the store already did.** `Task.marks` is
   drawn as it arrives; a Task that read as snoozed from a keyboard cannot read
   as plain here.
@@ -206,6 +228,9 @@ and adds to this list rather than to the plan.
   rather than on a row. The blank row empties whether or not the write landed,
   because the refusal is already said in its own words and a name left sitting
   there is a name added twice by whoever read the sentence and tapped again.
+  That is the opposite of the rule the attachment field follows above, and the
+  two screens disagreeing is issue #78 rather than a distinction either one
+  argues for.
   Deleting is one tap, the way the four verbs on a Task are: the Tasks that
   carried the Collection survive it and the Change History says it went.
 - **A narrowing to something the client cannot name is kept on the screen.**
