@@ -11,6 +11,17 @@ export type Collection = {
   count: number
 }
 
+/**
+ * A Collection by name, where the last read named it. An id nothing named
+ * reads as itself rather than dropping out, for the reason the sheet ticks
+ * one: a membership nobody can see is one nobody can take off. Every screen
+ * drawing a filing goes through here, so the three of them cannot disagree
+ * about what an unnamed id looks like.
+ */
+export function nameOf(all: Collection[], id: string): string {
+  return all.find((one) => one.id === id)?.name ?? id
+}
+
 export type Task = {
   id: string
   parent?: string
