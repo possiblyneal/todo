@@ -45,8 +45,8 @@ export type TaskBody = {
    * does not know, so `addTask`, `addSubtask`, `editTask` and `detachEdited`
    * each split them off and attach them one at a time afterwards.
    *
-   * It adds and never removes. A pointer already on the Task is taken off from
-   * the detail screen, which is the only screen that can show what is there.
+   * Nothing here detaches. A pointer already on the Task is taken off from the
+   * detail screen, which is the only screen that can show what is there.
    */
   attachments?: string[]
   intoLists?: string[]
@@ -129,7 +129,10 @@ export async function addTask(body: TaskBody): Promise<string> {
   return written.id
 }
 
-/** Changes a Task's attributes and its memberships together, as one write. */
+/**
+ * Changes a Task's attributes and its memberships together, as one write, and
+ * attaches any pointers after it.
+ */
 export async function editTask(id: string, body: TaskBody): Promise<void> {
   const [change, pointers] = unattached(body)
   await send<{ id: string }>(

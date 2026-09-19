@@ -415,3 +415,26 @@ test('a refused attachment says the task was written', async () => {
   ).rejects.toThrow(/the task was written, and 0 of 2 attachments with it/)
   expect(written).toBe(true)
 })
+
+// A Subtask is the same write with a parent, so it splits them the same way.
+// It has its own test because `Breakdown.test.tsx` mocks `addSubtask` whole,
+// which leaves nothing reaching this path.
+test('an attachment on a subtask is written after the subtask exists', async () => {
+  const calls: string[] = []
+  vi.stubGlobal('fetch', (url: string) => {
+    calls.push(String(url))
+    return Promise.resolve(
+      new Response(JSON.stringify({ id: 'task_kid' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  })
+
+  await addSubtask('task_abc', { title: 'Sand it', attachments: ['/a'] })
+
+  expect(calls).toEqual([
+    '/api/tasks/task_abc/subtasks',
+    '/api/tasks/task_kid/attachments',
+  ])
+})
