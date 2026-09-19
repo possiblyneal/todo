@@ -25,13 +25,26 @@ export function drawKey(count: number, random: () => number): number {
 }
 
 /**
+ * The keys drawn so far, by Collection id, for as long as the page is loaded.
+ *
+ * It is here rather than inside a component because the lifetime is the page's
+ * and not any one screen's. `Narrow` is unmounted whenever a Task, the
+ * Collections screen or the Activity screen is open, so a draw held in its
+ * state would be thrown away and redrawn on the way back — the reshuffle this
+ * exists to prevent, at the granularity somebody actually navigates at.
+ *
+ * `ranked` takes a map as an argument all the same, so a test draws into one of
+ * its own and this one stays out of it.
+ */
+export const drawnKeys = new Map<string, number>()
+
+/**
  * The Collections in drawn order, keying any that have not been drawn yet.
  *
- * `keys` is carried by the caller and outlives a poll on purpose. The draw is
- * once per Collection rather than once per read: a list re-weighted every
- * second would move between seeing a Tag and reaching it, which is the one way
- * discovery turns into an annoyance. A Tag created while the client is open is
- * keyed the first time it arrives and holds that place afterwards.
+ * The draw is once per Collection rather than once per read: the poll runs
+ * every second, and a list re-weighted that often would move between seeing a
+ * Tag and reaching it. A Tag created while the client is open is keyed the
+ * first time it arrives and holds that place afterwards.
  *
  * `keys` is written to rather than replaced, because what it holds is the
  * order somebody is already looking at.
@@ -41,10 +54,16 @@ export function ranked(
   keys: Map<string, number>,
   random: () => number,
 ): Collection[] {
-  for (const one of all) {
-    if (!keys.has(one.id)) keys.set(one.id, drawKey(one.count, random))
-  }
+  const keyed = all.map((one) => {
+    let key = keys.get(one.id)
+    if (key === undefined) {
+      key = drawKey(one.count, random)
+      keys.set(one.id, key)
+    }
+    return { one, key }
+  })
   // Descending by key, and stably, so two drawing the same key keep the order
   // they were counted in rather than swapping about.
-  return [...all].sort((a, b) => (keys.get(b.id) ?? 0) - (keys.get(a.id) ?? 0))
+  keyed.sort((a, b) => b.key - a.key)
+  return keyed.map((each) => each.one)
 }

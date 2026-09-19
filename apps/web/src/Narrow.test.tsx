@@ -8,6 +8,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { Narrow } from './Narrow'
+import { drawnKeys } from './rank'
 import { OFFERED_NOTHING, WIDE, type Offered } from './state'
 
 afterEach(cleanup)
@@ -104,4 +105,30 @@ test('showing everything again narrows back to the everyday view', () => {
   const onChange = shown({ ...WIDE, all: true })
   fireEvent.click(screen.getByRole('button', { name: 'Everything shown' }))
   expect(onChange).toHaveBeenCalledWith({ ...WIDE, all: false })
+})
+
+// The controls are unmounted whenever another screen is open, and the Tag order
+// has to survive that: somebody who opens a Task and comes back is looking for
+// the Tag where they last saw it. Thirty Tags drawn twice would agree by
+// chance about once in 10^32 reads, so an order that matches is an order that
+// was not redrawn.
+test('the Tag order survives the controls being unmounted', () => {
+  drawnKeys.clear()
+  const many: Offered = {
+    ...OFFERED,
+    tags: Array.from({ length: 30 }, (_, at) => ({
+      id: `t${at}`,
+      name: `tag${at}`,
+      color: 'red',
+      count: at % 5,
+    })),
+  }
+  const order = () => {
+    render(<Narrow narrowing={WIDE} offered={many} onChange={vi.fn()} />)
+    const picker = screen.getByLabelText('Tag') as HTMLSelectElement
+    const values = [...picker.options].map((one) => one.value)
+    cleanup()
+    return values
+  }
+  expect(order()).toEqual(order())
 })
