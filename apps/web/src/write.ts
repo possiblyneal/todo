@@ -235,12 +235,25 @@ export async function mark(
 export type QA = { question: string; answer: string }
 
 /**
+ * One Subtask the Broker proposes. Exactly the six `ai.Proposal` carries in
+ * `apps/todo/src/ai/ai.go` and no more: a proposal is approved on what was
+ * drawn beside its tick, so an attribute this type admits is one the screen
+ * has to draw. `TaskBody` is wider and is what the approval goes out as, and
+ * typing a proposal as one would let a deadline nobody saw be written by a
+ * route that never answers one.
+ */
+export type Proposal = Pick<
+  TaskBody,
+  'title' | 'description' | 'why' | 'estimate' | 'priority' | 'impact'
+>
+
+/**
  * One turn coming back: what the Broker still needs to know, or what it
  * proposes. The two are alternatives.
  */
 export type Step = {
   questions?: string[]
-  proposals: TaskBody[]
+  proposals: Proposal[]
 }
 
 /**

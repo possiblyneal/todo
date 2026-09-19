@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 
 import { sentence } from './api'
 import type { Task } from './state'
-import { addSubtask, breakdown, type QA, type TaskBody } from './write'
+import { addSubtask, breakdown, type Proposal, type QA } from './write'
 
 export function Breakdown({
   task,
@@ -24,7 +24,7 @@ export function Breakdown({
   const [answered, setAnswered] = useState<QA[]>([])
   const [asking, setAsking] = useState<string[]>([])
   const [replies, setReplies] = useState<string[]>([])
-  const [proposals, setProposals] = useState<TaskBody[] | null>(null)
+  const [proposals, setProposals] = useState<Proposal[] | null>(null)
   // Which proposals are approved, by position. Two can come back saying the
   // same thing and only the order tells them apart, so a set of titles would
   // decline both halves of a pair when one was unticked.

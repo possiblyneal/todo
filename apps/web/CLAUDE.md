@@ -67,7 +67,8 @@ and adds to this list rather than to the plan.
 - `src/Series.tsx` — the Series screen: the rule, the dates it produces next,
   and the four things done to one of them. It works out no date of its own.
 - `src/Breakdown.tsx` — the breakdown screen: the turn with the Broker, the
-  questions it still has, and the proposals ticked by position.
+  questions it still has, and the proposals ticked by position, each drawing
+  every attribute its tick would write.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
   Subtasks, its Series, its breakdown, the four lifecycle verbs, its pointers
   added and taken off, and its history.
@@ -274,17 +275,6 @@ and adds to this list rather than to the plan.
   which is what an option or a switch reads: a Collection the store named
   carries the count it worked out, and an id nothing named carries none, because
   a zero there would be this side answering a question the store never answered.
-- **A proposal draws every attribute approving it would write.** `Breakdown.tsx`
-  shows the title, description, why, estimate, priority and impact, unparsed and
-  in the Broker's words: a tick over attributes nobody is shown is not a gate,
-  and a level none of the three is drawn as the word that was used for the store
-  to refuse in its own sentence. The description is drawn whole: the two-line
-  clip is the list row's and belongs to a row, which is a way of finding a Task
-  rather than of reading one, so the type is on `.lines` and the clip on the
-  row's own `.lines`. The estimate is labelled alongside the two levels,
-  because `30m` beside `Priority high` reads as much like a deadline as like an
-  estimate. The line holding the three is not drawn at all when the Broker
-  answered none of them.
 - **A List or a Tag made on the sheet is made then, not on submit.** `Ticks` in
   `Sheet.tsx` posts it, holds the name until the poll answers with it, and ticks
   it. A Collection is an aggregate of its own, so the one made here outlives a
@@ -464,10 +454,19 @@ and adds to this list rather than to the plan.
   the Broker having answered oddly rather than having asked something. Taking
   the questions first would throw the proposals away and ask again for what was
   already proposed.
-- **What the Broker proposed is drawn unparsed.** A proposal arrives in the same
-  body the sheet submits and is written as it came, so an estimate this side
-  cannot read is the API's to refuse in its own words rather than this screen's
-  to drop.
+- **A proposal draws every attribute approving it would write, unparsed.**
+  `Breakdown.tsx` shows the title, description, why, estimate, priority and
+  impact, which are the six `Proposal` admits and the six `ai.Proposal`
+  carries: a tick over an attribute nobody was shown is not a gate, so the
+  type is narrowed from `TaskBody` rather than left wide and trusted. A level
+  that is none of the three is drawn as the word the Broker used, and the
+  store refuses it in its own sentence rather than this screen dropping it.
+  The description is drawn whole: the two-line clip is the list row's, a row
+  being a way of finding a Task rather than of reading one, so the type is on
+  `.lines` and the clip on the row's own. The estimate is labelled alongside
+  the two levels, because `30m` beside `Priority high` reads as much like a
+  deadline as like an estimate; the line holding the three is not drawn at all
+  when the Broker answered none of them.
 - **The Tags are ranked for discovery, and the draw is once per Tag.**
   Efraimidis-Spirakis weighted sampling over `count + 1`, so a Tag carried
   twice usually sits above one carried once and sometimes sits below it. The
