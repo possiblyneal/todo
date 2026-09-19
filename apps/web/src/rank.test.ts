@@ -48,12 +48,15 @@ test('a second read does not draw again', () => {
 })
 
 // A Tag made while the client is open has no key yet, and gets one then rather
-// than being left unranked at whichever end the sort happens to put it.
-test('a Tag arriving later is keyed when it arrives', () => {
+// than being left unranked at whichever end the sort happens to put it. The
+// draws are picked so the later Tag outranks the earlier one: a key the second
+// read handed out but did not rank by would leave the order the other way
+// round.
+test('a Tag arriving later is keyed and ranked by that key', () => {
   const keys = new Map<string, number>()
   ranked([tag('old', 1)], keys, feeding(0.5))
-  ranked([tag('old', 1), tag('new', 1)], keys, feeding(0.7))
-  expect(keys.has('new')).toBe(true)
+  const order = ranked([tag('old', 1), tag('new', 1)], keys, feeding(0.7))
+  expect(order.map((one) => one.id)).toEqual(['new', 'old'])
 })
 
 test('the ranking returns every Collection it was given', () => {
