@@ -183,3 +183,12 @@ func ColorLabels() string {
 func SnoozeLabels() string {
 	return strings.Join(store.SnoozeNames(), ", ")
 }
+
+// LevelLabels names the three, for the reason ColorLabels names the nine: a
+// flag spelling them out itself offers a fourth the day one is added to the
+// store and not to the flag. The examples beside them are not in here — three
+// sentences is a wall in a flag's help — so a surface that has room for them
+// reads them off GET /api/state, which is where they are served.
+func LevelLabels() string {
+	return strings.Join(store.LevelNames(), ", ")
+}
