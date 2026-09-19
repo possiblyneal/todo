@@ -157,12 +157,14 @@ export function App() {
 
       <div className="pane middle">
         {/*
-        The box is above the list rather than behind a tap, because a dump is
-        the most frequent thing anybody does here and nothing should be stacked
-        in front of it. The Lists and Tags it offers on the add sheet are the
-        ones the last read named; before the first one there are none to offer
-        and the sheet shows none.
-      */}
+          The box is above the list rather than behind a tap, because a dump is
+          the most frequent thing anybody does here and nothing should be
+          stacked in front of it. On a phone that is `index.css` ordering this
+          pane's children into the one column ahead of the filtering, since the
+          panes as written would put the filtering first. The Lists and Tags it
+          offers on the add sheet are the ones the last read named; before the
+          first one there are none to offer and the sheet shows none.
+        */}
         <Box
           offered={state ?? OFFERED_NOTHING}
           // A question is asked about the Tasks the list asked for, under the
@@ -171,20 +173,20 @@ export function App() {
           narrowing={narrowing}
         />
         {/*
-        The box the list is searched in sits over the Tasks and not among the
-        filtering: it is about what is under it, which is the same thing on a
-        phone and in the middle pane at a desk.
-      */}
+          The box the list is searched in sits over the Tasks and not among the
+          filtering: it is about what is under it, which is the same thing on a
+          phone and in the middle pane at a desk.
+        */}
         <Search
           value={narrowing.search}
           onChange={(search) => setNarrowing({ ...narrowing, search })}
         />
         {/*
-        An error sits over the list rather than replacing it. A poll that
-        failed says nothing about the Tasks already on the screen, and a phone
-        that walked out of range should not have its list taken away while it
-        walks back.
-      */}
+          An error sits over the list rather than replacing it. A poll that
+          failed says nothing about the Tasks already on the screen, and a
+          phone that walked out of range should not have its list taken away
+          while it walks back.
+        */}
         {error && <p className="message">{error}</p>}
         {!state && !error && <p className="message">Reading the list…</p>}
         {state && state.tasks.length === 0 && (
@@ -237,10 +239,12 @@ export function App() {
         this is drawn at: beside the list at a desk and instead of it on a
         phone, decided in `index.css` rather than by anything measured here.
 
-        A Task the read no longer names is a Task that went away while it was
-        selected, which is what deleting one from another surface looks like
-        from here. The pane says so rather than disappearing, because the tap
-        that selected it was somebody's and the list is unchanged.
+        A Task the read no longer names is a Task that went out of the list
+        while it was selected: deleted from another surface, or narrowed out
+        by a filter changed on this one. The pane says so rather than
+        disappearing, because the tap that selected it was somebody's, and the
+        sentence says the list rather than the tracker because which of the two
+        it was is not something this surface knows.
       */}
       {selected && state && (
         <div className="pane opened">

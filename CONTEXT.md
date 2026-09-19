@@ -47,7 +47,7 @@ A Collection a Task belongs to, standing for where the work sits: a house move, 
 _Avoid_: Project, folder, category, bucket
 
 **Tag**:
-A named label a Task carries. It has an identity of its own rather than being the text typed on a Task — it can be renamed or recolored once, and counted across the tracker.
+A Collection a Task carries as a label, standing for what the work is about rather than where it sits. It has an identity of its own rather than being the text typed on a Task — it can be renamed or recolored once, and counted across the tracker.
 _Avoid_: Keyword, label, topic
 
 **Color**:
@@ -63,7 +63,7 @@ A pointer held on a Task to something living outside the tracker — a file path
 _Avoid_: File, upload, document
 
 **Narrowing**:
-What one read of the Tasks asks for: which List, which Tags, what text to match, what order to come back in, and whether the snoozed and the ended are in. It describes a question and never a result, nothing stores one, and every Task that comes back came back because the store answered it — no surface sifts a list it was given. Naming a second Tag widens it rather than narrowing twice: a Task carrying any one of the named Tags is in the read.
+What one read of the Tasks asks for: which List, which Tags, what text to match, what order to come back in, and whether the snoozed and the ended are in. It describes a question and never a result, nothing stores one, and every Task that comes back came back because the store answered it — a surface narrows by asking for a narrower list rather than by keeping a filter of its own over the one it has. Naming a second Tag widens it rather than narrowing twice: a Task carrying any one of the named Tags is in the read.
 _Avoid_: Filter, query, view, search
 
 **Overdue**:

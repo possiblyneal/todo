@@ -96,8 +96,9 @@ and adds to this list rather than to the plan.
   with a value it cannot name and whether its Tag order survives an unmount,
   which kind a collection write goes out under, whether the field holding a
   pointer is cleared and what the picker off the host puts in it, that a
-  selected Task and the list it was selected from are drawn from one tree, and
-  what a row does with a name nothing named and an instant it cannot read. The
+  selected Task and the list it was selected from are drawn from one tree and
+  that the search box over the list goes back to the store, and what a row does
+  with a name nothing named and an instant it cannot read. The
   other components are drawn from what they are handed, so there is nothing in
   them a test would pin that reading them does not.
 - `src/log.test.ts`, `src/state.test.ts`, `src/write.test.ts`,
@@ -105,10 +106,12 @@ and adds to this list rather than to the plan.
   how an Actor splits, what a Narrowing becomes as a query, what a write sends,
   and what the draw does to the Tag order. A module that only holds types or
   calls `fetch` has nothing to pin and is not listed.
-- `src/index.css` — the whole of the styling, including the one media query
-  there is and therefore the whole of what decides whether this is three panes
-  or one column. There is no component-level stylesheet and no CSS-in-JS, so
-  the 44px rule below is checkable by reading one file.
+- `src/index.css` — the whole of the styling, including both media queries and
+  therefore the whole of what decides whether this is three panes or one
+  column. The phone query orders the one column and hides it behind a selected
+  Task; the desk query is what makes the panes columns. There is no
+  component-level stylesheet and no CSS-in-JS, so the 44px rule below is
+  checkable by reading one file.
 - `index.html`, `vite.config.ts`, `tsconfig.json`, `eslint.config.js` — the
   build. The dev server proxies `/api` so development has the one origin
   production has.
@@ -564,8 +567,11 @@ and adds to this list rather than to the plan.
 - **Three panes at a desk, one column on a phone, and one component tree for
   both.** `index.css` is the whole of the difference: nothing measures a width
   here, and the same elements are rendered at every size. The panes are the
-  filtering, the Tasks with the search box over them, and the Task that is
-  selected. Activity and the collections screen are not panes — they are what is
+  filtering, the middle one holding `Box` with the search box and the Tasks
+  under it, and the Task that is selected. The panes are written filtering
+  first because that is the desk order; on a phone the middle pane stops being
+  a box of its own so the column can put `Box` ahead of the filtering, which is
+  where the front door belongs. Activity and the collections screen are not panes — they are what is
   on the screen instead of the three, at every width.
 - **Selecting a Task and opening it are one state.** A tap sets the screen to
   that Task, and the layout decides whether its pane sits beside the list or

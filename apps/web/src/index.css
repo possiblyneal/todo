@@ -392,10 +392,33 @@ button.row {
 
 /* On a phone the selected Task is shown instead of the list rather than beside
    it: a third of a phone is not a pane. `Detail`'s own Back is what clears the
-   selection, which is the same button at both widths. */
+   selection, which is the same button at both widths.
+
+   One column puts the panes in the order they are written, which would stack
+   the filtering in front of the box. The box is the front door and a dump is
+   the most frequent thing anybody does here, so the middle pane gives up being
+   a box of its own and the column orders its children directly: the box, then
+   the filtering, then the list the filtering is about. At a desk the panes are
+   columns and none of this applies. */
 @media (max-width: 59.99rem) {
+  .panes > .middle {
+    display: contents;
+  }
+
+  .panes > .filters {
+    order: 1;
+  }
+
+  .panes > .middle > * {
+    order: 2;
+  }
+
+  .panes > .middle > .box {
+    order: 0;
+  }
+
   .panes.showing > .filters,
-  .panes.showing > .middle {
+  .panes.showing > .middle > * {
     display: none;
   }
 }

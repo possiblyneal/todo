@@ -57,3 +57,23 @@ test('a selected Task is drawn beside the list it was selected from', async () =
   ).toBeDefined()
   expect(screen.getByRole('button', { name: /Move house/ })).toBeDefined()
 })
+
+test('typing in the search box asks the store for the narrower list', async () => {
+  render(<App />)
+  await screen.findByRole('button', { name: /Move house/ })
+
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search' }), {
+    target: { value: 'house' },
+  })
+
+  // The narrowing goes back to the store rather than sifting what is already
+  // on the screen, which is what makes the box over the list a read and not a
+  // filter this surface keeps.
+  await vi.waitFor(() => {
+    expect(
+      vi
+        .mocked(state.fetchState)
+        .mock.calls.some(([narrowing]) => narrowing.search === 'house'),
+    ).toBe(true)
+  })
+})
