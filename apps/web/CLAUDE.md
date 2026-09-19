@@ -65,9 +65,10 @@ and adds to this list rather than to the plan.
   the Tags are switches, because one is picked one at a time and the other is a
   set.
 - `src/Row.tsx` — one row of the list: what the Task is called, two lines of
-  what it says, when it arrived, when it is due, what it is filed under,
+  what it says, when it was created, its Deadline, the Lists it is filed under,
   whether it points anywhere, the tap that opens it, and the press held that
-  puts the four verbs under it.
+  puts the four verbs under it. The Tags are not on it: they are the split down
+  the side of the list, which is where a Tag is reached.
 - `src/Series.tsx` — the Series screen: the rule, the dates it produces next,
   and the four things done to one of them. It works out no date of its own.
 - `src/Breakdown.tsx` — the breakdown screen: the turn with the Broker, the
@@ -88,13 +89,15 @@ and adds to this list rather than to the plan.
 - `src/main.tsx` — the mount, and nothing else.
 - `src/rank.test.ts`, `src/Sheet.test.tsx`, `src/Breakdown.test.tsx`,
   `src/Narrow.test.tsx`, `src/Collections.test.tsx`, `src/Detail.test.tsx`,
-  `src/App.test.tsx` — the ranking's draw, and the components with a grammar:
-  what a pick turns into on the wire, what a proposal draws before it is
-  approved, what a picker does with a value it cannot name, which kind a
-  collection write goes out under, whether the field holding a pointer is
-  cleared, and that a selected Task and the list it was selected from are drawn
-  from one tree. The other components are drawn from what they are handed, so
-  there is nothing in them a test would pin that reading them does not.
+  `src/App.test.tsx`, `src/Row.test.tsx` — the ranking's draw, and the
+  components with a grammar: what a pick turns into on the wire, what a
+  proposal draws before it is approved, what a picker does with a value it
+  cannot name, which kind a collection write goes out under, whether the field
+  holding a pointer is cleared, that a selected Task and the list it was
+  selected from are drawn from one tree, and what a row does with a name
+  nothing named and an instant it cannot read. The other components are drawn
+  from what they are handed, so there is nothing in them a test would pin that
+  reading them does not.
 - `src/index.css` — the whole of the styling, including the one media query
   there is and therefore the whole of what decides whether this is three panes
   or one column. There is no component-level stylesheet and no CSS-in-JS, so
@@ -476,10 +479,17 @@ and adds to this list rather than to the plan.
   in `index.css` is what clips it. A truncation computed in the component would
   be guessing at a width it cannot see, and would guess wrong on every screen
   but the one it was written against.
-- **A date is drawn as the day it falls on where the reader is, or as it
-  came.** `Row.tsx` formats through `toLocaleDateString`, and a string no date
-  can be read out of is drawn verbatim — the same rule the pickers follow for a
-  value they cannot name.
+- **A date on a row is drawn as the day it falls on where the reader is, or as
+  it came.** `Row.tsx` formats through `toLocaleDateString`, and a string no
+  date can be read out of is drawn verbatim — the same rule the pickers follow
+  for a value they cannot name. It is the row's rule and not yet the surface's:
+  `Detail.tsx` still draws `createdAt` and `deadline` as the wire sent them,
+  which is issue #79 rather than a distinction either screen argues for.
+- **A filing is drawn by `state.nameOf`, and keyed on the id.** One lookup for
+  the three screens that draw one, so they cannot disagree about what an id
+  nothing named looks like. The spans are keyed on the id because nothing makes
+  a List name unique and the fallback is the id itself, so a name is not unique
+  twice over.
 - **Three panes at a desk, one column on a phone, and one component tree for
   both.** `index.css` is the whole of the difference: nothing measures a width
   here, and the same elements are rendered at every size. The panes are the
