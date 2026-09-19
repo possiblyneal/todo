@@ -44,18 +44,25 @@ body {
   white-space: nowrap;
 }
 
-/* Two lines of the description and then clipped. `line-clamp` is what does it;
-   the `-webkit-` pair beside it is the same property under the name every
-   browser still requires to honour it. */
+/* What a Task says, in smaller and dimmer type than its title. */
 .lines {
+  overflow-wrap: anywhere;
+  opacity: 0.75;
+  font-size: 0.85rem;
+}
+
+/* Two lines of it and then clipped, in a row and nowhere else: a row is a way
+   of finding the Task rather than of reading it, and the whole of it is a tap
+   away. Everywhere else the words are there to be read before something is
+   decided on them, and half of a description is worse than none.
+   `line-clamp` is what clips it; the `-webkit-` pair beside it is the same
+   property under the name every browser still requires to honour it. */
+button.row .lines {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   line-clamp: 2;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  overflow-wrap: anywhere;
-  opacity: 0.75;
-  font-size: 0.85rem;
 }
 
 /* When it was created, its Deadline, the Lists it is filed under, and the

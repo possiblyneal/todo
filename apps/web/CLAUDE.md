@@ -67,7 +67,8 @@ and adds to this list rather than to the plan.
 - `src/Series.tsx` — the Series screen: the rule, the dates it produces next,
   and the four things done to one of them. It works out no date of its own.
 - `src/Breakdown.tsx` — the breakdown screen: the turn with the Broker, the
-  questions it still has, and the proposals ticked by position.
+  questions it still has, and the proposals ticked by position, each drawing
+  every attribute its tick would write.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
   Subtasks, its Series, its breakdown, the four lifecycle verbs, its pointers
   added and taken off, and its history.
@@ -80,10 +81,11 @@ and adds to this list rather than to the plan.
   their log through it.
 - `src/App.tsx` — the box above the list, and which screen is open. It draws what the read returned and works nothing out for itself.
 - `src/main.tsx` — the mount, and nothing else.
-- `src/Sheet.test.tsx`, `src/Narrow.test.tsx`, `src/Collections.test.tsx`,
-  `src/Detail.test.tsx`, `src/Row.test.tsx` — the five components with a
-  grammar: what a pick turns into on the wire, what a picker does with a value
-  it cannot name and whether its Tag order survives an unmount, which kind a
+- `src/Sheet.test.tsx`, `src/Breakdown.test.tsx`, `src/Narrow.test.tsx`,
+  `src/Collections.test.tsx`, `src/Detail.test.tsx`, `src/Row.test.tsx` — the
+  six components with a grammar: what a pick turns into on the wire, what a
+  proposal draws before it is approved, what a picker does with a value it
+  cannot name and whether its Tag order survives an unmount, which kind a
   collection write goes out under, whether the field holding a pointer is
   cleared, and what a row does with a name nothing named and an instant it
   cannot read. The other components are drawn from what they are handed, so
@@ -457,10 +459,19 @@ and adds to this list rather than to the plan.
   the Broker having answered oddly rather than having asked something. Taking
   the questions first would throw the proposals away and ask again for what was
   already proposed.
-- **What the Broker proposed is drawn unparsed.** A proposal arrives in the same
-  body the sheet submits and is written as it came, so an estimate this side
-  cannot read is the API's to refuse in its own words rather than this screen's
-  to drop.
+- **A proposal draws every attribute approving it would write, unparsed.**
+  `Breakdown.tsx` shows the title, description, why, estimate, priority and
+  impact, which are the six `Proposal` admits and the six `ai.Proposal`
+  carries: a tick over an attribute nobody was shown is not a gate, so the
+  type is narrowed from `TaskBody` rather than left wide and trusted. A level
+  that is none of the three is drawn as the word the Broker used, and the
+  store refuses it in its own sentence rather than this screen dropping it.
+  The description is drawn whole: the two-line clip is the list row's, a row
+  being a way of finding a Task rather than of reading one, so the type is on
+  `.lines` and the clip on the row's own. The estimate is labelled alongside
+  the two levels, because `30m` beside `Priority high` reads as much like a
+  deadline as like an estimate; the line holding the three is not drawn at all
+  when the Broker answered none of them.
 - **The Tags are ranked for discovery, and the draw is once per Tag.**
   Efraimidis-Spirakis weighted sampling over `count + 1`, so a Tag carried
   twice usually sits above one carried once and sometimes sits below it. The

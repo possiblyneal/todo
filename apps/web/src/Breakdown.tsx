@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 
 import { sentence } from './api'
 import type { Task } from './state'
-import { addSubtask, breakdown, type QA, type TaskBody } from './write'
+import { addSubtask, breakdown, type Proposal, type QA } from './write'
 
 export function Breakdown({
   task,
@@ -24,7 +24,7 @@ export function Breakdown({
   const [answered, setAnswered] = useState<QA[]>([])
   const [asking, setAsking] = useState<string[]>([])
   const [replies, setReplies] = useState<string[]>([])
-  const [proposals, setProposals] = useState<TaskBody[] | null>(null)
+  const [proposals, setProposals] = useState<Proposal[] | null>(null)
   // Which proposals are approved, by position. Two can come back saying the
   // same thing and only the order tells them apart, so a set of titles would
   // decline both halves of a pair when one was unticked.
@@ -179,13 +179,37 @@ export function Breakdown({
                   <span>{proposal.title}</span>
                 </label>
                 {/*
-                  What the Broker said about it, in its own words and unparsed,
-                  because a proposal is approved on what it says rather than on
-                  what this side could make of it.
+                  Everything the tick beside it would write, in the Broker's own
+                  words and unparsed: a proposal is approved on what it says
+                  rather than on what this side could make of it, and a gate
+                  over attributes nobody is shown is not a gate. A priority that
+                  is none of the three is drawn as the word that was used; the
+                  store is what refuses it, and says so in its own sentence.
+
+                  The estimate and the two levels are labelled because they are
+                  single words that mean nothing alone — `high` says neither
+                  which attribute it is nor that anybody chose it, and `30m` is
+                  as much a deadline as an estimate to anybody reading it cold.
+                  The line holding them is not drawn when the Broker answered
+                  none of the three, the way the description and the why are
+                  not.
                 */}
+                {proposal.description && (
+                  <p className="lines">{proposal.description}</p>
+                )}
                 {proposal.why && <p className="marks">{proposal.why}</p>}
-                {proposal.estimate && (
-                  <p className="marks">{proposal.estimate}</p>
+                {(proposal.estimate ||
+                  proposal.priority ||
+                  proposal.impact) && (
+                  <p className="facts">
+                    {proposal.estimate && (
+                      <span>Estimate {proposal.estimate}</span>
+                    )}
+                    {proposal.priority && (
+                      <span>Priority {proposal.priority}</span>
+                    )}
+                    {proposal.impact && <span>Impact {proposal.impact}</span>}
+                  </p>
                 )}
               </li>
             ))}
