@@ -529,10 +529,10 @@ function Machine({ onPick }: { onPick: (path: string) => void }) {
         </button>
       )}
       {files.entries.map((one) => {
-        // The separator the host uses is the one in the path it answered, and
-        // every path it answers is absolute, so this is a join rather than a
-        // guess: `todo api` is a Unix service and the route is the only thing
-        // that names a directory here.
+        // `todo api` is a Unix service, so a join on `/` is the separator its
+        // paths are spelled with rather than a guess at the host's; every path
+        // the route answers is absolute, and the route is the only thing that
+        // names a directory here.
         const path = `${files.path}/${one.name}`
         return (
           <button
