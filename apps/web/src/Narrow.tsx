@@ -84,15 +84,15 @@ export function Narrow({
       />
 
       {/*
-        One button and not four. `?all=true` takes in the snoozed, the
-        completed, the declined and the deleted together, and offering four
-        switches over a route with one flag would be this side inventing a
-        distinction the store does not make.
+        One button and not three. `?all=true` takes in the snoozed, the
+        completed and the declined together, and offering three switches over a
+        route with one flag would be this side inventing a distinction the
+        store does not make.
 
-        It says everything rather than ended for the same reason: a deletion is
-        not an ending, and a Task somebody deleted turning up under a button
-        that promised the finished ones would be the label lying about what it
-        did.
+        It says everything rather than ended because a snoozed Task has not
+        ended. What it does not take in is the deleted: a Task that should not
+        have been there is not among the three, and it is reached at the entry
+        that deleted it on the activity screen rather than offered back here.
 
         It is what puts a Task that is no longer in the everyday read back
         within reach: reopen is offered on every Task, but a completed one is

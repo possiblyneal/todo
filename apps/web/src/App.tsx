@@ -140,6 +140,7 @@ export function App() {
     return (
       <Activity
         tasks={state?.tasks ?? []}
+        offered={state ?? OFFERED_NOTHING}
         revision={etag}
         onBack={() => setScreen({ name: 'list' })}
       />

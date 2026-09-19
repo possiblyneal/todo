@@ -75,6 +75,8 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 
 		Priorities: levels(store.PriorityOffers()),
 		Impacts:    levels(store.ImpactOffers()),
+
+		Opens: store.OnTasks(),
 	}
 	for _, t := range tasks {
 		out.Tasks = append(out.Tasks, newTask(t))
@@ -120,8 +122,14 @@ func query(r *http.Request) store.Query {
 		IncludeCompleted: all,
 		IncludeDeclined:  all,
 		IncludeSnoozed:   all,
-		IncludeDeleted:   all,
-		List:             r.URL.Query().Get("list"),
+		// Three and not four. A snoozed, a completed and a declined Task were
+		// all meant to be there, and `?all=true` is how somebody looks at the
+		// ones the everyday read puts aside. A deleted Task should not have
+		// been there at all, so a read that offered it back would be putting
+		// it among the three it is least like. It is read at the entry that
+		// deleted it instead -- `GET /api/tasks/{id}/at/{seq}` -- which is
+		// also where what it said is still written down.
+		List: r.URL.Query().Get("list"),
 		// Repeated rather than separated: `?tag=a&tag=b` is what a set of
 		// values looks like in a query string, and reading it this way means
 		// no separator this side invented and no tag id that cannot hold one.
@@ -188,6 +196,14 @@ type stateBody struct {
 	// keeps none of that.
 	Priorities []level `json:"priorities"`
 	Impacts    []level `json:"impacts"`
+
+	// Opens is store.OnTasks: the kinds of entry whose subject is a Task, and
+	// so the ones `GET /api/tasks/{id}/at/{seq}` can answer for. A log drawn
+	// with a tap on each row needs to know which rows have somewhere to go,
+	// and the alternative is a second copy of the kinds on every surface that
+	// draws one -- wrong from the day a kind is added here until each is
+	// caught up.
+	Opens []string `json:"opens"`
 }
 
 // level is one of the three as a client reads it.

@@ -136,7 +136,7 @@ func (t *tagIDs) Set(value string) error {
 
 func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	fs := flags("list", stderr)
-	all := fs.Bool("all", false, "include completed, declined, snoozed and deleted tasks")
+	all := fs.Bool("all", false, "include completed, declined and snoozed tasks")
 	in := fs.String("list", "", "only the tasks in this list, by id")
 	var tags tagIDs
 	fs.Var(&tags, "tag", "only the tasks carrying this tag, by id; repeat for any of several")
@@ -150,7 +150,6 @@ func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 		IncludeCompleted: *all,
 		IncludeDeclined:  *all,
 		IncludeSnoozed:   *all,
-		IncludeDeleted:   *all,
 		List:             *in,
 		Tags:             tags,
 		Search:           *search,

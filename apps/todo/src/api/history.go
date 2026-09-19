@@ -2,8 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 
 	"github.com/possiblyneal/todo/apps/todo/src/store"
 )
@@ -56,15 +59,47 @@ func taskHistory(s *store.Store, w http.ResponseWriter, r *http.Request) {
 	send(w, http.StatusOK, newHistory(entries))
 }
 
+// taskAsOf is GET /api/tasks/{id}/at/{seq}: the Task as it stood when that
+// entry was appended, which is how a deleted Task is looked at now that no
+// list read offers one. It is not only for a deletion: any entry answers, so
+// "what did this say before that edit" is a question with an answer.
+//
+// The replay is the store's, through the store's own triggers. Nothing here
+// knows what a kind does to a Task.
+func taskAsOf(s *store.Store, w http.ResponseWriter, r *http.Request) {
+	asked := r.PathValue("seq")
+	seq, err := strconv.ParseInt(asked, 10, 64)
+	if err != nil || seq < 1 {
+		fail(w, usage{fmt.Errorf("cannot read %q as a position in the Change History: want a whole number of at least 1", asked)})
+		return
+	}
+	was, err := s.TaskAsOf(r.PathValue("id"), seq)
+	switch {
+	case errors.Is(err, store.ErrAbsent):
+		fail(w, missing{err})
+		return
+	case err != nil:
+		fail(w, err)
+		return
+	}
+	send(w, http.StatusOK, newTask(was))
+}
+
 // history is GET /api/history: the same rows across every Task, newest first
 // and bounded to a page, which is what the activity screen reads.
+//
+// `?search=` narrows the whole log rather than the page, which is why it is a
+// parameter here and not something the screen does to what it already holds: a
+// screen reaches further back by asking for more, so a match it made itself
+// could only find what had already arrived. It is the store that matches, the
+// same way it is the store that matches the search over the list.
 func history(s *store.Store, w http.ResponseWriter, r *http.Request) {
 	limit, err := page(r, "entries", historyPage, historyLimit)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	entries, err := s.LatestHistory(limit)
+	entries, err := s.LatestHistory(limit, r.URL.Query().Get("search"))
 	if err != nil {
 		fail(w, err)
 		return

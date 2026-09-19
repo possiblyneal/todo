@@ -37,6 +37,9 @@ import (
 // There is no Lease Expired. Expiry is a condition that becomes true on its
 // own and is read as the clause expires_at > now; breaking is something a
 // writer did, so it is recorded.
+// Every kind the log holds. A kind added here is added to OnTasks below as
+// well, or deliberately left out of it: that set is what says whether an entry
+// names a Task, and a surface reads it rather than deciding for itself.
 const (
 	KindTaskAdded     = "task_added"
 	KindTaskDescribed = "task_described"
@@ -71,6 +74,44 @@ const (
 	KindOccurrenceSkipped  = "occurrence_skipped"
 	KindOccurrenceDetached = "occurrence_detached"
 )
+
+// OnTasks is every kind whose subject is a Task id, which is what makes an
+// entry one a Task can be read at. The rest carry a Collection or a Series
+// instead: a List Created names the List, and looking a Task up by that id
+// would find none.
+//
+// The eight left out are KindListCreated, KindListDescribed, KindListDeleted,
+// KindTagCreated, KindTagDescribed and KindTagDeleted, each naming the
+// Collection, and KindSeriesCreated and KindSeriesEdited, naming the Series.
+// They are named here so that "deliberately left out" is something a reader
+// can check rather than take on trust.
+//
+// It is here rather than worked out by whoever draws a log, for the reason
+// Sorts and Colors are: a kind added to this package appears wherever the set
+// is served the day it is appended, and a surface keeping its own copy would
+// be wrong until somebody noticed.
+func OnTasks() []string {
+	return []string{
+		KindTaskAdded,
+		KindTaskDescribed,
+		KindTaskCompleted,
+		KindTaskDeclined,
+		KindTaskReopened,
+		KindTaskDeleted,
+		KindTaskListed,
+		KindTaskUnlisted,
+		KindTagAttached,
+		KindTagDetached,
+		KindAttachmentAdded,
+		KindAttachmentRemoved,
+		KindOccurrenceTicked,
+		KindOccurrenceSkipped,
+		KindOccurrenceDetached,
+		KindLeaseTaken,
+		KindLeaseReleased,
+		KindLeaseBroken,
+	}
+}
 
 // ErrRefused is a write with no unexpired Lease held by the writing Actor on
 // the target's top-level root. The store refused it; nothing was applied.
@@ -1457,11 +1498,28 @@ func (s *Store) HistoryOf(subject string) ([]Entry, error) {
 //
 // A limit of zero or less is no entries rather than all of them, so a caller
 // that forgot to say how many gets nothing rather than the whole log.
-func (s *Store) LatestHistory(limit int) ([]Entry, error) {
+//
+// Search narrows before the limit does, which is the whole reason it is here
+// and not on the surface. A screen reaches further back by asking for more
+// entries, so a screen that matched the page it already held could only find
+// what was recent enough to have arrived; a Task deleted a month ago is exactly
+// the thing somebody comes to this log to find. It matches an entry's payload,
+// which is where a Task's own words are, and its subject, which is the id a
+// Task is known by elsewhere on the screen. Empty matches everything.
+//
+// The comparison is the one Query.Search uses, for the same reason: somebody
+// searching for `50%` means the characters.
+func (s *Store) LatestHistory(limit int, search string) ([]Entry, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
-	return s.entries(`SELECT seq, at, actor, kind, subject, payload FROM change_history ORDER BY seq DESC LIMIT ?`, limit)
+	search = strings.TrimSpace(search)
+	return s.entries(`
+	SELECT seq, at, actor, kind, subject, payload FROM change_history
+	WHERE ? = ''
+	   OR instr(lower(payload), lower(?)) > 0
+	   OR instr(lower(subject), lower(?)) > 0
+	ORDER BY seq DESC LIMIT ?`, search, search, search, limit)
 }
 
 // entries runs one read of the Change History and decodes what it returns. The
@@ -1481,7 +1539,14 @@ func (s *Store) entries(query string, args ...any) ([]Entry, error) {
 		if err := rows.Scan(&e.Seq, &at, &e.Actor, &e.Kind, &e.Subject, &e.Payload); err != nil {
 			return nil, fmt.Errorf("read entry: %w", err)
 		}
-		e.At, _ = time.Parse(stamp, at)
+		// The parse is not swallowed. An `at` this cannot read is a row
+		// written by something other than this package, and a zero instant
+		// passed on quietly would be replayed into created_at as year one
+		// rather than reported.
+		e.At, err = time.Parse(stamp, at)
+		if err != nil {
+			return nil, fmt.Errorf("read the timestamp on entry %d: %w", e.Seq, err)
+		}
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()

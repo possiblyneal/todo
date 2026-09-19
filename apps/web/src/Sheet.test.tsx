@@ -30,6 +30,7 @@ const OFFERED: Offered = {
     { name: 'high', example: 'Today.' },
   ],
   impacts: [{ name: 'med', example: 'One piece of work moves.' }],
+  opens: ['task_added'],
 }
 
 /** Renders the sheet and answers with what submitting it sent. */
