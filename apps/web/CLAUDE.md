@@ -151,9 +151,12 @@ and adds to this list rather than to the plan.
   walks back rather than losing them on the way out.
 - **An API error is shown in the API's own words.** The body's sentence is the
   one the CLI would have printed, so it is drawn rather than restated.
-- **The sheet is the gate, and nothing before it writes.** Handing a dump over
-  is a read: the Task comes back as a draft, and a draft abandoned leaves
-  nothing behind. Only submitting the sheet calls `POST /api/tasks`.
+- **The sheet is the gate, and nothing about the Task is written before
+  submit.** Handing a dump over is a read: the Task comes back as a draft, and
+  a draft abandoned leaves nothing behind. Only submitting the sheet calls
+  `POST /api/tasks`. The one write it makes before then is the List or Tag its
+  ticks offer to make, which is a different aggregate and not the Task; the
+  bullet below is where that is argued.
 - **Nothing the Broker said is dropped on the way to a field.** A deadline is
   typed rather than picked and a level that is none of the three is offered as
   a fourth, because a control that can hold only what it can parse would blank
@@ -278,10 +281,22 @@ and adds to this list rather than to the plan.
   to refuse in its own sentence.
 - **A List or a Tag made on the sheet is made then, not on submit.** `Ticks` in
   `Sheet.tsx` posts it, holds the name until the poll answers with it, and ticks
-  it. A Collection is an aggregate of its own, so it exists on the same terms as
-  one made on the collections screen and outlives a sheet backed out of; the row
-  says that on the screen rather than leaving it to be discovered. The ticks
-  draw over an empty set for this reason, where they used to draw nothing.
+  it. A Collection is an aggregate of its own, so the one made here outlives a
+  sheet backed out of and is renamed, recolored and deleted from the
+  collections screen like any other; the row says that on the screen rather
+  than leaving it to be discovered. It is made with a name and no color,
+  because this row is somebody saying which List rather than adding to a
+  catalogue, and the color is put on where the rest of a Collection is edited.
+  The ticks draw over an empty set for this reason, where they used to draw
+  nothing.
+  A refusal is said in the sheet's one message slot and is taken down by the
+  next creation that lands, because the sentence belongs to the write somebody
+  just made and a refusal left standing over a Collection that was made says
+  the wrong thing about the tick beside it. The box keeps the name either way,
+  which is the attachment field's rule rather than the collections screen's: a
+  name typed while the request was in flight is the next one somebody means to
+  make, so the box is cleared by the name going out and not by the answer
+  coming back. That is the third site of the disagreement issue #78 is about.
 - **More than one Tag narrows to any of them, not all of them.**
   `Narrowing.tags` is a set, sent as `?tag=` repeated, and a Task carrying any
   one of them is in the list. Turning a second Tag on is somebody widening what
@@ -316,7 +331,10 @@ and adds to this list rather than to the plan.
 - **A membership in the draft is on the screen before it is written.** An id
   the client cannot yet put a name to, which is the window before the first
   poll lands, is ticked under the id itself rather than hidden, because a
-  membership nobody could untick is a write the sheet did not gate.
+  membership nobody could untick is a write the sheet did not gate. One made
+  on the sheet is the exception and is drawn under the word that was typed:
+  the id is unrecognisable and this side does know the name, having just sent
+  it, so falling back to the id would be hiding an answer it has.
 - **A dump survives backing out of the sheet.** Somebody who changed their mind
   about the Task has not changed their mind about having typed the sentence.
 - **The list redraws on the next poll, not on the write.** A write answers with
