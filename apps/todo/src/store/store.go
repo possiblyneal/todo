@@ -1299,10 +1299,24 @@ func (s *Store) Tasks(q Query) ([]Task, error) {
 	// The Tags travel as one JSON array rather than as a placeholder each, so
 	// the argument list stays the shape the query is written against however
 	// many Tags are named. json_each is what reads them back out.
-	tags, err := json.Marshal(append([]string{}, q.Tags...))
-	if err != nil {
-		return nil, fmt.Errorf("read tasks: %w", err)
+	//
+	// An id with nothing in it is dropped rather than asked about, so naming
+	// no Tag and naming an empty one are the same thing. That is what List
+	// does with an empty string, and a caller who built a query out of a
+	// variable nobody set should get the list rather than silence.
+	//
+	// The copy into a fresh slice is what makes a nil one marshal as `[]`
+	// instead of `null`: json_array_length(null) is NULL, which would fail the
+	// guard below rather than pass it and empty every list.
+	named := []string{}
+	for _, id := range q.Tags {
+		if strings.TrimSpace(id) != "" {
+			named = append(named, id)
+		}
 	}
+	// A []string cannot fail to marshal, so the error is dropped rather than
+	// wrapped into a path nothing reaches.
+	tags, _ := json.Marshal(named)
 	rows, err := s.db.Query(fmt.Sprintf(`
 WITH RECURSIVE
 -- The Tasks a search is about: the ones whose own words hold the text, and

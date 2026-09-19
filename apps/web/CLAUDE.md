@@ -253,25 +253,34 @@ and adds to this list rather than to the plan.
   blank over a list that was still narrowed and nothing would say what
   happened. `Tags` keeps an unnamed id on screen for the same reason: a switch
   nobody can see is a switch nobody can turn off. The rule has five sites and
-  they stay five: `Picker` and `Tags` here, `Choice` and `Snooze` in `Sheet.tsx`
-  below, and `Color` in `Collections.tsx`, which keeps a color the served nine do
-  not name so that saving a rename cannot clear it. The List and the Tag are one
-  `Picker` because a Collection is the same shape either way, and that is the
-  only merge the rule makes. `Color` and `Choice` are the nearest remaining pair
-  and stay apart: one is a bare control in a row and the other a labelled field
-  in a form, so merging them would mean two props that configure chrome and one
-  file's layout change having to consider the other's. What is duplicated across
-  the five is the rule itself rather than the control, written out at each site
-  because the elements differ, and lifting that one expression out is worth doing
-  on its own rather than inside a feature branch. What `Picker` and `Tags` do
-  share is `labelled`, which is what an option or a switch reads: a Collection
-  the store named carries the count it worked out, and an id nothing named
-  carries none, because a zero there would be this side answering a question the
-  store never answered.
-- **More than one Tag narrows to any of them, not all of them.** `Narrowing.tags`
-  is a set, sent as `?tag=` repeated, and a Task carrying any one of them is in
-  the list. Turning a second Tag on is somebody widening what they are willing
-  to look at; an intersection would empty the list on the second tap.
+  they stay five: `Picker` and `Tags` here, `Choice` and `Snooze` in
+  `Sheet.tsx` below, and `Color` in `Collections.tsx`, which keeps a color the
+  served nine do not name so that saving a rename cannot clear it. The rule
+  merges nothing: the List and the Tag were one `Picker` and are two controls
+  now, because a List is picked one at a time and a Tag is switched on beside
+  others, so what they let somebody do differs and not only what they are
+  labelled. `Color` and `Choice` are the nearest pair and stay apart: one is
+  a bare control in a row and the other a labelled field in a form, so merging
+  them would mean two props that configure chrome and one file's layout change
+  having to consider the other's. What is duplicated across the five is the rule
+  itself rather than the control, written out at each site because the elements
+  differ, and lifting that one expression out is worth doing on its own rather
+  than inside a feature branch. What `Picker` and `Tags` do share is `labelled`,
+  which is what an option or a switch reads: a Collection the store named
+  carries the count it worked out, and an id nothing named carries none, because
+  a zero there would be this side answering a question the store never answered.
+- **More than one Tag narrows to any of them, not all of them.**
+  `Narrowing.tags` is a set, sent as `?tag=` repeated, and a Task carrying any
+  one of them is in the list. Turning a second Tag on is somebody widening what
+  they are willing to look at; an intersection would empty the list on the
+  second tap. An id with nothing in it is no Tag named, the way an empty
+  `?list=` is: the store drops it, so a caller that built the query out of a
+  variable nobody set gets the list rather than silence.
+- **The switches are not drawn when the store has no Tags.** There is nothing
+  to narrow by and nothing to say about it, where a `Picker` had `Every tag` to
+  rest on. That is why this one control may draw nothing where the ticks on the
+  sheet draw over an empty set: a tick is a thing being written and an empty
+  one still has to be offered, and a switch is only a way of reading.
 - **A picked value the client does not know is offered rather than dropped.**
   `Choice` in `Sheet.tsx` is one control for the levels and the Task's color
   alike — a Collection's color is `Color` in `Collections.tsx` — and a value
