@@ -117,8 +117,10 @@ export type State = Offered & {
 /**
  * The narrowings `GET /api/state` accepts, as the screen holds them. `all` is
  * the store's own word for it: one flag that takes in the snoozed, the
- * completed, the declined and the deleted together, because that is what the
- * route does with it rather than four switches this side pretends to.
+ * completed and the declined together, because that is what the route does
+ * with it rather than three switches this side pretends to. The deleted are
+ * not among them and no list read offers them; `fetchTaskAsOf` is how one is
+ * looked at.
  *
  * `list` and `tags` are ids rather than names, because that is what a Task
  * carries. `search` is text, matched by the store against a Task's own words.
@@ -249,8 +251,32 @@ export const HISTORY_CAP = 1000
  * is generous because the screen drops the Lease bookkeeping out of it, and a
  * page counted before that happens is mostly plumbing.
  */
-export async function fetchHistory(limit = 200): Promise<Entry[]> {
-  return await read(`/api/history?limit=${Math.min(limit, HISTORY_CAP)}`)
+export async function fetchHistory(limit = 200, search = ''): Promise<Entry[]> {
+  const asked = new URLSearchParams({
+    limit: String(Math.min(limit, HISTORY_CAP)),
+  })
+  // The store is what matches, the same way it matches the search over the
+  // list. A screen reaches further back by asking for more entries, so a
+  // screen that matched the page it already held could only find what was
+  // recent enough to have arrived -- and a Task deleted a month ago is the
+  // thing somebody comes to this log to find.
+  if (search !== '') asked.set('search', search)
+  return await read(`/api/history?${asked}`)
+}
+
+/**
+ * The Task as it stood when one entry was appended. It is how a deleted Task
+ * is looked at: no list read offers one, and the entry that deleted it is
+ * where what it said is still written down.
+ *
+ * It answers about any entry and not only a deletion, so "what did this say
+ * before that edit" has an answer too. A position before the Task existed is
+ * `404`, which is a real answer rather than an empty Task.
+ */
+export async function fetchTaskAsOf(id: string, seq: number): Promise<Task> {
+  const response = await fetch(`/api/tasks/${encodeURIComponent(id)}/at/${seq}`)
+  if (!response.ok) throw await refused(response)
+  return (await response.json()) as Task
 }
 
 async function read(path: string): Promise<Entry[]> {

@@ -9,6 +9,7 @@ import type { Entry } from './state'
 export function Log({
   entries,
   nameOf,
+  onOpen,
 }: {
   entries: Entry[]
   /**
@@ -17,18 +18,42 @@ export function Log({
    * still what the entry is about.
    */
   nameOf?: (subject: string) => string
+  /**
+   * Opening the Task as this entry left it. Given, every row becomes something
+   * to press: an entry is the only way to a deleted Task now that no list read
+   * offers one, and a row that read like a record but did nothing would hide
+   * the one door there is. Left out, the log is a log.
+   */
+  onOpen?: (entry: Entry) => void
 }) {
   if (entries.length === 0) return <p className="message">Nothing yet.</p>
   return (
     <ul className="log">
-      {entries.map((entry) => (
-        <li key={entry.seq} className="entry">
-          <span className="did">{what(entry.kind)}</span>
-          {nameOf && <span className="about">{nameOf(entry.subject)}</span>}
-          <Who actor={entry.actor} />
-          <When at={entry.at} />
-        </li>
-      ))}
+      {entries.map((entry) => {
+        const said = (
+          <>
+            <span className="did">{what(entry.kind)}</span>
+            {nameOf && <span className="about">{nameOf(entry.subject)}</span>}
+            <Who actor={entry.actor} />
+            <When at={entry.at} />
+          </>
+        )
+        return (
+          <li key={entry.seq} className="entry">
+            {onOpen ? (
+              <button
+                type="button"
+                className="entry-open"
+                onClick={() => onOpen(entry)}
+              >
+                {said}
+              </button>
+            ) : (
+              said
+            )}
+          </li>
+        )
+      })}
     </ul>
   )
 }

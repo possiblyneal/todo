@@ -8,26 +8,20 @@
 import { useState } from 'react'
 
 import { sentence } from './api'
+import { Attributes } from './Attributes'
 import { Breakdown } from './Breakdown'
 import { Log } from './Log'
 import { useRead } from './read'
 import { Series } from './Series'
 import { Sheet } from './Sheet'
-import {
-  fetchTaskHistory,
-  nameOf,
-  type Collection,
-  type Entry,
-  type Offered,
-  type Task,
-} from './state'
+import { Was } from './Was'
+import { fetchTaskHistory, type Entry, type Offered, type Task } from './state'
 import {
   addSubtask,
   attach,
   detach,
   draftOf,
   editTask,
-  estimate,
   lifecycle,
   VERBS,
   type TaskBody,
@@ -68,6 +62,10 @@ export function Detail({
     '' | 'edit' | 'subtask' | 'series' | 'breakdown'
   >('')
   const [working, setWorking] = useState(false)
+  // The entry being read out as the Task it left behind, or nothing. A screen
+  // belongs to the Task it was opened on, and this is that Task at one of its
+  // own positions rather than a second screen about another one.
+  const [opened, setOpened] = useState<Entry | null>(null)
   // What a verb was told, kept apart from what the read was told: a refusal is
   // about the write somebody just made and stays on the screen until they make
   // another, where a failed read is over as soon as one comes back.
@@ -152,6 +150,12 @@ export function Detail({
     )
   }
 
+  if (opened) {
+    return (
+      <Was entry={opened} offered={offered} onBack={() => setOpened(null)} />
+    )
+  }
+
   return (
     <div className="detail">
       <div className="buttons">
@@ -178,22 +182,7 @@ export function Detail({
       )}
       {(refused ?? unread) && <p className="message">{refused ?? unread}</p>}
 
-      <dl className="carried">
-        <Carried name="Description" value={task.description} />
-        <Carried name="Why" value={task.why} />
-        <Carried name="Deadline" value={task.deadline} />
-        <Carried name="Estimate" value={estimate(task.estimateSeconds)} />
-        <Carried name="Priority" value={task.priority} />
-        <Carried name="Impact" value={task.impact} />
-        <Carried name="Color" value={task.color} />
-        <Carried name="Lists" value={named(task.lists, offered.lists)} />
-        <Carried name="Tags" value={named(task.tags, offered.tags)} />
-        <Carried name="Series" value={task.series} />
-        <Carried name="Created" value={task.createdAt} />
-        {Object.entries(task.fields ?? {}).map(([name, value]) => (
-          <Carried key={name} name={name} value={value} />
-        ))}
-      </dl>
+      <Attributes task={task} offered={offered} />
 
       <Attachments
         on={task.attachments ?? []}
@@ -243,30 +232,14 @@ export function Detail({
       )}
 
       <h2 className="heading">History</h2>
-      <Log entries={entries} />
+      {/*
+        Every entry opens this Task as that entry left it, so "what did this
+        say before that edit" is a question the screen answers rather than one
+        a reader works out from the kinds.
+      */}
+      <Log entries={entries} onOpen={setOpened} />
     </div>
   )
-}
-
-/** One attribute, drawn only where the Task carries one. */
-function Carried({ name, value }: { name: string; value?: string }) {
-  if (!value) return null
-  return (
-    <>
-      <dt>{name}</dt>
-      <dd>{value}</dd>
-    </>
-  )
-}
-
-/**
- * The Lists or Tags a Task carries, by name where the read named them. An id
- * the read did not name is drawn as the id rather than dropped, for the same
- * reason the sheet ticks one: a membership nobody can see is one nobody can
- * take off.
- */
-function named(ids: string[] | undefined, all: Collection[]): string {
-  return (ids ?? []).map((id) => nameOf(all, id)).join(', ')
 }
 
 /**

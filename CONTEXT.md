@@ -31,7 +31,7 @@ Said of a Task that will not be done. It ends the Task the way completing does, 
 _Avoid_: Rejected, cancelled, dropped, won't-do
 
 **Deleted**:
-Said of a Task that should not have been there. It is the one thing there is no way back from: reopening a deleted Task is refused, so a Task somebody may want again is declined rather than deleted. What the Change History says about it stays, because a deletion is an appended entry and never an erasure; the Task itself does not come back.
+Said of a Task that should not have been there. It is the one thing there is no way back from: reopening a deleted Task is refused, so a Task somebody may want again is declined rather than deleted. It leaves every list read, including the one that shows everything, because it is not one of the states a Task was meant to be in. It is reachable at the entry that deleted it rather than merely kept: a deletion is an appended entry and never an erasure, and any entry reads the Task out as it stood at that position. The Task itself does not come back.
 _Avoid_: Removed, archived, trashed
 
 **Subtask**:

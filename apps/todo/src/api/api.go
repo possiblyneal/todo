@@ -100,6 +100,13 @@ func Handler(s *store.Store, o Options) http.Handler {
 	mux.HandleFunc("GET /api/tasks/{id}/history", func(w http.ResponseWriter, r *http.Request) {
 		taskHistory(s, w, r)
 	})
+	// The Task as one entry left it. It is a read of the Change History rather
+	// than of the Task, which is why it is served beside the log and not beside
+	// the Task's own routes: the position is the question and the id only says
+	// which subject of it to answer about.
+	mux.HandleFunc("GET /api/tasks/{id}/at/{seq}", func(w http.ResponseWriter, r *http.Request) {
+		taskAsOf(s, w, r)
+	})
 	mux.HandleFunc("GET /api/history", func(w http.ResponseWriter, r *http.Request) {
 		history(s, w, r)
 	})
@@ -201,11 +208,14 @@ func send(w http.ResponseWriter, status int, body any) {
 func fail(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	var asked usage
+	var absent missing
 	switch {
 	case store.Refused(err):
 		status = http.StatusConflict
 	case errors.As(err, &asked):
 		status = http.StatusBadRequest
+	case errors.As(err, &absent):
+		status = http.StatusNotFound
 	}
 	send(w, status, map[string]string{"error": err.Error()})
 }
@@ -237,3 +247,14 @@ type usage struct{ err error }
 
 func (u usage) Error() string { return u.err.Error() }
 func (u usage) Unwrap() error { return u.err }
+
+// missing marks an error about something that is genuinely not there, which is
+// 404. It is deliberately rare: a Task carrying no Series answers `repeats:
+// false` rather than this, because the Task is present and the question has a
+// negative answer. This is for a question whose subject does not exist at all,
+// which is a Task asked for at a position in the Change History before it was
+// added.
+type missing struct{ err error }
+
+func (m missing) Error() string { return m.err.Error() }
+func (m missing) Unwrap() error { return m.err }

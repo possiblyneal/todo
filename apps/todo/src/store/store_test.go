@@ -165,7 +165,7 @@ func TestLatestHistoryIsNewestFirstAndBounded(t *testing.T) {
 		}
 	}
 
-	entries, err := s.LatestHistory(2)
+	entries, err := s.LatestHistory(2, "")
 	if err != nil {
 		t.Fatalf("LatestHistory: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestLatestHistoryIsNewestFirstAndBounded(t *testing.T) {
 	// Nothing said is nothing returned rather than everything there is: a
 	// caller that forgot to say how many would otherwise be handed the log
 	// this read exists to avoid decoding.
-	none, err := s.LatestHistory(0)
+	none, err := s.LatestHistory(0, "")
 	if err != nil {
 		t.Fatalf("LatestHistory(0): %v", err)
 	}

@@ -1457,11 +1457,28 @@ func (s *Store) HistoryOf(subject string) ([]Entry, error) {
 //
 // A limit of zero or less is no entries rather than all of them, so a caller
 // that forgot to say how many gets nothing rather than the whole log.
-func (s *Store) LatestHistory(limit int) ([]Entry, error) {
+//
+// Search narrows before the limit does, which is the whole reason it is here
+// and not on the surface. A screen reaches further back by asking for more
+// entries, so a screen that matched the page it already held could only find
+// what was recent enough to have arrived; a Task deleted a month ago is exactly
+// the thing somebody comes to this log to find. It matches an entry's payload,
+// which is where a Task's own words are, and its subject, which is the id a
+// Task is known by elsewhere on the screen. Empty matches everything.
+//
+// The comparison is the one Query.Search uses, for the same reason: somebody
+// searching for `50%` means the characters.
+func (s *Store) LatestHistory(limit int, search string) ([]Entry, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
-	return s.entries(`SELECT seq, at, actor, kind, subject, payload FROM change_history ORDER BY seq DESC LIMIT ?`, limit)
+	search = strings.TrimSpace(search)
+	return s.entries(`
+	SELECT seq, at, actor, kind, subject, payload FROM change_history
+	WHERE ? = ''
+	   OR instr(lower(payload), lower(?)) > 0
+	   OR instr(lower(subject), lower(?)) > 0
+	ORDER BY seq DESC LIMIT ?`, search, search, search, limit)
 }
 
 // entries runs one read of the Change History and decodes what it returns. The

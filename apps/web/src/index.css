@@ -306,6 +306,31 @@ button.row {
   border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
 }
 
+/* An entry that opens the Task it is about. It is a button because pressing it
+   is what it is, and it is drawn as the row rather than as a control: the log
+   is a record to read down, and forty buttons in a column would read as a
+   menu. The 44px the row already carries is what a thumb needs, so the target
+   is the whole row and not a word in it. */
+.entry-open {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.entry-open:hover,
+.entry-open:focus-visible {
+  text-decoration: underline;
+}
+
 .did {
   font-variant: small-caps;
 }

@@ -120,8 +120,14 @@ func query(r *http.Request) store.Query {
 		IncludeCompleted: all,
 		IncludeDeclined:  all,
 		IncludeSnoozed:   all,
-		IncludeDeleted:   all,
-		List:             r.URL.Query().Get("list"),
+		// Three and not four. A snoozed, a completed and a declined Task were
+		// all meant to be there, and `?all=true` is how somebody looks at the
+		// ones the everyday read puts aside. A deleted Task should not have
+		// been there at all, so a read that offered it back would be putting
+		// it among the three it is least like. It is read at the entry that
+		// deleted it instead -- `GET /api/tasks/{id}/at/{seq}` -- which is
+		// also where what it said is still written down.
+		List: r.URL.Query().Get("list"),
 		// Repeated rather than separated: `?tag=a&tag=b` is what a set of
 		// values looks like in a query string, and reading it this way means
 		// no separator this side invented and no tag id that cannot hold one.

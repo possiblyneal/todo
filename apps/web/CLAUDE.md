@@ -59,7 +59,7 @@ and adds to this list rather than to the plan.
   makes one write of its own, the List or Tag its ticks offer to make; every
   other write is whoever opens it saying what submitting it does.
 - `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tags,
-  and the one toggle that takes in the snoozed, completed, declined and deleted,
+  and the one toggle that takes in the snoozed, completed and declined,
   plus `Search`, the box the list is searched in, exported apart from them
   because it belongs over the Tasks rather than among the filtering. It sets
   fields on the Narrowing and narrows nothing itself. The List is a picker and
@@ -78,28 +78,35 @@ and adds to this list rather than to the plan.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
   Subtasks, its Series, its breakdown, the four lifecycle verbs, its pointers
   added and taken off, and its history.
+- `src/Attributes.tsx` — the attributes a Task carries, drawn only where it
+  carries one. The detail screen and the historical one both draw through it,
+  so the Task as it stands and the Task as it stood cannot be described
+  differently.
+- `src/Was.tsx` — the Task as one entry left it, read only. It is how a deleted
+  Task is looked at, and it is opened from an entry on either log.
 - `src/Collections.tsx` — the collections screen: the Lists and the Tags
   created, renamed, recolored and deleted. Both sets are drawn by one component
   given the path segment, because a List and a Tag are the same three writes.
 - `src/Activity.tsx` — the activity screen: the Change History across every
-  Task, with the filter for Actors that name a harness and a model.
+  Task, with the filter for Actors that name a harness and a model and the box
+  the log is searched in.
 - `src/Log.tsx` — the entries drawn as who, what and when. Both screens draw
-  their log through it.
+  their log through it, and both give it somewhere for an entry to open.
 - `src/App.tsx` — the three panes, the poll that fills them, and which screen
   is open. It draws what the read returned and works nothing out for itself,
   including how wide the screen is.
 - `src/main.tsx` — the mount, and nothing else.
 - `src/Sheet.test.tsx`, `src/Breakdown.test.tsx`, `src/Narrow.test.tsx`,
   `src/Collections.test.tsx`, `src/Detail.test.tsx`, `src/App.test.tsx`,
-  `src/Row.test.tsx` — the components with a grammar: what a pick turns into on
-  the wire, what a proposal draws before it is approved, what a picker does
+  `src/Row.test.tsx`, `src/Was.test.tsx` — the components with a grammar: what
+  a pick turns into on the wire, what a proposal draws before it is approved, what a picker does
   with a value it cannot name and whether its Tag order survives an unmount,
   which kind a collection write goes out under, whether the field holding a
   pointer is cleared and what the picker off the host puts in it, that a
   selected Task and the list it was selected from are drawn from one tree and
-  that the search box over the list goes back to the store, and what a row does
-  with a name nothing named and an instant it cannot read. The
-  other components are drawn from what they are handed, so there is nothing in
+  that the search box over the list goes back to the store, what a row does
+  with a name nothing named and an instant it cannot read, and whether an entry
+  is something to press and what pressing it reads out. The other components are drawn from what they are handed, so there is nothing in
   them a test would pin that reading them does not.
 - `src/log.test.ts`, `src/state.test.ts`, `src/write.test.ts`,
   `src/rank.test.ts` — the modules that work something out rather than draw it:
@@ -430,14 +437,35 @@ and adds to this list rather than to the plan.
   all, and then those three read once and never again while the list stays live.
   That is the one state where they are behind, and it is the same state the API
   describes as not knowing whether anything changed.
+- **A deleted Task is reached from the log and from nowhere else.** No list
+  read offers one, `?all=true` included, so the toggle takes in three states
+  and not four. `fetchTaskAsOf` is the way to one: `Was` reads
+  `GET /api/tasks/{id}/at/{seq}` and draws the Task as that entry left it,
+  under the entry itself. It is read only — a Task drawn at a position may not
+  be there to be written to — and it draws its attributes through
+  `Attributes.tsx`, the same component the detail screen draws its own
+  through, so the two cannot come to describe one Task differently.
+- **Every entry opens, not only the ones that deleted something.** `Log` takes
+  an `onOpen` and wraps each row in a button when it is given one, so "what did
+  this say before that edit" is a question either log answers rather than one a
+  reader works out from the kinds. Without `onOpen` the rows are not buttons: a
+  row that looked pressable and did nothing would be worse than a row that does
+  not. The entry opened is kept whole rather than as a `seq`, because the
+  screen draws what happened above the Task and the entry is what says it.
+- **The log is searched by the route, never by the page in hand.** The activity
+  screen reaches further back by asking for more, so a match made against what
+  has already arrived could only find what was recent enough to be on it, and a
+  Task deleted a month ago is the thing somebody comes here to find. The text
+  goes out as `?search=` and the read restarts on it, the same keystroke-to-read
+  rule the list's search box follows.
 - **A verb is offered whatever state the Task is in.** Which of the four the
-  store refuses is the store's to say, and it says it in a sentence. Reopen is
-  offered on a deleted Task and refused there, in the store's own sentence,
-  which is the rule working rather than failing: a screen that greyed the verb
-  out would be a second copy of a rule that already exists, and would be wrong
-  the day the store's answer changed. Reopen is reached through show everything: the everyday poll asks for the
-  open Tasks, so an ended one is in the list to be tapped only under
-  `?all=true`.
+  store refuses is the store's to say, and it says it in a sentence: a screen
+  that greyed the verb out would be a second copy of a rule that already
+  exists, and would be wrong the day the store's answer changed. Reopen is
+  reached through show everything: the everyday poll asks for the open Tasks,
+  so an ended one is in the list to be tapped only under `?all=true`. A
+  deleted Task is not there under either, and reopening one is refused
+  anyway.
 - **The four verbs are the first thing the client keeps a copy of.**
   `write.VERBS` names them because no route answers what they are, and both the
   row and the detail screen read that one list. A fifth added to
