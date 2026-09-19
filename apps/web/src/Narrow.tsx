@@ -24,8 +24,8 @@ export function Narrow({
   offered: Offered
   onChange: (narrowing: Narrowing) => void
 }) {
-  // The Tags in drawn order. The keys outlive this component on purpose: it is
-  // unmounted whenever another screen is open, and `rank.ts` is where the
+  // The Tags in drawn order. The keys outlive this component on purpose, since
+  // it does not stay mounted across every screen; `rank.ts` is where the
   // lifetime and the reason for it are argued.
   const tags = ranked(offered.tags, drawnKeys, Math.random)
 
