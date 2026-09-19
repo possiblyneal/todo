@@ -121,3 +121,21 @@ func TestBrowsingRefusesAPathThatNamesNothing(t *testing.T) {
 		t.Errorf("status = %d, want 400 (%s)", w.Code, w.Body.String())
 	}
 }
+
+// The root is resolved the way the paths judged against it are, so a listener
+// pointed at a symlink lists what it points at rather than refusing all of it.
+func TestBrowsingARootReachedThroughASymlink(t *testing.T) {
+	root := tree(t)
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(root, link); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	body := decodeFiles(t, browsed(t, link, "?path=notes"))
+	if body.Path != filepath.Join(root, "notes") {
+		t.Errorf("path = %q, want the notes directory", body.Path)
+	}
+	if body.Parent != root {
+		t.Errorf("parent = %q, want %q", body.Parent, root)
+	}
+}

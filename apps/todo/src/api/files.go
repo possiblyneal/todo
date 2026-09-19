@@ -93,20 +93,28 @@ func within(root, asked string) (string, error) {
 	return at, nil
 }
 
-// home is the root a listener browses from, resolved once. Symlinks are taken
-// off it here so every path compared against it below is compared against what
-// it really is; an empty answer is a listener that cannot browse, and says so
-// when asked rather than at startup.
+// rooted resolves the root the same way `within` resolves what it judges.
+// Both sides of that comparison have to be the same kind of path, or a root
+// reached through a symlink would refuse every path under itself. One that
+// cannot be resolved is left as it was given, which refuses rather than
+// widens.
+func rooted(dir string) string {
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return dir
+	}
+	return real
+}
+
+// home is where a listener browses from when it was told nowhere else. An
+// empty answer is a listener that cannot browse, and says so when asked rather
+// than at startup.
 func home() string {
 	dir, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	real, err := filepath.EvalSymlinks(dir)
-	if err != nil {
-		return ""
-	}
-	return real
+	return dir
 }
 
 // filesBody is one directory as the picker reads it. Parent is empty at the

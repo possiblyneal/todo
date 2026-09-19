@@ -2,12 +2,16 @@
 // through. It holds routing, encoding and the status code an error takes, and
 // no rules: every handler is another caller of the same store the verbs call,
 // so a person on a phone and an Agent at a terminal get the same contract.
+// GET /api/files is the one exception and says so where it is registered: it
+// reads a directory rather than the store, so the root it will not look above
+// is a rule with nowhere else to live.
 //
 // See docs/adrs/0003-replace-the-tui-with-a-browser-client.md and
 // docs/plans/browser-client.md.
 package api
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -116,10 +120,7 @@ func Handler(s *store.Store, o Options) http.Handler {
 	// The one route reading outside the store. It lists and never opens, and
 	// what it lists is the machine a pointer resolves against rather than the
 	// phone the pointer is being typed into.
-	root := o.Browse
-	if root == "" {
-		root = home()
-	}
+	root := rooted(cmp.Or(o.Browse, home()))
 	mux.HandleFunc("GET /api/files", func(w http.ResponseWriter, r *http.Request) {
 		browse(root, w, r)
 	})
