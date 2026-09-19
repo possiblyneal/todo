@@ -60,14 +60,21 @@ export function App() {
     const poll = async () => {
       try {
         const snapshot = await fetchState(narrowing, etag, controller.signal)
+        // Aborting does not reject a response that already arrived, so a poll
+        // torn down between the response and its body draws the narrowing it
+        // asked under over the one that replaced it. The catch guards for the
+        // same reason; this is the other half of it.
+        if (controller.signal.aborted) return
         // A null snapshot is 304: nothing changed, so nothing is redrawn.
         if (snapshot) {
           etag = snapshot.etag
           setState(snapshot.state)
           setDrawn(narrowing)
           // The tag is the revision the other screens fetch their own reads
-          // again on: it changes exactly when something was written, which is
-          // what keeps them current without a second clock.
+          // again on. It changes when something was written and also when the
+          // narrowing did, since the API hashes the query into it; a narrowing
+          // cannot change while those screens are mounted, so what they see is
+          // the first of the two.
           setEtag(snapshot.etag)
         }
         setError(null)
@@ -182,10 +189,11 @@ export function App() {
       */}
       <Box
         offered={state ?? OFFERED_NOTHING}
-        // A question is asked about the Tasks the list asked for, under the
-        // same query string. The two go together or the box starts answering
-        // about a list nobody is looking at.
-        narrowing={narrowing}
+        // A question is asked about the Tasks on the screen, which is the
+        // narrowing they were read under and not the one the controls are
+        // showing: a question asked between a control moving and its list
+        // arriving would be answered about a list nobody is looking at yet.
+        narrowing={drawn}
       />
       {/*
         The controls are drawn before the first read lands, with nothing in the

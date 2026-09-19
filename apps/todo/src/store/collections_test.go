@@ -591,3 +591,19 @@ func ids(tasks []Task) []string {
 	}
 	return out
 }
+
+// A word with a space after it is the word. `instr` reads the space, so a
+// search that was not trimmed empties the list the moment somebody types one.
+func TestSearchIgnoresTheSpaceAroundTheWord(t *testing.T) {
+	s := openTemp(t)
+	root := leased(t, s, "alice", Attributes{Title: Set("Buy paint")})
+	leased(t, s, "alice", Attributes{Title: Set("Read a book")})
+
+	tasks, err := s.Tasks(Query{Search: " paint "})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if strings.Join(ids(tasks), ",") != root {
+		t.Errorf("searching for %q found %v, want just %s", " paint ", ids(tasks), root)
+	}
+}
