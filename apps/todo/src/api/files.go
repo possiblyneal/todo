@@ -85,14 +85,14 @@ func within(root, asked string) (string, error) {
 		asked = filepath.Join(root, asked)
 	}
 	clean := filepath.Clean(asked)
-	if !under(root, clean) {
+	if !under(root, clean) || !inside(root, clean) {
 		return "", outside(asked, root)
 	}
 	at, err := filepath.EvalSymlinks(clean)
 	if err != nil {
 		return "", usage{fmt.Errorf("cannot list %s: %w", asked, err)}
 	}
-	if !under(root, at) {
+	if !under(root, at) || !inside(root, at) {
 		return "", outside(asked, root)
 	}
 	return at, nil
@@ -100,19 +100,19 @@ func within(root, asked string) (string, error) {
 
 // under is the containment comparison, on the path boundary rather than on the
 // characters: a root of `/home/ne` does not contain `/home/neal`.
-//
-// It is spelled twice. The first is the comparison itself and is already the
-// answer. The second says the same thing on the strings, with the separator
-// on the end so it draws the boundary in the same place, and it is here
-// because the scanner reading this route for path injection recognises that
-// form as the guard and does not recognise the first. A route that is bounded
-// but reported as unbounded is a finding nobody can tell from a real one, and
-// those are the findings that eventually get waved through.
 func under(root, at string) bool {
 	rel, err := filepath.Rel(root, at)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return false
-	}
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// inside is the same containment, said again on the strings with the separator
+// on the end so the boundary lands in the same place. `under` is the answer
+// and this adds nothing to it. It is here, and spelled this way and in this
+// function, because the scanner reading this route for path injection
+// recognises only a guard it can see beside the path it is judging: `under`
+// reads to it as no guard at all, and a route that is bounded but reported as
+// unbounded is a finding nobody can tell from a real one.
+func inside(root, at string) bool {
 	sep := string(filepath.Separator)
 	return at == root || strings.HasPrefix(at, strings.TrimSuffix(root, sep)+sep)
 }
