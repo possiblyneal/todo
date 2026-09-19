@@ -12,12 +12,7 @@
 import { useEffect, useState } from 'react'
 
 import { sentence } from './api'
-import {
-  type Collection,
-  fetchFiles,
-  type Files,
-  type Offered,
-} from './state'
+import { type Collection, fetchFiles, type Files, type Offered } from './state'
 import { addCollection, type Kind, memberships, type TaskBody } from './write'
 
 /** The attributes this sheet takes as text, which is every one it shows. */
