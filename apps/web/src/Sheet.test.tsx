@@ -131,6 +131,13 @@ test('the color and the snooze each offer their own served set', () => {
   opened({ title: 'Ship it' })
   const color = screen.getByLabelText('Color') as HTMLSelectElement
   expect([...color.options].map((o) => o.value)).toEqual(['', 'red', 'blue'])
+  // Under its bare name: the levels are drawn beside what they mean and a
+  // color has nothing to say for itself, so the same control draws both.
+  expect([...color.options].map((o) => o.textContent)).toEqual([
+    '—',
+    'red',
+    'blue',
+  ])
   const snooze = screen.getByLabelText('Snooze') as HTMLSelectElement
   expect([...snooze.options].map((o) => o.value)).toEqual([
     'leave',

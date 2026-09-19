@@ -47,8 +47,8 @@ func attributeFlags(fs *flag.FlagSet) func() (*store.Attributes, error) {
 		why         = fs.String("why", "", "why the task is worth doing")
 		deadline    = fs.String("deadline", "", "when it is due: 2006-01-02, 2006-01-02 15:04, or RFC 3339")
 		estimate    = fs.String("estimate", "", "how long it will take, as a duration such as 90m")
-		priority    = fs.String("priority", "", "low, med or high")
-		impact      = fs.String("impact", "", "low, med or high")
+		priority    = fs.String("priority", "", "one of "+write.LevelLabels())
+		impact      = fs.String("impact", "", "one of "+write.LevelLabels())
 		snooze      = fs.String("snooze", "", "hide it for a while: a duration, or "+write.SnoozeLabels())
 		color       = fs.String("color", "", "one of "+write.ColorLabels())
 		pairs       = fields{}
