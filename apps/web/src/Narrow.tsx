@@ -11,9 +11,7 @@
 // and the next poll asks the API again, so the list on the screen is always a
 // list the store described rather than one this side sifted.
 
-import { useState } from 'react'
-
-import { ranked } from './rank'
+import { drawnKeys, ranked } from './rank'
 import type { Collection, Narrowing, Offered } from './state'
 
 export function Narrow({
@@ -32,17 +30,10 @@ export function Narrow({
   offered: Offered
   onChange: (narrowing: Narrowing) => void
 }) {
-  // The Tags' draw, kept across polls rather than recomputed from one. That is
-  // what makes it once per Tag: `ranked` keys whatever it has not seen and
-  // leaves the rest where they were, so the order holds while somebody reads
-  // it and a Tag made elsewhere still finds a place.
-  //
-  // `useState` and not `useRef` because this is read while rendering, which is
-  // the one thing a ref is not for. Nothing ever sets it: the map is the piece
-  // of state, and `ranked` writes into it. Keying a Tag twice is keying it
-  // once, so a render repeated is a draw not repeated.
-  const [keys] = useState(() => new Map<string, number>())
-  const tags = ranked(offered.tags, keys, Math.random)
+  // The Tags in drawn order. The keys outlive this component on purpose: it is
+  // unmounted whenever another screen is open, and `rank.ts` is where the
+  // lifetime and the reason for it are argued.
+  const tags = ranked(offered.tags, drawnKeys, Math.random)
 
   return (
     <div className="narrow">
