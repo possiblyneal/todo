@@ -5,6 +5,7 @@
 // and the next poll asks the API again, so the list on the screen is always a
 // list the store described rather than one this side sifted.
 
+import { drawnKeys, ranked } from './rank'
 import type { Collection, Narrowing, Offered } from './state'
 
 export function Narrow({
@@ -23,6 +24,11 @@ export function Narrow({
   offered: Offered
   onChange: (narrowing: Narrowing) => void
 }) {
+  // The Tags in drawn order. The keys outlive this component on purpose, since
+  // it does not stay mounted across every screen; `rank.ts` is where the
+  // lifetime and the reason for it are argued.
+  const tags = ranked(offered.tags, drawnKeys, Math.random)
+
   return (
     <div className="narrow">
       {/*
@@ -65,10 +71,17 @@ export function Narrow({
         onPick={(list) => onChange({ ...narrowing, list })}
       />
 
+      {/*
+        The Lists are offered as the read listed them and the Tags are not.
+        A List is somewhere a Task is filed and there are few of them, so a
+        stable order is what makes one easy to reach; Tags accumulate, and an
+        order by count alone would bury an old one forever. `rank.ts` is where
+        that difference is argued.
+      */}
       <Picker
         name="Tag"
         every="Every tag"
-        all={offered.tags}
+        all={tags}
         value={narrowing.tag}
         onPick={(tag) => onChange({ ...narrowing, tag })}
       />
