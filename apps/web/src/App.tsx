@@ -4,8 +4,15 @@ import { Activity } from './Activity'
 import { Box } from './Box'
 import { sentence } from './api'
 import { Detail } from './Detail'
+import { Narrow } from './Narrow'
 import { Row } from './Row'
-import { fetchState, type State } from './state'
+import {
+  fetchState,
+  type Narrowing,
+  queryString,
+  type State,
+  WIDE,
+} from './state'
 
 // The store's write-ahead log is what says a write happened, so this polls it
 // once a second over HTTP, and the ETag is what keeps that to a 304 while
@@ -25,6 +32,21 @@ export function App() {
   const [error, setError] = useState<string | null>(null)
   const [etag, setEtag] = useState<string | null>(null)
   const [screen, setScreen] = useState<Screen>({ name: 'list' })
+  // The list opens on the everyday view, the same one `todo list` prints with
+  // no flags. It is held here rather than in the controls because the poll and
+  // the question both ask under it.
+  const [narrowing, setNarrowing] = useState<Narrowing>(WIDE)
+  // The narrowing the Tasks on the screen were read under, which is not the
+  // one the controls show for the round trip after a control is touched. The
+  // list is left standing meanwhile rather than blanked, so the sentence under
+  // an empty one has to name the narrowing that emptied it and not the one
+  // being asked for.
+  const [drawn, setDrawn] = useState<Narrowing>(WIDE)
+
+  // The query is what the effect depends on rather than the object holding it:
+  // a Narrowing is a new object on every render and depending on one would
+  // restart the poll forever.
+  const query = queryString(narrowing)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -32,14 +54,22 @@ export function App() {
 
     const poll = async () => {
       try {
-        const snapshot = await fetchState(etag, controller.signal)
+        const snapshot = await fetchState(narrowing, etag, controller.signal)
+        // Aborting does not reject a response that already arrived, so a poll
+        // torn down between the response and its body draws the narrowing it
+        // asked under over the one that replaced it. The catch guards for the
+        // same reason; this is the other half of it.
+        if (controller.signal.aborted) return
         // A null snapshot is 304: nothing changed, so nothing is redrawn.
         if (snapshot) {
           etag = snapshot.etag
           setState(snapshot.state)
+          setDrawn(narrowing)
           // The tag is the revision the other screens fetch their own reads
-          // again on: it changes exactly when something was written, which is
-          // what keeps them current without a second clock.
+          // again on. It changes when something was written and also when the
+          // narrowing did, since the API hashes the query into it; a narrowing
+          // cannot change while those screens are mounted, so what they see is
+          // the first of the two.
           setEtag(snapshot.etag)
         }
         setError(null)
@@ -71,7 +101,12 @@ export function App() {
       controller.abort()
       clearTimeout(timer)
     }
-  }, [])
+    // A changed narrowing starts the poll again from no ETag, which is what
+    // keeps the tag and the list it describes the same age. The API hashes the
+    // query into the tag as well, so an old one cannot be answered 304 against
+    // a different view even if one were handed back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
 
   // An error sits over the list rather than replacing it. A poll that failed
   // says nothing about the Tasks already on the screen, and a phone that walked
@@ -113,6 +148,8 @@ export function App() {
         subtasks={state.tasks.filter((task) => task.parent === open.id)}
         lists={state.lists}
         tags={state.tags}
+        colors={state.colors}
+        snoozes={state.snoozes}
         revision={etag}
         onOpen={(id) => setScreen({ name: 'task', id })}
         onBack={() => setScreen({ name: 'list' })}
@@ -129,11 +166,51 @@ export function App() {
         ones the last read named; before the first one there are none to offer
         and the sheet shows none.
       */}
-      <Box lists={state?.lists ?? []} tags={state?.tags ?? []} />
+      <Box
+        lists={state?.lists ?? []}
+        tags={state?.tags ?? []}
+        colors={state?.colors ?? []}
+        snoozes={state?.snoozes ?? []}
+        // A question is asked about the Tasks on the screen, which is the
+        // narrowing they were read under and not the one the controls are
+        // showing: a question asked between a control moving and its list
+        // arriving would be answered about a list nobody is looking at yet.
+        narrowing={drawn}
+      />
+      {/*
+        The controls are drawn before the first read lands, with nothing in the
+        pickers but the everyday view. They are what asks for a list, so a
+        screen that waited for a list before offering them would be waiting on
+        itself.
+      */}
+      <Narrow
+        narrowing={narrowing}
+        lists={state?.lists ?? []}
+        tags={state?.tags ?? []}
+        sorts={state?.sorts ?? []}
+        onChange={setNarrowing}
+      />
       {error && <p className="message">{error}</p>}
       {!state && !error && <p className="message">Reading the list…</p>}
       {state && state.tasks.length === 0 && (
-        <p className="message">Nothing here yet.</p>
+        <p className="message">
+          {/*
+            The List, the Tag and the search are what take Tasks out of a read
+            this client asks for, so one of them set is a list narrowed to
+            nothing. A sort reorders what came back and cannot empty it, and
+            `all` widens rather than narrows, so neither is asked about here: a
+            store with nothing in it says so under every sort and under the
+            toggle both ways.
+
+            That leaves the everyday view over a store holding only ended Tasks
+            saying nothing is here yet. Telling that from an empty store would
+            take a second read, and for a fresh store this is the right
+            sentence.
+          */}
+          {!drawn.list && !drawn.tag && !drawn.search
+            ? 'Nothing here yet.'
+            : 'Nothing matches what the list is narrowed to.'}
+        </p>
       )}
       {state && state.tasks.length > 0 && (
         <ul className="list">

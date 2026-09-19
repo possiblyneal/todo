@@ -1187,6 +1187,16 @@ type Query struct {
 
 	// List narrows to the Tasks in one List, named by its id.
 	List string
+	// Tag narrows to the Tasks carrying one Tag, named by its id. It is the
+	// same shape as List because a Tag is the same shape as a List: the two
+	// differ in what they mean and not in how a Task belongs to one.
+	Tag string
+	// Search narrows to the Tasks whose own words hold this text, matched in
+	// the Title, the Description and the Why. The comparison is
+	// case-insensitive over ASCII, which is `lower()`'s reach without an
+	// extension, and it is a substring rather than a word: somebody typing
+	// half a word is looking for what it starts.
+	Search string
 	// Sort orders siblings. The zero value is SortCreated.
 	Sort Sort
 }
@@ -1204,20 +1214,53 @@ type Query struct {
 // itself in view. A List filtered per row instead would return a Subtask whose
 // parent is not in the List: a row with a Depth to indent by and a Parent that
 // is not in the answer.
+//
+// Search is the one narrowing that reaches upward as well. A Task matches on
+// its own words, and the Tasks above it come back with it unmatched, so the
+// match has somewhere to sit and the answer is still a tree. Without that, a
+// Subtask called "paint" under a Task called "redecorate" is unfindable by the
+// word somebody would actually type, which is search failing at the one thing
+// it does. The narrowings a caller sets deliberately still apply to every row,
+// so a match under a Task those hide is hidden with it.
 func (s *Store) Tasks(q Query) ([]Task, error) {
 	at := now()
 	if q.Sort == "" {
 		q.Sort = SortCreated
 	}
+	// Trimmed the way every other text a caller types is: a word with a space
+	// after it is the word, and `instr` would read the space and match nothing.
+	q.Search = strings.TrimSpace(q.Search)
 	key, ok := sortKeys[q.Sort]
 	if !ok {
 		return nil, fmt.Errorf("%q is not a sort: want %s", q.Sort, strings.Join(SortNames(), ", "))
 	}
 	rows, err := s.db.Query(fmt.Sprintf(`
-WITH RECURSIVE depth_first(id, path) AS (
+WITH RECURSIVE
+-- The Tasks a search is about: the ones whose own words hold the text, and
+-- then every Task above one of those. The walk is upward, which is what lets a
+-- match sit under a parent that does not match. Where nothing is searched for
+-- this is empty and costs nothing, because the walk below only consults it
+-- when the text is non-empty.
+--
+-- instr rather than LIKE: a person searching for "50%%" means the characters,
+-- and LIKE would read them as a wildcard unless every search were escaped on
+-- the way in.
+searched(id) AS (
+	SELECT id FROM task
+	WHERE ? <> ''
+	  AND (instr(lower(title), lower(?)) > 0
+	    OR instr(lower(COALESCE(description, '')), lower(?)) > 0
+	    OR instr(lower(COALESCE(why, '')), lower(?)) > 0)
+	UNION
+	SELECT t.parent_id FROM task t JOIN searched s ON t.id = s.id
+	WHERE t.parent_id IS NOT NULL
+),
+depth_first(id, path) AS (
 	SELECT id, %[1]s || '/' || id FROM task
 	WHERE parent_id IS NULL
 	  AND (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = task.id AND m.list_id = ?))
+	  AND (? = '' OR EXISTS (SELECT 1 FROM task_tag m WHERE m.task_id = task.id AND m.tag_id = ?))
+	  AND (? = '' OR id IN (SELECT id FROM searched))
 	  AND (? OR deleted_at IS NULL)
 	  AND (? OR completed_at IS NULL)
 	  AND (? OR declined_at IS NULL)
@@ -1226,6 +1269,8 @@ WITH RECURSIVE depth_first(id, path) AS (
 	SELECT t.id, d.path || '/' || %[1]s || '/' || t.id
 	FROM task t JOIN depth_first d ON t.parent_id = d.id
 	WHERE (? = '' OR EXISTS (SELECT 1 FROM task_list m WHERE m.task_id = t.id AND m.list_id = ?))
+	  AND (? = '' OR EXISTS (SELECT 1 FROM task_tag m WHERE m.task_id = t.id AND m.tag_id = ?))
+	  AND (? = '' OR t.id IN (SELECT id FROM searched))
 	  AND (? OR t.deleted_at IS NULL)
 	  AND (? OR t.completed_at IS NULL)
 	  AND (? OR t.declined_at IS NULL)
@@ -1244,8 +1289,11 @@ SELECT
 	)), '[]')
 FROM task t JOIN depth_first d ON d.id = t.id
 ORDER BY d.path`, key),
-		q.List, q.List, q.IncludeDeleted, q.IncludeCompleted, q.IncludeDeclined, q.IncludeSnoozed, at,
-		q.List, q.List, q.IncludeDeleted, q.IncludeCompleted, q.IncludeDeclined, q.IncludeSnoozed, at,
+		q.Search, q.Search, q.Search, q.Search,
+		q.List, q.List, q.Tag, q.Tag, q.Search,
+		q.IncludeDeleted, q.IncludeCompleted, q.IncludeDeclined, q.IncludeSnoozed, at,
+		q.List, q.List, q.Tag, q.Tag, q.Search,
+		q.IncludeDeleted, q.IncludeCompleted, q.IncludeDeclined, q.IncludeSnoozed, at,
 		at)
 	if err != nil {
 		return nil, fmt.Errorf("read tasks: %w", err)

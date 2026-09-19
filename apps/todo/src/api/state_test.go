@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -179,6 +180,26 @@ func TestStateTakesEverySortTheStoreHas(t *testing.T) {
 	}
 }
 
+// The sorts the response offers are the sorts it accepts. A surface drawing a
+// picker from this must not be able to offer one the store would refuse, which
+// is the whole reason the list is on the wire rather than copied client-side.
+func TestStateOffersExactlyTheSortsItAccepts(t *testing.T) {
+	s := openTemp(t)
+	state := decodeState(t, get(t, s, "/api/state", nil))
+
+	if len(state.Sorts) != len(store.Sorts) {
+		t.Fatalf("sorts = %v, want %v", state.Sorts, store.SortNames())
+	}
+	for i, sort := range store.Sorts {
+		if state.Sorts[i] != string(sort) {
+			t.Errorf("sorts[%d] = %q, want %q", i, state.Sorts[i], sort)
+		}
+		if w := get(t, s, "/api/state?sort="+state.Sorts[i], nil); w.Code != http.StatusOK {
+			t.Errorf("sort=%s = %d, want 200", state.Sorts[i], w.Code)
+		}
+	}
+}
+
 func ptr[T any](v T) *T { return &v }
 
 // An empty list on the wire is `[]` and never `null`, in every place one can
@@ -324,6 +345,68 @@ func TestAPathThatClimbsOutOfTheServedDirectoryDoesNot(t *testing.T) {
 		client(dir).ServeHTTP(w, r)
 		if strings.Contains(w.Body.String(), "not for the browser") {
 			t.Errorf("%s was served the file above the directory", target)
+		}
+	}
+}
+
+// The Tag and the search reach the read the same way the List does, under the
+// names `todo list` takes them under. An Agent narrows by query string and a
+// person's client narrows by query string, so what a client can ask for is what
+// this route accepts and no less.
+func TestStateNarrowsByTagAndBySearch(t *testing.T) {
+	s := openTemp(t)
+	fence := add(t, s, "Paint the fence")
+	shop := add(t, s, "Buy paint")
+	tag, err := s.AddTag("tester", "errand", "green")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+	if err := s.WithLease("tester", shop, store.WriteTTL, func() error {
+		return s.AttachTag("tester", shop, tag)
+	}); err != nil {
+		t.Fatalf("AttachTag: %v", err)
+	}
+
+	body := decodeState(t, get(t, s, "/api/state?tag="+tag, nil))
+	if len(body.Tasks) != 1 || body.Tasks[0].ID != shop {
+		t.Errorf("tag narrowing gave %d tasks, want only the tagged one", len(body.Tasks))
+	}
+
+	body = decodeState(t, get(t, s, "/api/state?search=fence", nil))
+	if len(body.Tasks) != 1 || body.Tasks[0].ID != fence {
+		t.Errorf("search gave %d tasks, want only the one whose words hold it", len(body.Tasks))
+	}
+}
+
+// The colors and the snoozes are the store's own lists, served for the same
+// reason the sorts are: a surface offering either would otherwise keep a second
+// copy and go on offering what the store stopped taking. Each is checked
+// against the store's list rather than against nine and four written out here,
+// which would be this test keeping the copy instead.
+func TestStateOffersTheStoresColorsAndSnoozes(t *testing.T) {
+	s := openTemp(t)
+	id := add(t, s, "Paint the fence")
+	state := decodeState(t, get(t, s, "/api/state", nil))
+
+	if got, want := state.Colors, store.ColorNames(); !slices.Equal(got, want) {
+		t.Errorf("colors = %v, want %v", got, want)
+	}
+	if got, want := state.Snoozes, store.SnoozeNames(); !slices.Equal(got, want) {
+		t.Errorf("snoozes = %v, want %v", got, want)
+	}
+
+	// Every one offered is one a write takes, which is what stops the lists
+	// being a menu with entries the store turns away.
+	for _, color := range state.Colors {
+		w := do(t, s, http.MethodPatch, "/api/tasks/"+id, `{"color": "`+color+`"}`)
+		if w.Code != http.StatusOK {
+			t.Errorf("color %s = %d, want 200 (%s)", color, w.Code, w.Body.String())
+		}
+	}
+	for _, snooze := range state.Snoozes {
+		w := do(t, s, http.MethodPatch, "/api/tasks/"+id, `{"snooze": "`+snooze+`"}`)
+		if w.Code != http.StatusOK {
+			t.Errorf("snooze %s = %d, want 200 (%s)", snooze, w.Code, w.Body.String())
 		}
 	}
 }

@@ -73,7 +73,7 @@ func ask(s *store.Store, c *ai.Client, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tasks, err := s.Tasks(query(r))
+	tasks, err := narrowed(s, r)
 	if err != nil {
 		fail(w, err)
 		return

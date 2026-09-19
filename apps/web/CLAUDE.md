@@ -10,19 +10,22 @@ beside the JSON, so there is no second process and no CORS.
 `docs/adrs/0003-replace-the-tui-with-a-browser-client.md` records why the
 surface moved off the terminal.
 
-Stages 1 to 4 of the plan built everything this directory holds, stages 5 and 6
-having deleted the TUI and packaged the two without adding a screen: the list over `GET /api/state`, the
-box that hands a dump to the Broker and opens the add sheet filled in, the
-detail screen a tap on a Task opens, the Series screen and the four things it
-does to a date, the breakdown that proposes Subtasks, and the activity screen
-over the Change History.
+What it holds: the list over `GET /api/state` and the controls that narrow and
+order it, the box that hands a dump to the Broker and opens the add sheet
+filled in, the detail screen a tap on a Task opens, the Series screen and the
+four things it does to a date, the breakdown that proposes Subtasks, and the
+activity screen over the Change History. The six stages of
+`docs/plans/browser-client.md` are all done; work since then is issue by issue
+and adds to this list rather than to the plan.
 
 ## Ownership
 
 - `src/api.ts` — the fetch plumbing every call shares: one JSON body out and
   one back, and the one place a failed response becomes an Error.
 - `src/state.ts` — the wire shapes and the one call that reads them. It mirrors
-  `apps/todo/src/api/state.go`, which is the side that decides them.
+  `apps/todo/src/api/state.go`, which is the side that decides them. It also
+  holds the Narrowing and the one function that writes it as a query string,
+  which both the list and the question ask under.
 - `src/write.ts` — the wire shapes the write and Broker routes take, and the
   calls that reach them, and the client's one copy of the four lifecycle verbs
   and the three Occurrence marks, plus the fourth thing done to a date, which
@@ -40,8 +43,14 @@ over the Change History.
 - `src/Box.tsx` — the box: a dump or a question, in the same field under the
   same thumb. Neither call writes.
 - `src/Sheet.tsx` — the sheet: a Task open for correction, whether the Broker
-  just read it or it already exists. It makes no write of its own; whoever
-  opens it says what submitting it does.
+  just read it or it already exists. Every attribute a Task has is on it, which
+  is the title, description, why, deadline, estimate, priority, impact, color,
+  snooze, the key/value pairs, and the Lists and Tags it is filed under. It
+  makes no write of its own; whoever opens it says what submitting it does.
+- `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tag,
+  the box searched in, and the one toggle that takes in the snoozed, completed,
+  declined and deleted. It sets fields on the Narrowing and narrows nothing
+  itself.
 - `src/Row.tsx` — one row of the list: the tap that opens the Task and the
   press held that puts the four verbs under it.
 - `src/Series.tsx` — the Series screen: the rule, the dates it produces next,
@@ -101,15 +110,71 @@ over the Change History.
   so about, in its own words, with the value still in the field.
 - **A question is asked about the Tasks the read asked for.** `POST /api/ask`
   narrows by the same query string `GET /api/state` does, so whatever narrows
-  the list narrows the question with it. Nothing narrows either today; a filter
-  added to the poll goes on the question in the same change, or the box starts
-  answering about a list nobody is looking at.
+  the list narrows the question with it. `queryString` in `state.ts` is what
+  makes that structural rather than a discipline: both calls build the string
+  from the same Narrowing through the same function, and a narrowing added
+  there is on the question the moment it is on the poll.
+- **The sorts on offer are the API's, not a copy.** `GET /api/state` carries
+  `sorts` from `store.Sorts`, so the picker cannot offer one the store would
+  refuse and a fifth sort appears the day it lands. This is the pattern for a
+  set the store owns; the level names, the verbs and the marks are copied only
+  because no route answers what they are.
+- **A changed narrowing restarts the poll from no ETag.** The tag and the list
+  it describes have to be the same age, so `App` keys the polling effect on the
+  query string. The API hashes the query into the tag as well, which means a
+  stale one cannot be answered `304` against a different view even if it were
+  handed back; the two together are belt and braces on the one mistake that
+  would draw one narrowing's Tasks under another's controls.
+- **Narrowing to a List narrows the tree, not just its roots.** The store
+  applies the filter to Subtasks too, so a Task open from a List-narrowed read
+  shows only the Subtasks in that List. That is `store.Tasks` behaving as
+  `todo list -list` does, and the client draws what it returned rather than
+  reassembling a tree the store did not describe.
+- **Searching is a keystroke and a read, with no timer in between.** Each
+  character is a new narrowing, so the poll restarts and the store answers off
+  one query; a delay here to decide when typing stopped would be a list that
+  lags the box it is searched from. The text goes out as typed, because the
+  store is what matches it and `todo list -search` matches the same way.
+- **The empty list says which of two things happened.** The List, the Tag and
+  the search are what take Tasks out of a read this client asks for, so a read
+  that came back with nothing under one of the three says the list is narrowed
+  to nothing and otherwise says the store is empty. A sort cannot empty an
+  answer and `all` widens rather than narrows, so neither is asked about. It branches on the narrowing the Tasks
+  on the screen were read under, held in `App.tsx` as `drawn`, not on the one
+  the controls show: the list is left standing through the round trip after a
+  control is touched, so the sentence under an empty one has to name the
+  narrowing that emptied it.
 - **The three level names are the one thing the client keeps a copy of.**
   `Sheet.tsx` names them because `GET /api/state` does not carry them; a fourth
   added to `store.Levels` has to be added here too. Nothing is lost in the
   meantime: a level the client does not recognise is offered as an extra option
   rather than blanked, so the copy going stale costs a missing choice and never
-  a dropped answer.
+  a dropped answer. The nine colors and the four snoozes were the same problem
+  and are not any more: `colors` and `snoozes` arrive with the state, so the
+  picker for each is the store's list and cannot offer a tenth or a fifth.
+- **A level the client does not know is offered rather than dropped.** `Choice`
+  in `Sheet.tsx` is one control for the levels and the colors alike, and a value
+  that is none of the offered ones is added to the end of the list. That is the
+  levels' case: the Broker answers priority and impact in whatever words it
+  chose, and a picker that silently could not hold one would lose what it said.
+  A color cannot arrive that way — `write.AsSaid` carries no color, and the nine
+  arrive with the state — so for colors the branch is the same code standing
+  idle rather than a case being handled. The API refuses what it refuses, in the
+  sentence the sheet shows.
+- **Snooze is the one attribute the sheet cannot read back.** A Task carries the
+  instant it wakes and the field takes the span to wait, so the control never
+  opens knowing the answer: leaving it alone and waking the Task cannot be the
+  same option, and they are two. Absent leaves a snoozed Task snoozed through an
+  edit about something else, and waking it is the only way back from a snooze on
+  this surface, since a snoozed Task is reached by showing everything the way an
+  ended one is. It carries the unknown-value fallback for a reason of its own:
+  `write.Snooze` takes a plain duration as well as the four served labels, so a
+  span from a terminal is a value the picker has to show rather than blank.
+- **A key/value pair is removed by emptying it, and a key is never renamed.**
+  The wire names a pair by its key, so what looks like a rename is a removal and
+  an addition; offering it as one edit would be the sheet describing a write the
+  API does not make. Emptying a value is the store's own rule for removing a
+  pair rather than a delete this side invents.
 - **A membership in the draft is on the screen before it is written.** An id
   the client cannot yet put a name to, which is the window before the first
   poll lands, is ticked under the id itself rather than hidden, because a
@@ -130,19 +195,21 @@ over the Change History.
   passes `{}` and sends the ticked sets rather than an empty difference.
 - **The other screens re-read on the ETag, not on a clock.** `App` hands the
   poll's tag down as a revision; the detail, Series and activity screens fetch
-  their own read again when it changes, which is exactly when something was written.
-  A second poll of their own would be a second clock disagreeing with the
-  first. A store whose write-ahead log cannot be stat'd carries no ETag at all,
-  and then those three read once and never again while the list stays
-  live. That is the one state where they are behind, and it is the same state
-  the API describes as not knowing whether anything changed.
+  their own read again when it changes. A second poll of their own would be a
+  second clock disagreeing with the first. The tag changes when something was
+  written and also when the narrowing changes, because the API hashes the query
+  into it. The second cannot be observed: the only screen the controls are on is
+  the list, and the three are unmounted while it is. Do not go looking for the
+  cost of it. A store whose write-ahead log cannot be stat'd carries no ETag at
+  all, and then those three read once and never again while the list stays live.
+  That is the one state where they are behind, and it is the same state the API
+  describes as not knowing whether anything changed.
 - **A verb is offered whatever state the Task is in.** Which of the four the
   store refuses is the store's to say, and it says it in a sentence. A screen
   that greyed out the wrong one would be a second copy of a rule that already
-  exists. Reopen is the one nobody can reach yet: the poll asks for the open
-  Tasks, so an ended one is not in the list to be tapped. It becomes reachable
-  with the state filters the plan gives the list, and it is on the screen in
-  the meantime rather than removed and put back.
+  exists. Reopen is reached through show everything: the everyday poll asks for the
+  open Tasks, so an ended one is in the list to be tapped only under
+  `?all=true`.
 - **The four verbs are the second thing the client keeps a copy of.**
   `write.VERBS` names them because no route answers what they are, and both the
   row and the detail screen read that one list. A fifth added to

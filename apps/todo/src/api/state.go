@@ -12,12 +12,11 @@ import (
 )
 
 // state is GET /api/state: everything one screen needs in one response, which
-// is the tree the list draws plus the Lists and Tags its sidebar ranks.
+// is the tree the list draws, the Lists and Tags it can be narrowed by, and
+// the sorts it can be ordered through.
 //
 // It is a read, so nothing is attributed and no Lease is taken.
 func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
-	q := query(r)
-
 	// The ETag is the write-ahead log's token hashed with the query that
 	// produced the response. The token alone is store-global while this
 	// response is not: a client changing its filter or its sort with no
@@ -37,15 +36,8 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tasks, err := s.Tasks(q)
+	tasks, err := narrowed(s, r)
 	if err != nil {
-		// The store holds the only list of sorts there is, so it is the store
-		// that turns an unknown one away and the store's sentence that says
-		// so. Reaching that refusal means the caller asked wrongly, which is
-		// 400 here and exit status 2 at a terminal; anything else went wrong.
-		if q.Sort != "" && !slices.Contains(store.Sorts, q.Sort) {
-			err = usage{err}
-		}
 		fail(w, err)
 		return
 	}
@@ -67,6 +59,10 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 		Tasks: make([]task, 0, len(tasks)),
 		Lists: make([]collection, 0, len(lists)),
 		Tags:  make([]collection, 0, len(tags)),
+		Sorts: store.SortNames(),
+
+		Colors:  store.ColorNames(),
+		Snoozes: store.SnoozeNames(),
 	}
 	for _, t := range tasks {
 		out.Tasks = append(out.Tasks, newTask(t))
@@ -103,8 +99,8 @@ func matches(values []string, tag string) bool {
 	return false
 }
 
-// query reads a Query out of the request, on the same four narrowings and the
-// same names `todo list` takes them under. An unknown sort is not refused
+// query reads a Query out of the request, on the same narrowings and the same
+// names `todo list` takes them under. An unknown sort is not refused
 // here: the store keeps the list of sorts, so the store is what refuses one.
 func query(r *http.Request) store.Query {
 	all := r.URL.Query().Get("all") == "true"
@@ -114,14 +110,57 @@ func query(r *http.Request) store.Query {
 		IncludeSnoozed:   all,
 		IncludeDeleted:   all,
 		List:             r.URL.Query().Get("list"),
+		Tag:              r.URL.Query().Get("tag"),
+		Search:           r.URL.Query().Get("search"),
 		Sort:             store.Sort(r.URL.Query().Get("sort")),
 	}
+}
+
+// narrowed reads the Tasks a request asked for, and turns the store's refusal
+// of an unknown sort into a caller's error.
+//
+// The store holds the only list of sorts there is, so it is the store that
+// turns an unknown one away and the store's sentence that says so. Reaching
+// that refusal means the caller asked wrongly, which is 400 here and exit
+// status 2 at a terminal; anything else went wrong.
+//
+// Every route that narrows by the query string reads it through this, so a
+// sort the store does not have is refused the same way wherever it is sent. An
+// Agent asking a question under a bad sort gets the answer a person's list
+// gets, rather than a 500 for the same mistake.
+func narrowed(s *store.Store, r *http.Request) ([]store.Task, error) {
+	q := query(r)
+	tasks, err := s.Tasks(q)
+	if err != nil && q.Sort != "" && !slices.Contains(store.Sorts, q.Sort) {
+		return nil, usage{err}
+	}
+	return tasks, err
 }
 
 type stateBody struct {
 	Tasks []task       `json:"tasks"`
 	Lists []collection `json:"lists"`
 	Tags  []collection `json:"tags"`
+
+	// Sorts is what ?sort= accepts, from store.Sorts, so a surface offering
+	// the choice does not keep its own list of it. It is the same set the
+	// store refuses an unknown sort against, which is what stops a picker
+	// offering one the store would turn away.
+	Sorts []string `json:"sorts"`
+
+	// Colors is store.Colors by name, for the same reason Sorts is here: a
+	// color is one of nine or it is refused, so a surface offering the choice
+	// would otherwise keep a second copy of the nine and offer a tenth the day
+	// one is added here and not there. The ANSI code each carries does not
+	// cross: it is what a terminal paints with, and the name is the whole of
+	// what is stored.
+	Colors []string `json:"colors"`
+
+	// Snoozes is store.SnoozeDefaults by label, which is what the offered
+	// snoozes are called rather than all a snooze can be: write.Snooze reads a
+	// plain duration too, so a surface may send one of these or a duration of
+	// its own.
+	Snoozes []string `json:"snoozes"`
 }
 
 // collection is a List or a Tag as the client reads it. The two are the same

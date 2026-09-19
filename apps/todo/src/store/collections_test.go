@@ -461,3 +461,149 @@ func TestDeletingSomethingThatIsNotThereIsRefused(t *testing.T) {
 		t.Errorf("history went from %d to %d entries, want it left alone", was, now)
 	}
 }
+
+// A Tag narrows the way a List does, because a Task belongs to one the same
+// way it belongs to the other.
+func TestTasksNarrowToATag(t *testing.T) {
+	s := openTemp(t)
+	urgent, err := s.AddTag("alice", "urgent", "")
+	if err != nil {
+		t.Fatalf("AddTag: %v", err)
+	}
+	tagged := leased(t, s, "alice", Attributes{Title: Set("Fix the leak")})
+	leased(t, s, "alice", Attributes{Title: Set("Read a book")})
+	if err := s.WithLease("alice", tagged, WriteTTL, func() error {
+		return s.AttachTag("alice", tagged, urgent)
+	}); err != nil {
+		t.Fatalf("AttachTag: %v", err)
+	}
+
+	tasks, err := s.Tasks(Query{Tag: urgent})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != tagged {
+		t.Errorf("narrowed to the tag the answer is %v, want only %s", ids(tasks), tagged)
+	}
+}
+
+// Search reaches up where the other narrowings do not. A Subtask matching
+// under a parent that does not is the whole case: hiding it would mean the
+// word somebody would actually type finds nothing.
+func TestSearchFindsAMatchUnderAParentThatDoesNot(t *testing.T) {
+	s := openTemp(t)
+	root := leased(t, s, "alice", Attributes{Title: Set("Redecorate")})
+	paint, err := s.AddSubtask("alice", root, Attributes{Title: Set("Buy paint")})
+	if err != nil {
+		t.Fatalf("AddSubtask: %v", err)
+	}
+	leased(t, s, "alice", Attributes{Title: Set("Read a book")})
+
+	tasks, err := s.Tasks(Query{Search: "paint"})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	// The parent comes back unmatched, so the match has somewhere to sit and
+	// the answer is still a tree rather than a row with a Parent nobody sent.
+	want := []string{root, paint}
+	if strings.Join(ids(tasks), ",") != strings.Join(want, ",") {
+		t.Errorf("searching for paint found %v, want the match and the Task above it %v", ids(tasks), want)
+	}
+	if tasks[1].Depth != 2 || tasks[1].Parent != root {
+		t.Errorf("the match came back at depth %d under %q, want depth 2 under %s", tasks[1].Depth, tasks[1].Parent, root)
+	}
+}
+
+// The words searched are the ones somebody typed into the Task, and the match
+// is a case-insensitive substring rather than a whole word.
+func TestSearchReadsTitleDescriptionAndWhy(t *testing.T) {
+	s := openTemp(t)
+	byTitle := leased(t, s, "alice", Attributes{Title: Set("Varnish the DOOR")})
+	byDescription := leased(t, s, "alice", Attributes{
+		Title:       Set("Saturday"),
+		Description: Set("the door sticks in the rain"),
+	})
+	byWhy := leased(t, s, "alice", Attributes{
+		Title: Set("Call the joiner"),
+		Why:   Set("because of the door"),
+	})
+	leased(t, s, "alice", Attributes{Title: Set("Read a book")})
+
+	tasks, err := s.Tasks(Query{Search: "doo"})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	want := []string{byTitle, byDescription, byWhy}
+	if strings.Join(ids(tasks), ",") != strings.Join(want, ",") {
+		t.Errorf("searching found %v, want the three that hold the word %v", ids(tasks), want)
+	}
+}
+
+// The text is compared as characters. A person searching for a per cent sign
+// means the character, which is what LIKE would have read as a wildcard.
+func TestSearchTakesAWildcardLiterally(t *testing.T) {
+	s := openTemp(t)
+	literal := leased(t, s, "alice", Attributes{Title: Set("Pay the 50% deposit")})
+	leased(t, s, "alice", Attributes{Title: Set("Read a book")})
+
+	tasks, err := s.Tasks(Query{Search: "50%"})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != literal {
+		t.Errorf("searching for 50%% found %v, want only %s", ids(tasks), literal)
+	}
+}
+
+// Search narrows within the view rather than around it: a Task the other
+// narrowings hide stays hidden, and so does a match underneath it.
+func TestSearchDoesNotReachPastTheOtherNarrowings(t *testing.T) {
+	s := openTemp(t)
+	root := leased(t, s, "alice", Attributes{Title: Set("Redecorate")})
+	if _, err := s.AddSubtask("alice", root, Attributes{Title: Set("Buy paint")}); err != nil {
+		t.Fatalf("AddSubtask: %v", err)
+	}
+	if err := s.WithLease("alice", root, WriteTTL, func() error {
+		return s.DeleteTask("alice", root)
+	}); err != nil {
+		t.Fatalf("DeleteTask: %v", err)
+	}
+
+	tasks, err := s.Tasks(Query{Search: "paint"})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Errorf("searching found %v under a deleted Task, want nothing", ids(tasks))
+	}
+	if tasks, err = s.Tasks(Query{Search: "paint", IncludeDeleted: true}); err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Errorf("asked for the deleted too, searching found %v, want the pair", ids(tasks))
+	}
+}
+
+func ids(tasks []Task) []string {
+	out := make([]string, 0, len(tasks))
+	for _, t := range tasks {
+		out = append(out, t.ID)
+	}
+	return out
+}
+
+// A word with a space after it is the word. `instr` reads the space, so a
+// search that was not trimmed empties the list the moment somebody types one.
+func TestSearchIgnoresTheSpaceAroundTheWord(t *testing.T) {
+	s := openTemp(t)
+	root := leased(t, s, "alice", Attributes{Title: Set("Buy paint")})
+	leased(t, s, "alice", Attributes{Title: Set("Read a book")})
+
+	tasks, err := s.Tasks(Query{Search: " paint "})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if strings.Join(ids(tasks), ",") != root {
+		t.Errorf("searching for %q found %v, want just %s", " paint ", ids(tasks), root)
+	}
+}

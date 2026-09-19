@@ -3,7 +3,7 @@
 // `apps/todo/src/api/broker.go`, which are the side that decides them.
 
 import { send } from './api'
-import type { Task } from './state'
+import { type Narrowing, queryString, type Task } from './state'
 
 /**
  * A Task's attributes and its memberships as they are sent, and the same shape
@@ -18,10 +18,25 @@ export type TaskBody = {
   title?: string
   description?: string
   why?: string
+  color?: string
   deadline?: string
   estimate?: string
   priority?: string
   impact?: string
+  /**
+   * How long to hide the Task for, which the API reads from now: one of the
+   * offered labels or a plain duration. It is the one attribute a Task cannot
+   * be read back into, since what it carries is the instant it wakes rather
+   * than the span somebody asked for, so an absent one leaves the Task as it
+   * is and an empty one wakes it.
+   */
+  snooze?: string
+  /**
+   * The key/value pairs, sent whole. A key mapped to the empty string removes
+   * it and a key left out is left alone, which is the store's rule rather than
+   * a second one written here.
+   */
+  fields?: Record<string, string>
   parent?: string
   intoLists?: string[]
   outOfLists?: string[]
@@ -41,9 +56,21 @@ export function capture(text: string): Promise<TaskBody> {
 /**
  * Asks about the Tasks in view and gets prose back. It is a read like the list
  * it is about: nothing is appended and nothing is kept between calls.
+ *
+ * "In view" is the narrowing the list is drawn under, sent as the same query
+ * string the poll carries and read by the route the same way. A question asked
+ * without it would be answered about every open Task while the screen shows a
+ * sorted, narrowed few, and nothing on the screen would say so.
  */
-export async function ask(question: string): Promise<string> {
-  const said = await send<{ answer: string }>('POST', '/api/ask', { question })
+export async function ask(
+  question: string,
+  narrowing: Narrowing,
+): Promise<string> {
+  const said = await send<{ answer: string }>(
+    'POST',
+    `/api/ask${queryString(narrowing)}`,
+    { question },
+  )
   return said.answer
 }
 
@@ -106,10 +133,12 @@ export function draftOf(task: Task): TaskBody {
     title: task.title,
     description: task.description,
     why: task.why,
+    color: task.color,
     deadline: task.deadline,
     estimate: estimate(task.estimateSeconds),
     priority: task.priority,
     impact: task.impact,
+    fields: task.fields,
     intoLists: task.lists ?? [],
     addTags: task.tags ?? [],
   }

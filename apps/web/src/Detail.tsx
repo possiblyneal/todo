@@ -36,6 +36,8 @@ export function Detail({
   subtasks,
   lists,
   tags,
+  colors,
+  snoozes,
   revision,
   onOpen,
   onBack,
@@ -45,6 +47,8 @@ export function Detail({
   subtasks: Task[]
   lists: Collection[]
   tags: Collection[]
+  colors: string[]
+  snoozes: string[]
   /**
    * The ETag of the read on the screen. The history is fetched again when it
    * changes, so a write made here or made by an Agent elsewhere shows up on the
@@ -95,6 +99,8 @@ export function Detail({
         // being lifted out, so it needs the same two to tick memberships with.
         lists={lists}
         tags={tags}
+        colors={colors}
+        snoozes={snoozes}
         revision={revision}
         // A detached date is an ordinary Task now, and opening it is the only
         // thing that names it: nothing else afterwards says where it went.
@@ -114,6 +120,8 @@ export function Detail({
         draft={open === 'edit' ? draftOf(task) : {}}
         lists={lists}
         tags={tags}
+        colors={colors}
+        snoozes={snoozes}
         action={open === 'edit' ? 'Save' : 'Add'}
         onSubmit={async (body: TaskBody) => {
           if (open === 'edit') await editTask(task.id, body)

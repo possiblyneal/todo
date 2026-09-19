@@ -14,6 +14,12 @@ import { memberships, type TaskBody } from './write'
 /** The attributes this sheet takes as text, which is every one it shows. */
 type Said = 'title' | 'description' | 'why' | 'deadline' | 'estimate'
 
+/**
+ * The three level names, and the one list the client still keeps a copy of:
+ * nothing on the wire carries them, so a fourth added to `store.Levels` has to
+ * be added here too. The colors and the snoozes used to be the same problem and
+ * are not any more — `GET /api/state` carries both.
+ */
 const LEVELS = ['low', 'med', 'high']
 
 export function Sheet({
@@ -21,6 +27,8 @@ export function Sheet({
   against,
   lists,
   tags,
+  colors,
+  snoozes,
   action,
   onSubmit,
   onCancel,
@@ -36,6 +44,13 @@ export function Sheet({
   against?: TaskBody
   lists: Collection[]
   tags: Collection[]
+  /**
+   * The colors a Task may carry and the snoozes on offer, as
+   * `GET /api/state` answered them. The client keeps no list of either, so it
+   * cannot offer a color the store would refuse.
+   */
+  colors: string[]
+  snoozes: string[]
   /** The word on the button, which is what submitting it does. */
   action: string
   onSubmit: (body: TaskBody) => Promise<void>
@@ -139,15 +154,34 @@ export function Sheet({
         />
       </label>
 
-      <Level
+      <Choice
         name="Priority"
+        offered={LEVELS}
         value={body.priority ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, priority: value }))}
       />
-      <Level
+      <Choice
         name="Impact"
+        offered={LEVELS}
         value={body.impact ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, impact: value }))}
+      />
+      <Choice
+        name="Color"
+        offered={colors}
+        value={body.color ?? ''}
+        onPick={(value) => setBody((was) => ({ ...was, color: value }))}
+      />
+
+      <Snooze
+        offered={snoozes}
+        value={body.snooze}
+        onPick={(value) => setBody((was) => ({ ...was, snooze: value }))}
+      />
+
+      <Fields
+        on={body.fields ?? {}}
+        onChange={(fields) => setBody((was) => ({ ...was, fields }))}
       />
 
       <Ticks
@@ -176,33 +210,153 @@ export function Sheet({
 }
 
 /**
- * One of the three levels. A value that is none of them is offered as a fourth
- * rather than dropped: the Broker chose the word, and a list that silently
- * cannot hold it would lose what it said.
+ * One attribute whose values are a list somebody picks from: a level, or a
+ * color. A value that is none of them is offered as one more rather than
+ * dropped, because the Broker chose the word and a list that silently cannot
+ * hold it would lose what it said. The API refuses the ones it refuses, and
+ * says so in the sentence the sheet shows.
+ *
+ * Empty clears the attribute, which is the same rule an emptied text field
+ * follows.
  */
-function Level({
+function Choice({
   name,
+  offered,
   value,
   onPick,
 }: {
   name: string
+  offered: string[]
   value: string
   onPick: (value: string) => void
 }) {
-  const offered =
-    value === '' || LEVELS.includes(value) ? LEVELS : [...LEVELS, value]
+  const shown =
+    value === '' || offered.includes(value) ? offered : [...offered, value]
   return (
     <label className="field">
       <span>{name}</span>
       <select value={value} onChange={(event) => onPick(event.target.value)}>
         <option value="">—</option>
-        {offered.map((level) => (
-          <option key={level} value={level}>
-            {level}
+        {shown.map((one) => (
+          <option key={one} value={one}>
+            {one}
           </option>
         ))}
       </select>
     </label>
+  )
+}
+
+/**
+ * How long to hide the Task for. It is not a Choice because a Task cannot be
+ * read back into one: what it carries is the instant it wakes rather than the
+ * span somebody asked for, so the sheet never opens knowing the answer and the
+ * two things leaving it alone and waking it up cannot be the same option.
+ *
+ * Undefined is left alone, which is what an untouched sheet sends and what
+ * keeps a snoozed Task snoozed through an edit about something else. The empty
+ * string wakes it, which is the only way back from a snooze on this surface.
+ */
+function Snooze({
+  offered,
+  value,
+  onPick,
+}: {
+  offered: string[]
+  value?: string
+  onPick: (value: string | undefined) => void
+}) {
+  // A snooze this side was never offered is shown as one more, the way a Choice
+  // shows a word it did not know: `write.Snooze` takes a plain duration as well
+  // as the four labels, and `store.SnoozeNames` serves the offer rather than the
+  // rule, so a Task snoozed by that duration from a terminal would otherwise
+  // reach this screen with its snooze blanked.
+  const shown =
+    value === undefined || value === '' || offered.includes(value)
+      ? offered
+      : [...offered, value]
+  return (
+    <label className="field">
+      <span>Snooze</span>
+      <select
+        value={value === undefined ? 'leave' : value === '' ? 'wake' : value}
+        onChange={(event) => {
+          const picked = event.target.value
+          onPick(
+            picked === 'leave' ? undefined : picked === 'wake' ? '' : picked,
+          )
+        }}
+      >
+        <option value="leave">—</option>
+        <option value="wake">wake it</option>
+        {shown.map((one) => (
+          <option key={one} value={one}>
+            {one}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+/**
+ * The key/value pairs, edited in place with one blank row to add another.
+ *
+ * A value emptied removes its pair, which is the store's own rule rather than a
+ * delete this side invents. A key is not renamed: the wire names a pair by its
+ * key, so a rename is a removal and an addition, and offering it as one edit
+ * would be the sheet describing a write the API does not make.
+ */
+function Fields({
+  on,
+  onChange,
+}: {
+  on: Record<string, string>
+  onChange: (fields: Record<string, string>) => void
+}) {
+  const [key, setKey] = useState('')
+  const [value, setValue] = useState('')
+
+  const add = () => {
+    // An empty value is how the wire says remove, so adding a pair with one
+    // would draw a row that submitting deletes.
+    if (key === '' || value === '') return
+    onChange({ ...on, [key]: value })
+    setKey('')
+    setValue('')
+  }
+
+  return (
+    <fieldset className="field">
+      <legend>Fields</legend>
+      {Object.entries(on).map(([name, held]) => (
+        <label key={name} className="pair">
+          <span>{name}</span>
+          <input
+            value={held}
+            placeholder="empty removes it"
+            onChange={(event) =>
+              onChange({ ...on, [name]: event.target.value })
+            }
+          />
+        </label>
+      ))}
+      <div className="pair">
+        <input
+          value={key}
+          placeholder="name"
+          onChange={(event) => setKey(event.target.value)}
+        />
+        <input
+          value={value}
+          placeholder="value"
+          onChange={(event) => setValue(event.target.value)}
+        />
+        <button type="button" onClick={add} disabled={key === ''}>
+          Add
+        </button>
+      </div>
+    </fieldset>
   )
 }
 

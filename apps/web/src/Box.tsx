@@ -10,15 +10,23 @@
 import { useState } from 'react'
 
 import { Sheet } from './Sheet'
-import type { Collection } from './state'
+import type { Collection, Narrowing } from './state'
 import { addTask, ask, capture, type TaskBody } from './write'
 
 export function Box({
   lists,
   tags,
+  colors,
+  snoozes,
+  narrowing,
 }: {
   lists: Collection[]
   tags: Collection[]
+  colors: string[]
+  snoozes: string[]
+  // What the list is narrowed to, so a question is asked about the Tasks on
+  // the screen rather than about every open one.
+  narrowing: Narrowing
 }) {
   const [text, setText] = useState('')
   const [working, setWorking] = useState<'' | 'reading' | 'asking'>('')
@@ -37,7 +45,7 @@ export function Box({
     setAnswer(null)
     try {
       if (what === 'reading') setDraft(await capture(said))
-      else setAnswer(await ask(said))
+      else setAnswer(await ask(said, narrowing))
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
@@ -57,6 +65,8 @@ export function Box({
         against={{}}
         lists={lists}
         tags={tags}
+        colors={colors}
+        snoozes={snoozes}
         action="Add"
         // The dump is done with once the Task is written. Backing out of the
         // sheet keeps it, because somebody who changed their mind about the

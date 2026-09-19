@@ -1,20 +1,24 @@
 import { afterEach, expect, test, vi } from 'vitest'
 
-import { fetchSeries, fetchState } from './state'
+import { fetchSeries, fetchState, queryString, WIDE } from './state'
 
 const empty: string[] = []
 
 // What the last call asked for, which is how the conditional request is
 // checked: the ETag only earns its keep if it is actually sent back.
 let asked: RequestInit | undefined
+// Where it asked, which is how the narrowing is checked: the query string is
+// the whole of what tells the API which Tasks the screen wants.
+let at: string | undefined
 
 function answering(
   status: number,
   body: unknown,
   headers: Record<string, string> = {},
 ) {
-  return (_url: string, init?: RequestInit) => {
+  return (url: string, init?: RequestInit) => {
     asked = init
+    at = url
     return Promise.resolve(
       new Response(status === 304 ? null : JSON.stringify(body), {
         status,
@@ -26,6 +30,7 @@ function answering(
 
 afterEach(() => {
   asked = undefined
+  at = undefined
   vi.unstubAllGlobals()
 })
 
@@ -45,7 +50,7 @@ test('a read returns the tree and the tag it came with', async () => {
     ),
   )
 
-  const snapshot = await fetchState(null)
+  const snapshot = await fetchState(WIDE, null)
 
   expect(snapshot?.etag).toBe('"abc"')
   expect(snapshot?.state.tasks[0]?.title).toBe('Ship it')
@@ -55,7 +60,7 @@ test('a read returns the tree and the tag it came with', async () => {
 test('an unchanged store is nothing to redraw rather than an empty one', async () => {
   vi.stubGlobal('fetch', answering(304, null))
 
-  expect(await fetchState('"abc"')).toBeNull()
+  expect(await fetchState(WIDE, '"abc"')).toBeNull()
   expect(asked?.headers).toEqual({ 'If-None-Match': '"abc"' })
 })
 
@@ -63,7 +68,7 @@ test('a refusal surfaces the sentence the CLI would have printed', async () => {
   const sentence = 'usage: sort is one of [title deadline], not "nope"'
   vi.stubGlobal('fetch', answering(400, { error: sentence }))
 
-  await expect(fetchState(null)).rejects.toThrow(sentence)
+  await expect(fetchState(WIDE, null)).rejects.toThrow(sentence)
 })
 
 test('an error with no sentence in it still says what happened', async () => {
@@ -71,7 +76,7 @@ test('an error with no sentence in it still says what happened', async () => {
     Promise.resolve(new Response('nope', { status: 500 })),
   )
 
-  await expect(fetchState(null)).rejects.toThrow('the API answered 500')
+  await expect(fetchState(WIDE, null)).rejects.toThrow('the API answered 500')
 })
 
 test('a task that does not repeat is not an error', async () => {
@@ -110,4 +115,75 @@ test('a series is the rule and the dates it produces', async () => {
   expect(series.occurrences[0]?.state).toBe('ticked')
   expect(series.occurrences[1]?.state).toBeUndefined()
   expect(series.rule).toBe('every week on mon,thu from 2026-09-16')
+})
+
+// The everyday view is the bare path. A query string of empty values would be
+// a second spelling of the same representation, and the ETag is hashed over
+// the query, so the two would never share a cached answer.
+test('narrowed by nothing is the path and no query at all', () => {
+  expect(queryString(WIDE)).toBe('')
+})
+
+test('each narrowing is sent under the name the route reads it by', () => {
+  expect(
+    queryString({
+      all: true,
+      list: 'l1',
+      tag: 't1',
+      search: 'paint',
+      sort: 'deadline',
+    }),
+  ).toBe('?all=true&list=l1&tag=t1&search=paint&sort=deadline')
+})
+
+// `all` is one flag over four states, because that is what the route does with
+// it. Sending `all=false` would be asking for something the route has no word
+// for.
+test('showing only the everyday tasks says nothing rather than false', () => {
+  expect(queryString({ ...WIDE, all: false })).toBe('')
+})
+
+test('a list id that needs escaping is escaped', () => {
+  expect(queryString({ ...WIDE, list: 'a b&c' })).toBe('?list=a+b%26c')
+})
+
+// The store is what matches the text, so whatever was typed goes out as typed.
+// Trimming or splitting it here would be this side deciding what a search means
+// and then disagreeing with `todo list -search`.
+test('searched text is sent as it was typed', () => {
+  expect(queryString({ ...WIDE, search: '50% off' })).toBe('?search=50%25+off')
+})
+
+test('the read asks under the narrowing it was given', async () => {
+  vi.stubGlobal(
+    'fetch',
+    answering(200, { tasks: [], lists: [], tags: [], sorts: [] }),
+  )
+
+  await fetchState({ ...WIDE, all: true, list: 'l1', sort: 'title' }, null)
+
+  expect(at).toBe('/api/state?all=true&list=l1&sort=title')
+})
+
+// The sorts are drawn as they arrive and never invented here, so an empty
+// answer is an empty picker rather than a default set this side made up.
+test('the sorts on offer are the ones the read named', async () => {
+  vi.stubGlobal(
+    'fetch',
+    answering(200, {
+      tasks: [],
+      lists: [],
+      tags: [],
+      sorts: ['title', 'deadline', 'created', 'estimate'],
+    }),
+  )
+
+  const snapshot = await fetchState(WIDE, null)
+
+  expect(snapshot?.state.sorts).toEqual([
+    'title',
+    'deadline',
+    'created',
+    'estimate',
+  ])
 })

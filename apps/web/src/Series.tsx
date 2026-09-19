@@ -24,6 +24,8 @@ export function Series({
   task,
   lists,
   tags,
+  colors,
+  snoozes,
   revision,
   onOpen,
   onBack,
@@ -31,6 +33,8 @@ export function Series({
   task: Task
   lists: Collection[]
   tags: Collection[]
+  colors: string[]
+  snoozes: string[]
   /**
    * The ETag of the read on the screen, which is what this reads again on: a
    * mark made here lands on the next poll and the dates redraw then, the same
@@ -89,6 +93,8 @@ export function Series({
         against={{}}
         lists={lists}
         tags={tags}
+        colors={colors}
+        snoozes={snoozes}
         action="Lift out"
         onSubmit={async (body) => {
           // The lift and the corrections are one write, so backing out of this

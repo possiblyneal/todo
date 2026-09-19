@@ -86,6 +86,31 @@ button.row {
   white-space: pre-wrap;
 }
 
+/* The controls over the list. Three across a phone would take each one under
+   the 44px floor, so they wrap instead of shrinking, and each keeps its own
+   height rather than inheriting the row's. */
+.narrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.control {
+  flex: 1 1 8rem;
+  min-height: 44px;
+  padding: 0.5rem;
+  font: inherit;
+}
+
+/* Show everything is a toggle, and there is no hover to say which way it is
+   set, so it is filled in when it is on. aria-pressed says it to a reader. */
+.control.on {
+  background: currentColor;
+  color: Canvas;
+}
+
 /* The add sheet: what the broker read, open for correction. */
 .sheet {
   display: flex;
@@ -131,6 +156,25 @@ button.row {
 .tick input {
   width: 1.25rem;
   height: 1.25rem;
+}
+
+/* One key/value pair, and the blank row that adds another. Both are the same
+   row so the thing being added lines up under the things already there. */
+.pair {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+
+.pair input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pair > span {
+  flex: 0 0 35%;
+  overflow-wrap: anywhere;
 }
 
 /* The detail and activity screens. Both are a column of a phone's width with
