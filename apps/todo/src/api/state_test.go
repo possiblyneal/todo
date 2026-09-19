@@ -474,8 +474,11 @@ func TestStateOffersTheLevelsWithTheirExamples(t *testing.T) {
 		{"priorities", state.Priorities, store.PriorityExamples, "priority"},
 		{"impacts", state.Impacts, store.ImpactExamples, "impact"},
 	} {
+		// Fatal rather than an error carried on: the loop below indexes
+		// store.Levels by the position of what came back, so a longer answer
+		// would panic where it should have failed.
 		if len(both.got) != len(store.Levels) {
-			t.Errorf("%s = %d, want %d", both.what, len(both.got), len(store.Levels))
+			t.Fatalf("%s = %d, want %d", both.what, len(both.got), len(store.Levels))
 		}
 		for i, one := range both.got {
 			if want := string(store.Levels[i]); one.Name != want {

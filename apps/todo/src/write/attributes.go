@@ -190,9 +190,5 @@ func SnoozeLabels() string {
 // sentences is a wall in a flag's help — so a surface that has room for them
 // reads them off GET /api/state, which is where they are served.
 func LevelLabels() string {
-	labels := make([]string, len(store.Levels))
-	for i, l := range store.Levels {
-		labels[i] = string(l)
-	}
-	return strings.Join(labels, ", ")
+	return strings.Join(store.LevelNames(), ", ")
 }

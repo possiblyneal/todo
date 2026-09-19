@@ -42,17 +42,24 @@ var (
 
 // LevelOffer is a level and the example that says what it means, which is what
 // a surface offering the choice shows. The two travel together so that serving
-// the words without the sentences takes a deliberate step; that both maps name
-// all three is pinned by a test rather than by this type.
+// the words without the sentences takes a deliberate step.
 type LevelOffer struct {
 	Name    string
 	Example string
 }
 
-// LevelOffers pairs the three with one of the two example maps above, in
-// order. A map missing a level yields an empty example rather than an error,
-// because the two maps here are the only ones and a test holds them complete.
-func LevelOffers(examples map[Level]string) []LevelOffer {
+// PriorityOffers and ImpactOffers are the three in order, each beside what it
+// means. They take no argument for the reason ColorNames does not: each is the
+// one reading of a list this package owns, and a function that took the map
+// could be handed one missing a level and would serve a word with nothing
+// beside it.
+func PriorityOffers() []LevelOffer { return levelOffers(PriorityExamples) }
+
+// ImpactOffers is PriorityOffers over the other map. The two are separate
+// because high priority is today and high impact is what unblocks other work.
+func ImpactOffers() []LevelOffer { return levelOffers(ImpactExamples) }
+
+func levelOffers(examples map[Level]string) []LevelOffer {
 	offers := make([]LevelOffer, len(Levels))
 	for i, l := range Levels {
 		offers[i] = LevelOffer{Name: string(l), Example: examples[l]}
@@ -60,12 +67,26 @@ func LevelOffers(examples map[Level]string) []LevelOffer {
 	return offers
 }
 
+// LevelNames are the three in order, the way ColorNames is the nine. A surface
+// naming them reads this rather than spelling them out, and the refusals below
+// are written from it so a fourth added here cannot be left out of the sentence
+// that lists them.
+func LevelNames() []string {
+	names := make([]string, len(Levels))
+	for i, l := range Levels {
+		names[i] = string(l)
+	}
+	return names
+}
+
+func levelNames() string { return strings.Join(LevelNames(), ", ") }
+
 // ParseLevel reads a level off a surface, so a bad one is refused where it is
 // typed rather than deep in the write path. An empty string clears the level.
 func ParseLevel(v string) (Level, error) {
 	l := Level(strings.ToLower(strings.TrimSpace(v)))
 	if l != "" && !l.valid() {
-		return "", fmt.Errorf("%q is not one of low, med, high", v)
+		return "", fmt.Errorf("%q is not one of %s", v, levelNames())
 	}
 	return l, nil
 }
@@ -279,7 +300,7 @@ func putLevel(p map[string]any, key string, v *Level) error {
 		return nil
 	}
 	if !v.valid() {
-		return fmt.Errorf("%s %q is not one of low, med, high", key, *v)
+		return fmt.Errorf("%s %q is not one of %s", key, *v, levelNames())
 	}
 	p[key] = string(*v)
 	return nil
