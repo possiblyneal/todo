@@ -280,9 +280,11 @@ function Snooze({
   value?: string
   onPick: (value: string | undefined) => void
 }) {
-  // A snooze the Broker said is offered as one more, the way a Choice offers a
-  // word it did not know: `write.Snooze` takes a plain duration as well as the
-  // labels, so one is not a value to drop on the way to the screen.
+  // A snooze this side was never offered is shown as one more, the way a Choice
+  // shows a word it did not know: `write.Snooze` takes a plain duration as well
+  // as the four labels, and `store.SnoozeNames` serves the offer rather than the
+  // rule, so a Task snoozed by that duration from a terminal would otherwise
+  // reach this screen with its snooze blanked.
   const shown =
     value === undefined || value === '' || options.includes(value)
       ? options
@@ -330,7 +332,9 @@ function Fields({
   const [value, setValue] = useState('')
 
   const add = () => {
-    if (key === '') return
+    // An empty value is how the wire says remove, so adding a pair with one
+    // would draw a row that submitting deletes.
+    if (key === '' || value === '') return
     onChange({ ...on, [key]: value })
     setKey('')
     setValue('')
