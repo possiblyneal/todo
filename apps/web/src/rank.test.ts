@@ -59,6 +59,18 @@ test('a Tag arriving later is keyed and ranked by that key', () => {
   expect(order.map((one) => one.id)).toEqual(['new', 'old'])
 })
 
+// Two Tags drawing the same key are ordered by nothing but the order they were
+// counted in, so the picker does not swap them about between reads for a reason
+// nobody could see. Reversing the input reverses the output: anything imposing
+// an order of its own -- by id, by name -- would answer the same both times.
+test('two Tags drawing the same key keep the order they came in', () => {
+  const both = [tag('first', 1), tag('second', 1)]
+  const given = (tags: Collection[]) =>
+    ranked(tags, new Map(), feeding(0.5)).map((one) => one.id)
+  expect(given(both)).toEqual(['first', 'second'])
+  expect(given([...both].reverse())).toEqual(['second', 'first'])
+})
+
 test('the ranking returns every Collection it was given', () => {
   const tags = [tag('a', 3), tag('b', 0), tag('c', 7)]
   const order = ranked(tags, new Map(), feeding(0.2, 0.4, 0.6))
