@@ -9,6 +9,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { Sheet } from './Sheet'
+import * as state from './state'
 import type { Offered } from './state'
 import * as write from './write'
 import type { TaskBody } from './write'
@@ -310,6 +311,108 @@ test('a phrase the picker cannot show is left in the box', () => {
     (screen.getByLabelText('Deadline as typed') as HTMLInputElement).value,
   ).toBe('next Friday')
   expect(sheet.submit().deadline).toBe('next Friday')
+})
+
+// The picker browses the machine that will resolve the path, because a
+// pointer typed on a phone names a file on the host and the browser's own file
+// input cannot answer with a directory at all. It fills the box and never reads
+// it back, which is the rule the deadline's picker follows.
+test('a file picked off the machine fills the attachment box', async () => {
+  vi.spyOn(state, 'fetchFiles').mockImplementation((path?: string) =>
+    Promise.resolve(
+      path === undefined
+        ? {
+            path: '/home/neal',
+            parent: '',
+            entries: [
+              { name: 'papers', dir: true },
+              { name: 'note.txt', dir: false },
+            ],
+          }
+        : {
+            path,
+            parent: '/home/neal',
+            entries: [{ name: 'deed', dir: false }],
+          },
+    ),
+  )
+  const sheet = opened({ title: 'Move house' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+  // A directory is somewhere to go and a file is something to point at, so the
+  // first tap lists and the second fills.
+  fireEvent.click(await screen.findByRole('button', { name: 'papers/' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'deed' }))
+
+  const typed = screen.getByLabelText('New attachment')
+  expect((typed as HTMLInputElement).value).toBe('/home/neal/papers/deed')
+  // Filling the box is not attaching: the box is still the field, and Attach
+  // is still what collects what is in it.
+  expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
+  expect(sheet.submit().attachments).toEqual(['/home/neal/papers/deed'])
+})
+
+// The route refuses in its own words — a path outside the root it will look
+// in, or one naming nothing — and the picker draws that rather than an empty
+// directory, which would say the machine has nothing on it.
+test('a refused listing is drawn in the API’s own words', async () => {
+  vi.spyOn(state, 'fetchFiles').mockRejectedValue(
+    new Error(
+      '/etc is outside /home/neal, which is as far as this listener will look',
+    ),
+  )
+  opened({ title: 'Move house' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+  expect(
+    await screen.findByText(
+      '/etc is outside /home/neal, which is as far as this listener will look',
+    ),
+  ).toBeDefined()
+})
+
+// A refusal on the way down is one tap from where somebody already was, so the
+// directory they were in stays drawn under the sentence. Replacing the picker
+// with it takes the Up button away with it, and the only way back out is Close,
+// which starts again at the root.
+test('a refused listing leaves the directory it was refused from drawn', async () => {
+  const listing = vi.spyOn(state, 'fetchFiles').mockResolvedValue({
+    path: '/home/neal',
+    parent: '',
+    entries: [
+      { name: 'papers', dir: true },
+      { name: 'note.txt', dir: false },
+    ],
+  })
+  opened({ title: 'Move house' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+  expect(await screen.findByRole('button', { name: 'note.txt' })).toBeDefined()
+
+  listing.mockRejectedValue(new Error('cannot list /home/neal/papers'))
+  fireEvent.click(screen.getByRole('button', { name: 'papers/' }))
+
+  expect(await screen.findByText('cannot list /home/neal/papers')).toBeDefined()
+  expect(screen.getByRole('button', { name: 'note.txt' })).toBeDefined()
+})
+
+// The root is the one path that already ends in the separator, and what the
+// join produces is what somebody reads in the box.
+test('a file picked at the root of the machine has one separator', async () => {
+  vi.spyOn(state, 'fetchFiles').mockResolvedValue({
+    path: '/',
+    parent: '',
+    entries: [{ name: 'swap', dir: false }],
+  })
+  opened({ title: 'Move house' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'swap' }))
+
+  expect(
+    (screen.getByLabelText('New attachment') as HTMLInputElement).value,
+  ).toBe('/swap')
 })
 
 // The same pointer twice is one pointer. It is also what keeps the rows keyed

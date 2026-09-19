@@ -2,12 +2,16 @@
 // through. It holds routing, encoding and the status code an error takes, and
 // no rules: every handler is another caller of the same store the verbs call,
 // so a person on a phone and an Agent at a terminal get the same contract.
+// GET /api/files is the one exception and says so where it is registered: it
+// reads a directory rather than the store, so the root it will not look above
+// is a rule with nowhere else to live.
 //
 // See docs/adrs/0003-replace-the-tui-with-a-browser-client.md and
 // docs/plans/browser-client.md.
 package api
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,10 +32,15 @@ import (
 // authentication here and so nobody to name per request: `todo api` resolves
 // its Actor once, the same way a verb resolves one, and the whole listener
 // writes as that. A browser on the LAN is the person who started it.
+//
+// Browse is the directory the file picker lists from and will not look above.
+// Empty is the home directory of the user running `todo api`, which is the
+// machine a pointer's relative path resolves against.
 type Options struct {
-	Addr  string
-	Web   string
-	Actor string
+	Addr   string
+	Web    string
+	Actor  string
+	Browse string
 }
 
 // Handler is every route, and it is what a test exercises without a listener.
@@ -109,6 +118,13 @@ func Handler(s *store.Store, o Options) http.Handler {
 			dropCollection(k, o.Actor, w, r)
 		})
 	}
+	// The one route reading outside the store. It lists and never opens, and
+	// what it lists is the machine a pointer resolves against rather than the
+	// phone the pointer is being typed into.
+	root := rooted(cmp.Or(o.Browse, home()))
+	mux.HandleFunc("GET /api/files", func(w http.ResponseWriter, r *http.Request) {
+		browse(root, w, r)
+	})
 	mux.HandleFunc("POST /api/capture", func(w http.ResponseWriter, r *http.Request) {
 		capture(s, broker, w, r)
 	})

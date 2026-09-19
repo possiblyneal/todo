@@ -12,7 +12,8 @@
 import { useState } from 'react'
 
 import { sentence } from './api'
-import type { Collection, Offered } from './state'
+import { type Collection, fetchFiles, type Files, type Offered } from './state'
+import { useRead } from './read'
 import { addCollection, type Kind, memberships, type TaskBody } from './write'
 
 /** The attributes this sheet takes as text, which is every one it shows. */
@@ -435,6 +436,7 @@ function Pointers({
   onChange: (on: string[]) => void
 }) {
   const [target, setTarget] = useState('')
+  const [browsing, setBrowsing] = useState(false)
 
   const add = () => {
     const pointer = target.trim()
@@ -464,11 +466,85 @@ function Pointers({
           value={target}
           onChange={(event) => setTarget(event.target.value)}
         />
+        <button type="button" onClick={() => setBrowsing(!browsing)}>
+          {browsing ? 'Close' : 'Browse'}
+        </button>
         <button type="button" onClick={add} disabled={target.trim() === ''}>
           Attach
         </button>
       </div>
+      {browsing && (
+        <Machine
+          onPick={(path) => {
+            setTarget(path)
+            setBrowsing(false)
+          }}
+        />
+      )}
     </fieldset>
+  )
+}
+
+/**
+ * The machine `todo api` runs on, one directory at a time. It is here because
+ * a pointer naming a file names it on that machine: the browser's own file
+ * input answers with a bare filename and no directory, so a file chosen on a
+ * phone would be a path the host cannot resolve.
+ *
+ * It fills the box and never reads it back, which is the rule the deadline's
+ * picker follows: a pointer half typed is not a path this could show, and the
+ * box stays the field that is submitted.
+ *
+ * It lists and never opens. Nothing is fetched and nothing is copied in, so
+ * what a name points at is as unknown here as it is to the store.
+ */
+function Machine({ onPick }: { onPick: (path: string) => void }) {
+  const [at, setAt] = useState<string | undefined>(undefined)
+  // The same read and the same guard the other screens make theirs through,
+  // rather than a second copy of both written out here.
+  const { value: files, error } = useRead<Files | null>(
+    () => fetchFiles(at),
+    null,
+    [at],
+  )
+
+  if (!files) return <p className="aside">{error ?? '…'}</p>
+  return (
+    <div role="group" aria-label="Files">
+      {/* Over the listing rather than instead of it: a directory that cannot
+          be read is one tap from where somebody already was, and a picker
+          replaced by a sentence has no Up button left to take it. */}
+      {error !== null && <p className="aside">{error}</p>}
+      <p className="aside">{files.path}</p>
+      {files.parent !== '' && (
+        <button
+          type="button"
+          className="row"
+          onClick={() => setAt(files.parent)}
+        >
+          <span>Up a directory</span>
+        </button>
+      )}
+      {files.entries.map((one) => {
+        // `todo api` is a Unix service, so a join on `/` is the separator its
+        // paths are spelled with rather than a guess at the host's; every path
+        // the route answers is absolute, and the route is the only thing that
+        // names a directory here. The root is the one path already ending in
+        // the separator, and what goes in the box is what somebody reads.
+        const path = `${files.path === '/' ? '' : files.path}/${one.name}`
+        return (
+          <button
+            key={one.name}
+            type="button"
+            className="row"
+            onClick={() => (one.dir ? setAt(path) : onPick(path))}
+          >
+            <span>{one.dir ? `${one.name}/` : one.name}</span>
+          </button>
+        )
+      })}
+      {files.entries.length === 0 && <p className="aside">Nothing here.</p>}
+    </div>
   )
 }
 

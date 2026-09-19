@@ -27,7 +27,10 @@ and adds to this list rather than to the plan.
   `apps/todo/src/api/state.go`, which is the side that decides them. It also
   holds the Narrowing and the one function that writes it as a query string,
   which both the list and the question ask under, and `Offered`: the served sets
-  a surface picks from, which is the whole of the state bar the Tasks.
+  a surface picks from, which is the whole of the state bar the Tasks. The
+  other reads a screen makes for itself are here too: a Task's history, the
+  whole Change History, a Series, and one directory of the machine the listener
+  runs on.
 - `src/write.ts` — the wire shapes the write and Broker routes take, and the
   calls that reach them, and the client's one copy of the four lifecycle verbs
   and the three Occurrence marks, plus the fourth thing done to a date, which
@@ -88,7 +91,7 @@ and adds to this list rather than to the plan.
   proposal draws before it is approved, what a picker does with a value it
   cannot name and whether its Tag order survives an unmount, which kind a
   collection write goes out under, whether the field holding a pointer is
-  cleared, and what a row does with a name nothing named and an instant it
+  cleared and what the picker off the host puts in it, and what a row does with a name nothing named and an instant it
   cannot read. The other components are drawn from what they are handed, so
   there is nothing in them a test would pin that reading them does not.
 - `src/log.test.ts`, `src/state.test.ts`, `src/write.test.ts`,
@@ -316,6 +319,21 @@ and adds to this list rather than to the plan.
   written twice, here and on the detail screen, because the two clear at
   different moments — the detail screen's on the write landing, this one on the
   tap, since there is no write to wait for.
+- **The sheet's attachment box is browsed as well as typed into.** The detail
+  screen's box is typed into only; the two are issue #78's third disagreement
+  rather than a distinction either screen argues for. `Machine` in
+  `Sheet.tsx` walks the machine `todo api` runs on over `GET /api/files`, a
+  directory at a time, and a file tapped fills the box. It fills and never reads
+  back, the rule the deadline's picker follows, and filling is not attaching:
+  Attach is still what collects what is in the box. The browser's own file input
+  is not what this is, and could not be: it answers with a bare filename and no
+  directory, so a file chosen on a phone would be a path the host cannot
+  resolve. A refusal is drawn in the API's own words, because the root it will
+  look no further than is the route's to describe, and it is drawn over the
+  directory it was refused from rather than instead of it: a picker replaced by
+  a sentence has no Up button left to take somebody back. It reads through
+  `useRead` like every other screen that fetches for itself, so the answer that
+  lands after a tap has moved on is dropped in one place rather than two.
 - **A List or a Tag made on the sheet is made then, not on submit.** `Ticks` in
   `Sheet.tsx` posts it, holds the name until the poll answers with it, and ticks
   it. A Collection is an aggregate of its own, so the one made here outlives a
