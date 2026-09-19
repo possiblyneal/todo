@@ -51,7 +51,11 @@ export function Narrow({
           onChange({ ...narrowing, sort: event.target.value })
         }
       >
-        <option value="">Oldest first</option>
+        {/* Nothing asked for, rather than a name for what the store does
+            then: saying it here would be a copy of the store's fallback, and
+            it would sit in the list beside the served sort that means the
+            same thing. */}
+        <option value="">—</option>
         {offered.sorts.map((sort) => (
           <option key={sort} value={sort}>
             By {sort}

@@ -171,11 +171,7 @@ func Estimate(v string) (time.Duration, error) {
 // ColorLabels names the offered colors, which are the only ones the store
 // takes. It is the sentence a surface offers them in.
 func ColorLabels() string {
-	labels := make([]string, len(store.Colors))
-	for i, c := range store.Colors {
-		labels[i] = c.Name
-	}
-	return strings.Join(labels, ", ")
+	return strings.Join(store.ColorNames(), ", ")
 }
 
 // SnoozeLabels names the offered snoozes, which are not the only ones taken:
