@@ -127,7 +127,7 @@ func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	all := fs.Bool("all", false, "include completed, declined, snoozed and deleted tasks")
 	in := fs.String("list", "", "only the tasks in this list, by id")
 	tag := fs.String("tag", "", "only the tasks carrying this tag, by id")
-	search := fs.String("search", "", "only the tasks whose title, description or why hold this text")
+	search := fs.String("search", "", "only the tasks whose title, description or why hold this text, and the tasks they sit under")
 	sort := fs.String("sort", string(store.SortCreated),
 		"order siblings by "+strings.Join(store.SortNames(), ", "))
 	if err := fs.Parse(args); err != nil {

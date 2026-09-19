@@ -175,19 +175,24 @@ and adds to this list rather than to the plan.
   store named carries the count it worked out, and an id nothing named carries
   none, because a zero there would be this side answering a question the store
   never answered.
-- **A picked value the client does not know is offered rather than dropped.**
-  `Choice` in `Sheet.tsx` is one control for the levels and the colors alike,
-  and a value that is none of the offered ones is added to the end of the list:
-  the Broker chose the word, and a picker that silently could not hold it would
-  lose what it said. The API refuses what it refuses, in the sentence the sheet
-  shows.
+- **A level the client does not know is offered rather than dropped.** `Choice`
+  in `Sheet.tsx` is one control for the levels and the colors alike, and a value
+  that is none of the offered ones is added to the end of the list. That is the
+  levels' case: the Broker answers priority and impact in whatever words it
+  chose, and a picker that silently could not hold one would lose what it said.
+  A color cannot arrive that way — `write.AsSaid` carries no color, and the nine
+  arrive with the state — so for colors the branch is the same code standing
+  idle rather than a case being handled. The API refuses what it refuses, in the
+  sentence the sheet shows.
 - **Snooze is the one attribute the sheet cannot read back.** A Task carries the
   instant it wakes and the field takes the span to wait, so the control never
   opens knowing the answer: leaving it alone and waking the Task cannot be the
   same option, and they are two. Absent leaves a snoozed Task snoozed through an
   edit about something else, and waking it is the only way back from a snooze on
   this surface, since a snoozed Task is reached by showing everything the way an
-  ended one is.
+  ended one is. It carries the unknown-value fallback for a reason of its own:
+  `write.Snooze` takes a plain duration as well as the four served labels, so a
+  span from a terminal is a value the picker has to show rather than blank.
 - **A key/value pair is removed by emptying it, and a key is never renamed.**
   The wire names a pair by its key, so what looks like a rename is a removal and
   an addition; offering it as one edit would be the sheet describing a write the
