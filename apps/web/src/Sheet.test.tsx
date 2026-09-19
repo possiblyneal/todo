@@ -287,6 +287,31 @@ test('a collected attachment is taken off before anything is written', () => {
   expect(sheet.submit().attachments).toEqual(['/two'])
 })
 
+// The picker writes into the box, which stays the field. A day picked is the
+// same text somebody could have typed, and is still editable afterwards.
+test('a picked date lands in the deadline box as text', () => {
+  const sheet = opened({ title: 'Buy milk' })
+  fireEvent.change(screen.getByLabelText('Pick a deadline'), {
+    target: { value: '2026-03-04' },
+  })
+  expect(
+    (screen.getByLabelText('Deadline as typed') as HTMLInputElement).value,
+  ).toBe('2026-03-04')
+  expect(sheet.submit().deadline).toBe('2026-03-04')
+})
+
+// The one thing the picker must not do. A phrase the API refuses is still the
+// reason the box exists — the refusal comes back with the phrase still in the
+// field — and a picker reaching into it would blank or guess at that phrase,
+// which is the failure this shape was chosen to avoid.
+test('a phrase the picker cannot show is left in the box', () => {
+  const sheet = opened({ title: 'Buy milk', deadline: 'next Friday' })
+  expect(
+    (screen.getByLabelText('Deadline as typed') as HTMLInputElement).value,
+  ).toBe('next Friday')
+  expect(sheet.submit().deadline).toBe('next Friday')
+})
+
 // The same pointer twice is one pointer. It is also what keeps the rows keyed
 // apart, since a row is keyed by the pointer it draws, and Remove filters by
 // that same text: two rows of `/one` would be one key and one tap taking both.
@@ -299,6 +324,38 @@ test('the same attachment collected twice is collected once', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
   expect(screen.getAllByRole('button', { name: 'Remove' })).toHaveLength(1)
   expect(sheet.submit().attachments).toEqual(['/one'])
+})
+
+// The picker blanking the box is the same failure from the other side: a
+// native date input fires a change carrying the empty string when a keystroke
+// clears it, and the phrase in the box is not the picker's to take away.
+test('a cleared picker leaves the box alone', () => {
+  const sheet = opened({ title: 'Buy milk' })
+  const picker = screen.getByLabelText('Pick a deadline')
+  fireEvent.change(picker, { target: { value: '2026-03-04' } })
+  fireEvent.change(picker, { target: { value: '' } })
+  expect(
+    (screen.getByLabelText('Deadline as typed') as HTMLInputElement).value,
+  ).toBe('2026-03-04')
+  expect(sheet.submit().deadline).toBe('2026-03-04')
+})
+
+// The picker holds nothing of its own, which is the whole of "never reads the
+// box". A control left holding the day it wrote would fire nothing when that
+// same day is picked again, so somebody who typed over a picked date could not
+// pick it back; empty after a pick is what makes the next one a change.
+test('the picker holds nothing after it has written', () => {
+  const sheet = opened({ title: 'Buy milk', deadline: 'next Friday' })
+  const picker = screen.getByLabelText('Pick a deadline') as HTMLInputElement
+  expect(picker.value).toBe('')
+
+  fireEvent.change(picker, { target: { value: '2026-03-04' } })
+  expect(picker.value).toBe('')
+  fireEvent.change(screen.getByLabelText('Deadline as typed'), {
+    target: { value: 'next Friday' },
+  })
+  fireEvent.change(picker, { target: { value: '2026-03-04' } })
+  expect(sheet.submit().deadline).toBe('2026-03-04')
 })
 
 // A refusal belongs to the write somebody just made, and a Collection that was

@@ -160,7 +160,7 @@ and adds to this list rather than to the plan.
   ticks offer to make, which is a different aggregate and not the Task; the
   bullet below is where that is argued.
 - **Nothing the Broker said is dropped on the way to a field.** A deadline is
-  typed rather than picked and a level that is none of the three is offered as
+  submitted as typed and a level that is none of the three is offered as
   a fourth, because a control that can hold only what it can parse would blank
   the Broker's answer before anybody saw it. What the API cannot read it says
   so about, in its own words, with the value still in the field.
@@ -287,6 +287,19 @@ and adds to this list rather than to the plan.
   which is what an option or a switch reads: a Collection the store named
   carries the count it worked out, and an id nothing named carries none, because
   a zero there would be this side answering a question the store never answered.
+- **A deadline is typed, and picked beside being typed.** The box is the field
+  and is submitted as typed, which is what keeps a phrase the Broker used from
+  being blanked by a control that can hold only what it can parse. The native
+  `<input type="date">` next to it writes into the box and never reads it:
+  "next Friday" is not a date it can show, and one that guessed at it would be
+  that same failure, only later. It writes a date and never an empty one,
+  because a native date input fires a change carrying `""` when a keystroke
+  clears it, and writing that through would blank the box by the other route.
+  It blanks itself after each pick, since a control left holding the day fires
+  nothing when that same day is picked again, and somebody who typed over a
+  picked date could not pick it back.
+  The two are named apart — the box is "Deadline as typed" and the picker "Pick
+  a deadline" — since one value behind two controls is two things to say.
 - **An Attachment is collected on the sheet and written after the Task exists.**
   `Pointers` in `Sheet.tsx` puts them on the body; every one of the four writes
   that sheet makes — `addTask`, `addSubtask`, `editTask` and `detachEdited` in
@@ -436,7 +449,7 @@ and adds to this list rather than to the plan.
   and the filter is a toggle, so an Agent that named itself with no slash, one
   run with no `TODO_ACTOR`, is in the view it opens on.
 - **The Series is set as one value and the screen keeps no draft of it.** The
-  rule is typed whole, for the reason a deadline is: a control offering the
+  rule is typed whole, for the reason a deadline's box is: a control offering the
   rules it could build would offer fewer than the parser accepts. The field
   starts empty against the rule drawn beside it rather than seeded from a read
   that moves under it on every poll, so `Replace` is a rule stated in full and
