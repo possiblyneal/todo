@@ -167,7 +167,9 @@ and adds to this list rather than to the plan.
   same option, and they are two. Absent leaves a snoozed Task snoozed through an
   edit about something else, and waking it is the only way back from a snooze on
   this surface, since a snoozed Task is reached by showing everything the way an
-  ended one is.
+  ended one is. It carries the unknown-value fallback for a reason of its own:
+  `write.Snooze` takes a plain duration as well as the four served labels, so a
+  span from a terminal is a value the picker has to show rather than blank.
 - **A key/value pair is removed by emptying it, and a key is never renamed.**
   The wire names a pair by its key, so what looks like a rename is a removal and
   an addition; offering it as one edit would be the sheet describing a write the

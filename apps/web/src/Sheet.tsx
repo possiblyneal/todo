@@ -266,6 +266,15 @@ function Snooze({
   value?: string
   onPick: (value: string | undefined) => void
 }) {
+  // A snooze this side was never offered is shown as one more, the way a Choice
+  // shows a word it did not know: `write.Snooze` takes a plain duration as well
+  // as the four labels, and `store.SnoozeNames` serves the offer rather than the
+  // rule, so a Task snoozed by that duration from a terminal would otherwise
+  // reach this screen with its snooze blanked.
+  const shown =
+    value === undefined || value === '' || offered.includes(value)
+      ? offered
+      : [...offered, value]
   return (
     <label className="field">
       <span>Snooze</span>
@@ -280,7 +289,7 @@ function Snooze({
       >
         <option value="leave">—</option>
         <option value="wake">wake it</option>
-        {offered.map((one) => (
+        {shown.map((one) => (
           <option key={one} value={one}>
             {one}
           </option>
