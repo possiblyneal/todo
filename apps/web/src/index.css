@@ -26,17 +26,6 @@ body {
   border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
 }
 
-/* A row in the list stacks what it says instead: the title across the top, then
-   the description, then the facts. It is still one tap target, and taller than
-   44px rather than shorter. */
-button.row {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.15rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
-}
-
 /* The title, with the marks pushed to the end of the same line. */
 .said {
   display: flex;
@@ -44,6 +33,11 @@ button.row {
   gap: 0.5rem;
 }
 
+/* One line, with the rest of a long title ellipsed. The `overflow: hidden` is
+   what `text-overflow` clips against, and it is also what lets the box narrow
+   at all: a flex item's automatic minimum is its content, except that an
+   overflow other than `visible` takes it to zero. So this needs no
+   `min-width: 0` beside it, and adding one would read as though it did. */
 .titled {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -59,23 +53,35 @@ button.row {
   line-clamp: 2;
   -webkit-line-clamp: 2;
   overflow: hidden;
+  overflow-wrap: anywhere;
   opacity: 0.75;
   font-size: 0.85rem;
 }
 
-/* When it arrived, when it is due, what it is filed under, and the clip. They
-   wrap rather than shrink, the way the controls above the list do. */
+/* When it was created, its Deadline, the Lists it is filed under, and the
+   clip. They wrap rather than shrink, the way the controls above the list do.
+   Wrapping is between them, so a single long one — an unspaced List name, or
+   an instant `day` could not read — breaks inside itself as well. */
 .facts {
   display: flex;
   flex-wrap: wrap;
+  overflow-wrap: anywhere;
   gap: 0.15rem 0.6rem;
   opacity: 0.6;
   font-size: 0.75rem;
 }
 
 /* A row is a tap that opens the Task, so it is a button: the tap target is the
-   whole row rather than the words in it, and a keyboard reaches it. */
+   whole row rather than the words in it, and a keyboard reaches it. It stacks
+   what it says: the title across the top, then the description, then the
+   facts. It is still one tap target, and taller than 44px rather than
+   shorter. */
 button.row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
   /* A press held on a row opens its verbs, and selecting the title instead is
      the platform's idea of what holding means rather than this one's. */
   user-select: none;

@@ -15,6 +15,7 @@ import { Series } from './Series'
 import { Sheet } from './Sheet'
 import {
   fetchTaskHistory,
+  nameOf,
   type Collection,
   type Entry,
   type Offered,
@@ -265,9 +266,7 @@ function Carried({ name, value }: { name: string; value?: string }) {
  * take off.
  */
 function named(ids: string[] | undefined, all: Collection[]): string {
-  return (ids ?? [])
-    .map((id) => all.find((one) => one.id === id)?.name ?? id)
-    .join(', ')
+  return (ids ?? []).map((id) => nameOf(all, id)).join(', ')
 }
 
 /**
