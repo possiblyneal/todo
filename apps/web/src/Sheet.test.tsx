@@ -311,6 +311,20 @@ test('a phrase the picker cannot show is left in the box', () => {
   expect(sheet.submit().deadline).toBe('next Friday')
 })
 
+// The same pointer twice is one pointer. It is also what keeps the rows keyed
+// apart, since a row is keyed by the pointer it draws, and Remove filters by
+// that same text: two rows of `/one` would be one key and one tap taking both.
+test('the same attachment collected twice is collected once', () => {
+  const sheet = opened({ title: 'Buy milk' })
+  const typed = screen.getByLabelText('New attachment')
+  fireEvent.change(typed, { target: { value: '/one' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
+  fireEvent.change(typed, { target: { value: '/one' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
+  expect(screen.getAllByRole('button', { name: 'Remove' })).toHaveLength(1)
+  expect(sheet.submit().attachments).toEqual(['/one'])
+})
+
 // A refusal belongs to the write somebody just made, and a Collection that was
 // made is the write they just made. Left standing, the sentence says the wrong
 // thing about the tick that appeared beside it.

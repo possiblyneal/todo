@@ -394,13 +394,19 @@ function Fields({
  * write against a Task that may not exist yet, so submitting is what sends
  * them: a draft backed out of leaves no pointer behind because none was sent.
  *
- * It adds and never removes. An edit opens with this empty rather than with
- * what the Task carries, because taking one off is the detail screen's, which
- * is the screen that can show what is there.
+ * Nothing here detaches. Remove drops one collected before anything was sent;
+ * an edit opens with this empty rather than with what the Task carries, because
+ * taking one off the Task is the detail screen's, which is the screen that can
+ * show what is there.
  *
  * A pointer is text and nothing else. Nothing is uploaded and nothing fetched,
  * so one naming a file names it on the machine `todo api` runs on rather than
  * on the phone it was typed into.
+ *
+ * The repeat it refuses is a repeat of the text. The store trims a pointer and
+ * makes a path absolute (`store.pointer`), so `./a` and `/cwd/a` are two rows
+ * here and one pointer there; it is the store that says what a pointer is, and
+ * this side is not going to work out a second answer to that question.
  */
 function Pointers({
   on,
