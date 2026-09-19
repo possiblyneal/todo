@@ -324,3 +324,117 @@ test('an attachment on the body is written after the task it is for', async () =
     { target: '/b' },
   ])
 })
+
+// The lift-out sheet is the same sheet, so it offers the same field. Before the
+// split reached this write the whole body went to a route that refuses a field
+// it does not know, so one pointer typed there was a 400 on the lift itself
+// rather than a pointer that failed to land.
+test('an attachment on a lifted-out date is written after the copy exists', async () => {
+  const calls: { url: string; body: Record<string, unknown> }[] = []
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+    calls.push({
+      url,
+      body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+    })
+    return Promise.resolve(
+      new Response(JSON.stringify({ id: 'task_lifted' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  })
+
+  const written = await detachEdited('task_abc', '2026-09-17', {
+    title: 'Water the plants twice',
+    attachments: ['/a'],
+  })
+
+  expect(calls.map((one) => one.url)).toEqual([
+    '/api/tasks/task_abc/series/edit',
+    '/api/tasks/task_lifted/attachments',
+  ])
+  expect(calls[0]?.body).toEqual({
+    title: 'Water the plants twice',
+    on: '2026-09-17',
+  })
+  expect(written).toBe('task_lifted')
+})
+
+// An edit already names the Task, so there is no id to wait for; what is pinned
+// here is the order, because a pointer sent with the PATCH would be refused by
+// a route that takes no such field.
+test('an attachment on an edit is written after the change', async () => {
+  const calls: { url: string; body: Record<string, unknown> }[] = []
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+    calls.push({
+      url,
+      body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+    })
+    return Promise.resolve(
+      new Response(JSON.stringify({ id: 'task_abc' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  })
+
+  await editTask('task_abc', { why: 'it is hot', attachments: ['/a'] })
+
+  expect(calls.map((one) => one.url)).toEqual([
+    '/api/tasks/task_abc',
+    '/api/tasks/task_abc/attachments',
+  ])
+  expect(calls[0]?.body).toEqual({ why: 'it is hot' })
+})
+
+// Every other way a submit fails leaves nothing behind, so a refused pointer
+// has to say that this one did not: the form would otherwise offer the same
+// button again and a second press would write a second Task.
+test('a refused attachment says the task was written', async () => {
+  let written = false
+  vi.stubGlobal('fetch', (url: string) => {
+    if (String(url).endsWith('/attachments')) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: 'a pointer cannot be empty' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+    }
+    written = true
+    return Promise.resolve(
+      new Response(JSON.stringify({ id: 'task_abc' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  })
+
+  await expect(
+    addTask({ title: 'Paint the fence', attachments: ['/a', '/b'] }),
+  ).rejects.toThrow(/the task was written, and 0 of 2 attachments with it/)
+  expect(written).toBe(true)
+})
+
+// A Subtask is the same write with a parent, so it splits them the same way.
+// It has its own test because `Breakdown.test.tsx` mocks `addSubtask` whole,
+// which leaves nothing reaching this path.
+test('an attachment on a subtask is written after the subtask exists', async () => {
+  const calls: string[] = []
+  vi.stubGlobal('fetch', (url: string) => {
+    calls.push(String(url))
+    return Promise.resolve(
+      new Response(JSON.stringify({ id: 'task_kid' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  })
+
+  await addSubtask('task_abc', { title: 'Sand it', attachments: ['/a'] })
+
+  expect(calls).toEqual([
+    '/api/tasks/task_abc/subtasks',
+    '/api/tasks/task_kid/attachments',
+  ])
+})
