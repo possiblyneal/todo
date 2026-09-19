@@ -387,6 +387,11 @@ function Fields({
  * A pointer is text and nothing else. Nothing is uploaded and nothing fetched,
  * so one naming a file names it on the machine `todo api` runs on rather than
  * on the phone it was typed into.
+ *
+ * The repeat it refuses is a repeat of the text. The store trims a pointer and
+ * makes a path absolute (`store.pointer`), so `./a` and `/cwd/a` are two rows
+ * here and one pointer there; it is the store that says what a pointer is, and
+ * this side is not going to work out a second answer to that question.
  */
 function Pointers({
   on,

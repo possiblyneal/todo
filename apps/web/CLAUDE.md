@@ -286,12 +286,16 @@ and adds to this list rather than to the plan.
   carries the count it worked out, and an id nothing named carries none, because
   a zero there would be this side answering a question the store never answered.
 - **An Attachment is collected on the sheet and written after the Task exists.**
-  `Pointers` in `Sheet.tsx` puts them on the body; `addTask`, `addSubtask` and
-  `editTask` in `write.ts` split them off, because the routes refuse a field
-  they do not know and `store.Attach` is a guarded write against a Task that may
-  not exist yet. They go one at a time, and a refusal on one leaves the Task and
-  the pointers before it standing, which is what approving a breakdown already
-  does. The field adds and never removes: taking one off is the detail screen's,
+  `Pointers` in `Sheet.tsx` puts them on the body; every one of the four writes
+  that sheet makes — `addTask`, `addSubtask`, `editTask` and `detachEdited` in
+  `write.ts` — splits them off, because every write route refuses a field it
+  does not know and `store.Attach` is a guarded write against a Task that may
+  not exist yet. A write added to the sheet and not given the split is a 400 on
+  the whole write, not a dropped pointer. They go one at a time, and a refusal
+  on one leaves the Task and the pointers before it standing; the sentence says
+  so, because the form cannot otherwise tell that from a submit that wrote
+  nothing, and pressing the button again would write a second Task. The field
+  adds and never removes from the Task: taking one off is the detail screen's,
   the only screen that shows what a Task already carries.
 - **A List or a Tag made on the sheet is made then, not on submit.** `Ticks` in
   `Sheet.tsx` posts it, holds the name until the poll answers with it, and ticks
