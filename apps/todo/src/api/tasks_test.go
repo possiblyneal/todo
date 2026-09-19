@@ -395,3 +395,54 @@ func TestSubtasksRefuseABodyNamingAnotherParent(t *testing.T) {
 		t.Errorf("POST subtasks with a parent answered %d, want 400: %s", w.Code, w.Body.String())
 	}
 }
+
+// The refusal the terminal exits 3 on is 409 here, in the same sentence. It is
+// the one lifecycle verb a Task can be in a state to be refused for, and the
+// status comes off store.Refused rather than off a list of errors written out
+// beside api.fail: store.ErrGone is neither ErrRefused nor ErrHeld, so a
+// second copy here would have answered 500 for a write that was turned away.
+//
+// No Task Reopened is appended, which is the whole point of refusing. The
+// Change History is append-only, so one written against a Task that stayed
+// deleted is a reopening the record claims happened and nothing later can take
+// back.
+func TestReopeningADeletedTaskIsRefusedWithAConflict(t *testing.T) {
+	s := openTemp(t)
+	id, err := s.AddTask("tester", store.Attributes{Title: store.Set("Paint the fence")})
+	if err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if w := do(t, s, http.MethodPost, "/api/tasks/"+id+"/delete", ""); w.Code != http.StatusOK {
+		t.Fatalf("POST delete answered %d: %s", w.Code, w.Body.String())
+	}
+	w := do(t, s, http.MethodPost, "/api/tasks/"+id+"/reopen", "")
+	if w.Code != http.StatusConflict {
+		t.Fatalf("POST reopen on a deleted Task answered %d, want 409: %s", w.Code, w.Body.String())
+	}
+	if sentence := said(t, w)["error"]; !strings.Contains(sentence, "a deleted Task is gone") {
+		t.Errorf("the refusal reads %q, want the store's sentence", sentence)
+	}
+
+	// The Lease is taken and given back either way -- write.Lifecycle takes it
+	// before the store is asked, so the bookkeeping is there and says a write
+	// was attempted. What must not be there is the entry itself.
+	history, err := s.HistoryOf(id)
+	if err != nil {
+		t.Fatalf("HistoryOf: %v", err)
+	}
+	for _, e := range history {
+		if e.Kind == store.KindTaskReopened {
+			t.Fatal("a refused reopening was written into the Change History")
+		}
+	}
+
+	tasks, err := s.Tasks(store.Query{IncludeDeleted: true})
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	for _, task := range tasks {
+		if task.ID == id && task.DeletedAt.IsZero() {
+			t.Error("the refused reopening undeleted the Task anyway")
+		}
+	}
+}
