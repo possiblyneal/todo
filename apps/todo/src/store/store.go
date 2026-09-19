@@ -81,6 +81,20 @@ var ErrRefused = errors.New("refused: the write needs an unexpired Lease on the 
 // cannot tell whether a person or an Agent took it, nor does it need to.
 var ErrHeld = errors.New("refused: an unexpired Lease is held on this Task")
 
+// ErrGone is a write against a Task that has been deleted. A deletion is the
+// one thing there is no way back from: declining is how a Task is put aside
+// and kept, so a deleted Task is one that should not have been there at all
+// and nothing brings it back.
+var ErrGone = errors.New("refused: a deleted Task is gone, and reopening does not bring one back")
+
+// Refused is the one statement of which errors are the store turning a write
+// away rather than something failing. A surface reads it to pick the status or
+// the exit code a refusal carries, so adding a fourth is adding it here and
+// nowhere else.
+func Refused(err error) bool {
+	return errors.Is(err, ErrRefused) || errors.Is(err, ErrHeld) || errors.Is(err, ErrGone)
+}
+
 // stamp is how every instant is stored. It is fixed-width on purpose, unlike
 // time.RFC3339Nano, which trims trailing zeros from the fraction and so orders
 // "12:00:00.5Z" before "12:00:00Z" under the TEXT comparison SQLite does. Both
@@ -160,7 +174,11 @@ type Task struct {
 	// the a_task_ends_once trigger is what keeps a Task out of both.
 	CompletedAt time.Time
 	DeclinedAt  time.Time
-	DeletedAt   time.Time
+
+	// DeletedAt is the third state that takes a Task out of the everyday
+	// view, and it is the one there is no way back from: a deleted Task is
+	// gone, and reopening refuses rather than bringing one back.
+	DeletedAt time.Time
 
 	// Overdue is the expression deadline < now, worked out by the read that
 	// produced this Task. It is never stored, and nothing records the moment
@@ -467,7 +485,8 @@ END;
 -- Reopening undoes either terminal state, on the Task and on everything above
 -- it. One entry serves both because reopening is the same act either way: the
 -- Task is open again, and the Change History already says which state it was
--- reopened out of.
+-- reopened out of. A deletion is not one of them -- ReopenTask refuses a
+-- deleted Task before the entry is appended, so there is nothing here to undo.
 --
 -- Reopening a Subtask reopens everything above it, in one statement. A trigger
 -- that cleared the parent and left the parent's own trigger to clear the
@@ -1036,8 +1055,30 @@ func (s *Store) DeclineTask(actor, taskID string) error {
 	return s.guarded(actor, taskID, KindTaskDeclined, map[string]any{})
 }
 
+// ReopenTask undoes an ending. It refuses a deleted Task rather than bringing
+// one back: deleting says the Task should not have been there, and declining
+// is what puts one aside and keeps it, so the two are not a state and a softer
+// state but two different answers. The read is inside the same transaction as
+// the append, so a deletion landing between them cannot slip a reopening past.
+//
+// Refusing is what keeps the Change History honest. Appending the entry and
+// leaving the row deleted -- which is what this did before -- reads afterwards
+// as a reopening that happened, and no later write can take that back.
 func (s *Store) ReopenTask(actor, taskID string) error {
-	return s.guarded(actor, taskID, KindTaskReopened, map[string]any{})
+	_, err := s.inTx(func(tx *sql.Tx) (Entry, error) {
+		var deleted sql.NullString
+		switch err := tx.QueryRow(`SELECT deleted_at FROM task WHERE id = ?`, taskID).Scan(&deleted); {
+		case errors.Is(err, sql.ErrNoRows):
+			// No row at all is not this rule's to phrase: the append below
+			// answers a Task that never existed the way every other write does.
+		case err != nil:
+			return Entry{}, fmt.Errorf("read the Task's deletion: %w", err)
+		case deleted.Valid:
+			return Entry{}, ErrGone
+		}
+		return guardedAppend(tx, actor, KindTaskReopened, taskID, taskID, map[string]any{})
+	})
+	return err
 }
 
 func (s *Store) DeleteTask(actor, taskID string) error {
@@ -1201,6 +1242,24 @@ type Query struct {
 	Sort Sort
 }
 
+// Check is everything Tasks refuses a Query for, worked out without reading
+// anything. It is exported because a caller may answer before the read gets
+// to run -- an ETag that says nothing changed, say -- and a Query that would
+// have been refused must be refused there too rather than served a cached
+// answer to a question the store never accepted.
+//
+// The zero Sort is SortCreated and passes, so a Query narrowed by nothing is
+// checked the same way as any other.
+func (q Query) Check() error {
+	if q.Sort == "" {
+		return nil
+	}
+	if _, ok := sortKeys[q.Sort]; !ok {
+		return fmt.Errorf("%q is not a sort: want %s", q.Sort, strings.Join(SortNames(), ", "))
+	}
+	return nil
+}
+
 // Tasks reads current state. It writes nothing, and it evaluates Overdue and
 // the snooze against the clock as it goes: neither is stored, and nothing
 // records the moment either becomes true.
@@ -1230,10 +1289,10 @@ func (s *Store) Tasks(q Query) ([]Task, error) {
 	// Trimmed the way every other text a caller types is: a word with a space
 	// after it is the word, and `instr` would read the space and match nothing.
 	q.Search = strings.TrimSpace(q.Search)
-	key, ok := sortKeys[q.Sort]
-	if !ok {
-		return nil, fmt.Errorf("%q is not a sort: want %s", q.Sort, strings.Join(SortNames(), ", "))
+	if err := q.Check(); err != nil {
+		return nil, err
 	}
+	key := sortKeys[q.Sort]
 	rows, err := s.db.Query(fmt.Sprintf(`
 WITH RECURSIVE
 -- The Tasks a search is about: the ones whose own words hold the text, and

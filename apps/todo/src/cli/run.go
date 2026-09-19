@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -144,12 +143,6 @@ func runVerb(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stderr, "todo: unknown verb %q\n", verb)
 	return 2
-}
-
-// isRefusal says whether the store turned a write away rather than failing at
-// it: no Lease, or one another Actor holds.
-func isRefusal(err error) bool {
-	return errors.Is(err, store.ErrRefused) || errors.Is(err, store.ErrHeld)
 }
 
 func open() (*store.Store, error) {

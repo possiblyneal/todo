@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -17,6 +16,16 @@ import (
 //
 // It is a read, so nothing is attributed and no Lease is taken.
 func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
+	// The query is refused before the ETag is looked at, because the ETag
+	// block answers without reading: a caller sending `If-None-Match: *`
+	// under a sort the store does not have would otherwise be told nothing
+	// changed about a view it can never be shown.
+	q, err := checked(r)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+
 	// The ETag is the write-ahead log's token hashed with the query that
 	// produced the response. The token alone is store-global while this
 	// response is not: a client changing its filter or its sort with no
@@ -36,7 +45,7 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tasks, err := narrowed(s, r)
+	tasks, err := s.Tasks(q)
 	if err != nil {
 		fail(w, err)
 		return
@@ -116,8 +125,8 @@ func query(r *http.Request) store.Query {
 	}
 }
 
-// narrowed reads the Tasks a request asked for, and turns the store's refusal
-// of an unknown sort into a caller's error.
+// checked reads the Query a request asked under and turns the store's refusal
+// of it into a caller's error.
 //
 // The store holds the only list of sorts there is, so it is the store that
 // turns an unknown one away and the store's sentence that says so. Reaching
@@ -127,14 +136,14 @@ func query(r *http.Request) store.Query {
 // Every route that narrows by the query string reads it through this, so a
 // sort the store does not have is refused the same way wherever it is sent. An
 // Agent asking a question under a bad sort gets the answer a person's list
-// gets, rather than a 500 for the same mistake.
-func narrowed(s *store.Store, r *http.Request) ([]store.Task, error) {
+// gets, rather than a 500 for the same mistake. It refuses without reading,
+// which is what lets a route that may answer from a cache refuse first.
+func checked(r *http.Request) (store.Query, error) {
 	q := query(r)
-	tasks, err := s.Tasks(q)
-	if err != nil && q.Sort != "" && !slices.Contains(store.Sorts, q.Sort) {
-		return nil, usage{err}
+	if err := q.Check(); err != nil {
+		return q, usage{err}
 	}
-	return tasks, err
+	return q, nil
 }
 
 type stateBody struct {

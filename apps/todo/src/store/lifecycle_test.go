@@ -307,3 +307,55 @@ func TestWithLeaseTakesAndGivesBack(t *testing.T) {
 		t.Errorf("the Lease outlived WithLease: a later write = %v, want ErrRefused", err)
 	}
 }
+
+// A deletion is the one thing there is no way back from. Reopening a deleted
+// Task is refused rather than answered 200 and left gone: an appended Task
+// Reopened that changed nothing reads afterwards as a reopening that happened,
+// and the Change History is append-only, so nothing later can take it back.
+func TestReopeningADeletedTaskIsRefused(t *testing.T) {
+	s := openTemp(t)
+	id := leased(t, s, "alice", Attributes{Title: Set("Buy milk")})
+
+	if err := s.DeleteTask("alice", id); err != nil {
+		t.Fatalf("DeleteTask: %v", err)
+	}
+
+	err := s.ReopenTask("alice", id)
+	if !errors.Is(err, ErrGone) {
+		t.Fatalf("ReopenTask on a deleted Task = %v, want ErrGone", err)
+	}
+	if !Refused(err) {
+		t.Error("the refusal does not read as a refusal, so a surface reports it as a failure")
+	}
+
+	// Nothing was appended, so the record does not claim a reopening.
+	history, err := s.HistoryOf(id)
+	if err != nil {
+		t.Fatalf("HistoryOf: %v", err)
+	}
+	for _, e := range history {
+		if e.Kind == KindTaskReopened {
+			t.Fatal("a refused reopening was written into the Change History")
+		}
+	}
+}
+
+// Declining is what puts a Task aside and keeps it, which is the way back the
+// deletion above does not have. The two are different answers rather than a
+// state and a softer state.
+func TestReopeningUndoesADeclineButNotADeletion(t *testing.T) {
+	s := openTemp(t)
+	id := leased(t, s, "alice", Attributes{Title: Set("Buy milk")})
+
+	if err := s.DeclineTask("alice", id); err != nil {
+		t.Fatalf("DeclineTask: %v", err)
+	}
+	if err := s.ReopenTask("alice", id); err != nil {
+		t.Fatalf("ReopenTask: %v", err)
+	}
+
+	got := only(t, s, Query{})
+	if !got.DeclinedAt.IsZero() {
+		t.Error("reopening left the Task declined")
+	}
+}

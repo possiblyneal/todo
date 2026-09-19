@@ -410,3 +410,24 @@ func TestStateOffersTheStoresColorsAndSnoozes(t *testing.T) {
 		}
 	}
 }
+
+// A refusal beats a cache. `If-None-Match: *` matches any representation at
+// all, and the ETag block answers without reading, so a query the store would
+// refuse has to be refused before that block runs. Otherwise a caller is told
+// nothing changed about a view it can never be shown.
+func TestABadSortIsRefusedEvenWithIfNoneMatchStar(t *testing.T) {
+	s := openTemp(t)
+	for _, path := range []string{"/api/state?sort=nope", "/api/state?sort=nope&all=true"} {
+		w := get(t, s, path, http.Header{"If-None-Match": {"*"}})
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s with If-None-Match: * = %d, want 400", path, w.Code)
+		}
+	}
+
+	// A sort the store does have is still answered 304, so the refusal above
+	// is the bad sort and not the header having stopped working.
+	w := get(t, s, "/api/state?sort=title", http.Header{"If-None-Match": {"*"}})
+	if w.Code != http.StatusNotModified {
+		t.Errorf("a good sort with If-None-Match: * = %d, want 304", w.Code)
+	}
+}
