@@ -1,0 +1,208 @@
+// @vitest-environment jsdom
+
+// The collections screen's one rule that cannot be read off the screen: a
+// rename and a recolor are one write, and a row nobody touched is no write at
+// all. The rest of it is text in and text out.
+
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, expect, test, vi } from 'vitest'
+
+import { Collections } from './Collections'
+import { OFFERED_NOTHING, type Offered } from './state'
+import * as write from './write'
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+const OFFERED: Offered = {
+  ...OFFERED_NOTHING,
+  lists: [{ id: 'l1', name: 'Home', color: 'blue', count: 2 }],
+  tags: [{ id: 't1', name: 'errand', color: 'red', count: 1 }],
+  colors: ['red', 'blue'],
+}
+
+/** Renders the screen with every write stubbed, and answers with the stubs. */
+function opened() {
+  const wrote = {
+    add: vi.spyOn(write, 'addCollection').mockResolvedValue('new'),
+    describe: vi.spyOn(write, 'describeCollection').mockResolvedValue(),
+    drop: vi.spyOn(write, 'dropCollection').mockResolvedValue(),
+  }
+  const drawn = render(
+    <Collections offered={OFFERED} read error={null} onBack={() => {}} />,
+  )
+  return {
+    ...wrote,
+    /** What the next poll handed down, redrawn the way `App.tsx` redraws it. */
+    polled: (offered: Offered) =>
+      drawn.rerender(
+        <Collections offered={offered} read error={null} onBack={() => {}} />,
+      ),
+  }
+}
+
+// Two attributes and one entry: a screen that sent the rename and the recolor
+// separately would put two rows in the Change History for one correction.
+test('a rename and a recolor go out as one write', () => {
+  const wrote = opened()
+  fireEvent.change(screen.getByLabelText('Home name'), {
+    target: { value: 'House' },
+  })
+  fireEvent.change(screen.getByLabelText('Home color'), {
+    target: { value: 'red' },
+  })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]!)
+  expect(wrote.describe).toHaveBeenCalledWith('lists', 'l1', {
+    name: 'House',
+    color: 'red',
+  })
+})
+
+// Absent is what tells the store to leave an attribute alone, so a rename
+// carries no color and a recolor carries no name. A body that always sent both
+// would put back whatever another Actor changed while the row sat open.
+test('a rename carries the name alone', () => {
+  const wrote = opened()
+  fireEvent.change(screen.getByLabelText('Home name'), {
+    target: { value: 'House' },
+  })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]!)
+  expect(wrote.describe).toHaveBeenCalledWith('lists', 'l1', { name: 'House' })
+})
+
+test('a recolor carries the color alone', () => {
+  const wrote = opened()
+  fireEvent.change(screen.getByLabelText('Home color'), {
+    target: { value: 'red' },
+  })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]!)
+  expect(wrote.describe).toHaveBeenCalledWith('lists', 'l1', { color: 'red' })
+})
+
+test('a row nobody touched cannot be saved', () => {
+  opened()
+  const save = screen.getAllByRole('button', { name: 'Save' })[0]!
+  expect((save as HTMLButtonElement).disabled).toBe(true)
+})
+
+// A row holds a draft, and the screen redraws on the read rather than on the
+// write, so a Collection somebody else renamed has to put the row back on the
+// new baseline. Otherwise Save lights up on a row nobody touched and sending it
+// writes the old name back over theirs.
+test('a rename from another surface resets the row rather than offering to undo it', () => {
+  const wrote = opened()
+  wrote.polled({
+    ...OFFERED,
+    lists: [{ id: 'l1', name: 'House', color: 'blue', count: 2 }],
+  })
+
+  const field = screen.getByLabelText('House name') as HTMLInputElement
+  expect(field.value).toBe('House')
+  const save = screen.getAllByRole('button', { name: 'Save' })[0]!
+  expect((save as HTMLButtonElement).disabled).toBe(true)
+})
+
+// The two sets are the same three writes against different aggregates, so the
+// only thing that tells them apart on the wire is the segment.
+// All three and not just the delete: the segment is handed down per set, so one
+// of the three given the wrong one is a Tag written as a List. Each is its own
+// test because a write in flight disables the rest of the screen.
+test('a Tag is deleted under its own kind', () => {
+  const wrote = opened()
+  fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[1]!)
+  expect(wrote.drop).toHaveBeenCalledWith('tags', 't1')
+})
+
+test('a Tag is created under its own kind', () => {
+  const wrote = opened()
+  fireEvent.change(screen.getByLabelText('New Tag'), {
+    target: { value: 'urgent' },
+  })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Add' })[1]!)
+  expect(wrote.add).toHaveBeenCalledWith('tags', { name: 'urgent', color: '' })
+})
+
+test('a Tag is renamed under its own kind', () => {
+  const wrote = opened()
+  fireEvent.change(screen.getByLabelText('errand name'), {
+    target: { value: 'chore' },
+  })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[1]!)
+  expect(wrote.describe).toHaveBeenCalledWith('tags', 't1', { name: 'chore' })
+})
+
+test('the blank row creates one and then clears itself', async () => {
+  const wrote = opened()
+  const box = screen.getByLabelText('New List') as HTMLInputElement
+  fireEvent.change(box, { target: { value: 'Work' } })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Add' })[0]!)
+  expect(wrote.add).toHaveBeenCalledWith('lists', { name: 'Work', color: '' })
+  await vi.waitFor(() => expect(box.value).toBe(''))
+})
+
+test('an unnamed create cannot be submitted', () => {
+  opened()
+  const add = screen.getAllByRole('button', { name: 'Add' })[0]!
+  expect((add as HTMLButtonElement).disabled).toBe(true)
+})
+
+// Nothing to draw is three different things, and the screen is reachable before
+// the first read lands. Telling somebody their Lists are gone because a poll has
+// not come back is the one of the three that costs them a duplicate.
+test('an empty screen says whether the read has landed', () => {
+  const { rerender } = render(
+    <Collections
+      offered={OFFERED_NOTHING}
+      read={false}
+      error={null}
+      onBack={() => {}}
+    />,
+  )
+  expect(screen.getAllByText('Reading…')).toHaveLength(2)
+
+  rerender(
+    <Collections
+      offered={OFFERED_NOTHING}
+      read
+      error={null}
+      onBack={() => {}}
+    />,
+  )
+  expect(screen.getAllByText('None.')).toHaveLength(2)
+})
+
+test('a read that failed says so over the screen', () => {
+  render(
+    <Collections
+      offered={OFFERED}
+      read
+      error="the api is not answering"
+      onBack={() => {}}
+    />,
+  )
+  expect(screen.getByText('the api is not answering')).toBeDefined()
+  // Over it and not in place of it: the Lists the last read named are still
+  // the Lists, and taking them away is what a failed poll does not say.
+  expect(screen.getByLabelText('Home name')).toBeDefined()
+})
+
+// A color the read does not offer is still the color the Collection carries,
+// so the picker holds it rather than rendering blank over it.
+test('a color the client does not offer stays on the picker', () => {
+  render(
+    <Collections
+      offered={{
+        ...OFFERED,
+        lists: [{ id: 'l1', name: 'Home', color: 'chartreuse', count: 0 }],
+      }}
+      read
+      error={null}
+      onBack={() => {}}
+    />,
+  )
+  expect((screen.getByLabelText('Home color') as HTMLSelectElement).value).toBe(
+    'chartreuse',
+  )
+})
