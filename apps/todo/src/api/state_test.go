@@ -456,6 +456,47 @@ func TestStateOffersTheStoresColorsAndSnoozes(t *testing.T) {
 	}
 }
 
+// The levels travel with their examples, and both fields carry all three: the
+// example is the only thing making the three words mean the same to a person
+// and to an Agent, so a level served without one is the copy this move was
+// made to retire.
+func TestStateOffersTheLevelsWithTheirExamples(t *testing.T) {
+	s := openTemp(t)
+	id := add(t, s, "Paint the fence")
+	state := decodeState(t, get(t, s, "/api/state", nil))
+
+	for _, both := range []struct {
+		what  string
+		got   []level
+		want  map[store.Level]string
+		patch string
+	}{
+		{"priorities", state.Priorities, store.PriorityExamples, "priority"},
+		{"impacts", state.Impacts, store.ImpactExamples, "impact"},
+	} {
+		// Fatal rather than an error carried on: the loop below indexes
+		// store.Levels by the position of what came back, so a longer answer
+		// would panic where it should have failed.
+		if len(both.got) != len(store.Levels) {
+			t.Fatalf("%s = %d, want %d", both.what, len(both.got), len(store.Levels))
+		}
+		for i, one := range both.got {
+			if want := string(store.Levels[i]); one.Name != want {
+				t.Errorf("%s[%d] = %q, want %q", both.what, i, one.Name, want)
+			}
+			if want := both.want[store.Levels[i]]; one.Example != want {
+				t.Errorf("%s[%d] example = %q, want %q", both.what, i, one.Example, want)
+			}
+			// Every one offered is one a write takes, the rule the colors and
+			// the snoozes are held to above.
+			w := do(t, s, http.MethodPatch, "/api/tasks/"+id, `{"`+both.patch+`": "`+one.Name+`"}`)
+			if w.Code != http.StatusOK {
+				t.Errorf("%s %s = %d, want 200 (%s)", both.what, one.Name, w.Code, w.Body.String())
+			}
+		}
+	}
+}
+
 // A refusal beats a cache. `If-None-Match: *` matches any representation at
 // all, and the ETag block answers without reading, so a query the store would
 // refuse has to be refused before that block runs. Otherwise a caller is told

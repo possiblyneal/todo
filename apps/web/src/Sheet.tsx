@@ -18,14 +18,6 @@ import { addCollection, type Kind, memberships, type TaskBody } from './write'
 /** The attributes this sheet takes as text, which is every one it shows. */
 type Said = 'title' | 'description' | 'why' | 'deadline' | 'estimate'
 
-/**
- * The three level names, and the one list the client still keeps a copy of:
- * nothing on the wire carries them, so a fourth added to `store.Levels` has to
- * be added here too. The colors and the snoozes used to be the same problem and
- * are not any more — `GET /api/state` carries both.
- */
-const LEVELS = ['low', 'med', 'high']
-
 export function Sheet({
   draft,
   against,
@@ -156,19 +148,19 @@ export function Sheet({
 
       <Choice
         name="Priority"
-        options={LEVELS}
+        options={offered.priorities}
         value={body.priority ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, priority: value }))}
       />
       <Choice
         name="Impact"
-        options={LEVELS}
+        options={offered.impacts}
         value={body.impact ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, impact: value }))}
       />
       <Choice
         name="Color"
-        options={offered.colors}
+        options={offered.colors.map((name) => ({ name }))}
         value={body.color ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, color: value }))}
       />
@@ -230,20 +222,38 @@ function Choice({
   onPick,
 }: {
   name: string
-  options: string[]
+  /**
+   * What is on offer, each with what choosing it means where the route says
+   * one. The levels carry an example and the colors do not: blue means blue.
+   * One prop and not a second list of names beside it, because two lists of
+   * the same values are two that can disagree.
+   */
+  options: { name: string; example?: string }[]
   value: string
   onPick: (value: string) => void
 }) {
+  const names = options.map((one) => one.name)
   const shown =
-    value === '' || options.includes(value) ? options : [...options, value]
+    value === '' || names.includes(value)
+      ? options
+      : // A value the route does not offer is kept, under its own name and
+        // with nothing said about what it means, because the route is what
+        // says that and it said nothing about this one.
+        [...options, { name: value }]
   return (
     <label className="field">
       <span>{name}</span>
+      {/*
+        The example is in the option rather than under the picker, because the
+        question it answers is asked while the three are side by side. Showing
+        only the chosen one's would mean picking each in turn to read them,
+        which is the choice being made to find out what the choice is.
+      */}
       <select value={value} onChange={(event) => onPick(event.target.value)}>
         <option value="">—</option>
         {shown.map((one) => (
-          <option key={one} value={one}>
-            {one}
+          <option key={one.name} value={one.name}>
+            {one.example ? `${one.name} — ${one.example}` : one.name}
           </option>
         ))}
       </select>

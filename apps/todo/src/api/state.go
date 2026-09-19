@@ -72,6 +72,9 @@ func state(s *store.Store, w http.ResponseWriter, r *http.Request) {
 
 		Colors:  store.ColorNames(),
 		Snoozes: store.SnoozeNames(),
+
+		Priorities: levels(store.PriorityOffers()),
+		Impacts:    levels(store.ImpactOffers()),
 	}
 	for _, t := range tasks {
 		out.Tasks = append(out.Tasks, newTask(t))
@@ -173,6 +176,32 @@ type stateBody struct {
 	// plain duration too, so a surface may send one of these or a duration of
 	// its own.
 	Snoozes []string `json:"snoozes"`
+
+	// Priorities and Impacts are store.Levels twice over, each level beside the
+	// example that says what it means. They are two fields and not one because
+	// the three words are the same and what they mean is not: high priority is
+	// today, and high impact is what unblocks other work.
+	//
+	// They are here for the reason Sorts and Colors are, and for one more: the
+	// examples are the only thing making the three words mean the same to a
+	// person and to an Agent, and a surface keeping its own copy of the words
+	// keeps none of that.
+	Priorities []level `json:"priorities"`
+	Impacts    []level `json:"impacts"`
+}
+
+// level is one of the three as a client reads it.
+type level struct {
+	Name    string `json:"name"`
+	Example string `json:"example"`
+}
+
+func levels(offers []store.LevelOffer) []level {
+	out := make([]level, len(offers))
+	for i, o := range offers {
+		out[i] = level{Name: o.Name, Example: o.Example}
+	}
+	return out
 }
 
 // collection is a List or a Tag as the client reads it. The two are the same
