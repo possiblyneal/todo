@@ -4,7 +4,7 @@
 // is a gate over half of what it lets through, so this is about what reaches
 // the screen rather than about what the Broker said.
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { Breakdown } from './Breakdown'
@@ -17,7 +17,7 @@ afterEach(() => {
 })
 
 const TASK: Task = {
-  id: 'one',
+  id: 't1',
   title: 'Move house',
   depth: 0,
   createdAt: '2026-03-04T09:00:00Z',
@@ -45,9 +45,7 @@ test('every attribute a proposal would write is drawn beside its tick', async ()
   expect(
     screen.getByText('Nothing else moves until it is booked.'),
   ).toBeDefined()
-  // Labelled, because a single word alone says neither which attribute it is
-  // nor that anybody chose it: `30m` reads as much like a deadline as like an
-  // estimate, and `high` says nothing at all.
+  // The labels are what is pinned; `Breakdown.tsx` is where they are argued.
   expect(screen.getByText('Estimate 30m')).toBeDefined()
   expect(screen.getByText('Priority high')).toBeDefined()
   expect(screen.getByText('Impact med')).toBeDefined()
@@ -80,4 +78,27 @@ test('the line of single words is not drawn when there are none', async () => {
 
   await screen.findByText('Book the van')
   expect(drawn.container.querySelector('.facts')).toBeNull()
+})
+
+// The gate is that the write carries nothing the tick did not show. The type
+// says so on this side and `write.AsProposed` says so on the other, but the
+// thing in between is this screen handing the proposal to `addSubtask`
+// untouched, and that is what would quietly stop being true.
+test('approving writes the proposal and nothing added to it', async () => {
+  vi.spyOn(write, 'breakdown').mockResolvedValue({
+    questions: [],
+    proposals: [{ title: 'Book the van', estimate: '30m' }],
+  })
+  const wrote = vi.spyOn(write, 'addSubtask').mockResolvedValue('t2')
+  render(<Breakdown task={TASK} onBack={() => {}} />)
+
+  await screen.findByText('Book the van')
+  fireEvent.click(screen.getByRole('button', { name: 'Add 1' }))
+
+  await vi.waitFor(() => expect(wrote).toHaveBeenCalledTimes(1))
+  expect(wrote.mock.calls[0]?.[0]).toBe('t1')
+  expect(wrote.mock.calls[0]?.[1]).toEqual({
+    title: 'Book the van',
+    estimate: '30m',
+  })
 })
