@@ -302,7 +302,16 @@ export async function fetchSeries(id: string): Promise<Series> {
 export type Files = {
   path: string
   parent: string
-  entries: { name: string; dir: boolean }[]
+  entries: Listed[]
+}
+
+/**
+ * One name in it. Whether it is a directory is the whole of what a picker
+ * needs: one is somewhere to go and the other is something to point at.
+ */
+export type Listed = {
+  name: string
+  dir: boolean
 }
 
 /** Lists one directory, or the listener's root where none is named. */

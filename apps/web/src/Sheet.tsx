@@ -9,10 +9,11 @@
 // add form, the edit form and the subtask form without holding three
 // descriptions of the same ten attributes.
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { sentence } from './api'
 import { type Collection, fetchFiles, type Files, type Offered } from './state'
+import { useRead } from './read'
 import { addCollection, type Kind, memberships, type TaskBody } from './write'
 
 /** The attributes this sheet takes as text, which is every one it shows. */
@@ -495,29 +496,21 @@ function Pointers({
  */
 function Machine({ onPick }: { onPick: (path: string) => void }) {
   const [at, setAt] = useState<string | undefined>(undefined)
-  const [files, setFiles] = useState<Files | null>(null)
-  const [error, setError] = useState('')
+  // The same read and the same guard the other screens make theirs through,
+  // rather than a second copy of both written out here.
+  const { value: files, error } = useRead<Files | null>(
+    () => fetchFiles(at),
+    null,
+    [at],
+  )
 
-  useEffect(() => {
-    let live = true
-    fetchFiles(at)
-      .then((answer) => {
-        if (!live) return
-        setFiles(answer)
-        setError('')
-      })
-      .catch((caught: unknown) => {
-        if (live) setError(sentence(caught))
-      })
-    return () => {
-      live = false
-    }
-  }, [at])
-
-  if (error !== '') return <p className="aside">{error}</p>
-  if (!files) return <p className="aside">…</p>
+  if (!files) return <p className="aside">{error ?? '…'}</p>
   return (
     <div role="group" aria-label="Files">
+      {/* Over the listing rather than instead of it: a directory that cannot
+          be read is one tap from where somebody already was, and a picker
+          replaced by a sentence has no Up button left to take it. */}
+      {error !== null && <p className="aside">{error}</p>}
       <p className="aside">{files.path}</p>
       {files.parent !== '' && (
         <button
@@ -532,8 +525,9 @@ function Machine({ onPick }: { onPick: (path: string) => void }) {
         // `todo api` is a Unix service, so a join on `/` is the separator its
         // paths are spelled with rather than a guess at the host's; every path
         // the route answers is absolute, and the route is the only thing that
-        // names a directory here.
-        const path = `${files.path}/${one.name}`
+        // names a directory here. The root is the one path already ending in
+        // the separator, and what goes in the box is what somebody reads.
+        const path = `${files.path === '/' ? '' : files.path}/${one.name}`
         return (
           <button
             key={one.name}
