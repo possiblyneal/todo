@@ -54,7 +54,8 @@ and adds to this list rather than to the plan.
 - `src/Sheet.tsx` — the sheet: a Task open for correction, whether the Broker
   just read it or it already exists. Every attribute a Task has is on it, which
   is the title, description, why, deadline, estimate, priority, impact, color,
-  snooze, the key/value pairs, and the Lists and Tags it is filed under. It
+  snooze, the key/value pairs, the pointers collected for it, and the Lists and
+  Tags it is filed under. It
   makes one write of its own, the List or Tag its ticks offer to make; every
   other write is whoever opens it saying what submitting it does.
 - `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tags,
@@ -124,8 +125,8 @@ and adds to this list rather than to the plan.
   snooze and the pickers' unknown-value rule turn a pick into a different thing
   on the wire, and an inversion there is a wrong write nobody sees happen.
 - **An Attachment is text, and this surface uploads nothing.** The detail
-  screen sends the pointer as typed and draws it as text, a web address and a
-  file path alike: nothing is fetched and nothing is copied in, which is the
+  screen and the sheet both send the pointer as typed and draw it as text, a web
+  address and a file path alike: nothing is fetched and nothing is copied in, which is the
   store's decision from issue #3 rather than a limit of the browser. A path is
   resolved by whoever runs `todo api`, so one typed on a phone names a file on
   that host and not on the phone.
@@ -267,7 +268,8 @@ and adds to this list rather than to the plan.
   rather than on a row. The blank row empties whether or not the write landed,
   because the refusal is already said in its own words and a name left sitting
   there is a name added twice by whoever read the sentence and tapped again.
-  That is the opposite of the rule the attachment field follows above, and the
+  That is the opposite of the rule the detail screen's attachment field follows
+  above, and the
   two screens disagreeing is issue #78 rather than a distinction either one
   argues for.
   Deleting is one tap, the way the four verbs on a Task are: the Tasks that
@@ -302,13 +304,21 @@ and adds to this list rather than to the plan.
   "next Friday" is not a date it can show, and one that guessed at it would be
   the same failure a control later.
 - **An Attachment is collected on the sheet and written after the Task exists.**
-  `Pointers` in `Sheet.tsx` puts them on the body; `addTask`, `addSubtask` and
-  `editTask` in `write.ts` split them off, because the routes refuse a field
-  they do not know and `store.Attach` is a guarded write against a Task that may
-  not exist yet. They go one at a time, and a refusal on one leaves the Task and
-  the pointers before it standing, which is what approving a breakdown already
-  does. The field adds and never removes: taking one off is the detail screen's,
-  the only screen that shows what a Task already carries.
+  `Pointers` in `Sheet.tsx` puts them on the body; every one of the four writes
+  that sheet makes — `addTask`, `addSubtask`, `editTask` and `detachEdited` in
+  `write.ts` — splits them off, because every write route refuses a field it
+  does not know and `store.Attach` is a guarded write against a Task that may
+  not exist yet. A write added to the sheet and not given the split is a 400 on
+  the whole write, not a dropped pointer. They go one at a time, and a refusal
+  on one leaves the Task and the pointers before it standing; the sentence says
+  so, because the form cannot otherwise tell that from a submit that wrote
+  nothing, and pressing the button again would write a second Task. The field
+  never detaches. A pointer already on the Task is taken off from the detail
+  screen, the only screen that shows what a Task already carries; Remove here
+  drops one collected before anything was sent. The row that collects one is
+  written twice, here and on the detail screen, because the two clear at
+  different moments — the detail screen's on the write landing, this one on the
+  tap, since there is no write to wait for.
 - **The attachment box is browsed as well as typed into.** `Machine` in
   `Sheet.tsx` walks the machine `todo api` runs on over `GET /api/files`, a
   directory at a time, and a file tapped fills the box. It fills and never reads
