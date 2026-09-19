@@ -1,10 +1,11 @@
 // The sheet: a Task open for correction, whether it is one the Broker just read
-// or one that already exists. Submitting it is the only thing that writes, so a
-// dump handed over and then thought better of leaves nothing behind.
+// or one that already exists. Nothing about the Task is written before submit,
+// so a dump handed over and then thought better of leaves nothing behind.
 //
-// It makes one write of its own, the List or Tag its ticks offer to make, which
-// is an aggregate rather than part of the Task. Every other write is whoever
-// opens it saying what submitting it does, which is what lets one sheet be the
+// It makes one write of its own, which is the List or Tag its ticks offer to
+// make: a Collection is an aggregate of its own rather than part of the Task,
+// so making one is not the gate giving way. Every other write is whoever opens
+// the sheet saying what submitting it does, which is what lets one sheet be the
 // add form, the edit form and the subtask form without holding three
 // descriptions of the same ten attributes.
 
@@ -90,7 +91,7 @@ export function Sheet({
       // it could not read is still in the field it came back in, so whoever
       // is looking at the sheet can correct that value rather than retype the
       // whole Task.
-      setError(caught instanceof Error ? caught.message : String(caught))
+      setError(sentence(caught))
       setWriting(false)
     }
   }
@@ -567,9 +568,12 @@ function Ticks({
   on: string[]
   onToggle: (id: string) => void
   /** Where a refused creation is said, which is the sheet's own one place. */
-  onFail: (sentence: string) => void
+  onFail: (said: string) => void
 }) {
-  const [made, setMade] = useState<Collection[]>([])
+  // Only the id and the name, because those are the two this side knows. A
+  // color and a count filled in here would be this side answering questions
+  // the store never answered, which is the rule the unnamed ids below follow.
+  const [made, setMade] = useState<{ id: string; name: string }[]>([])
   const [naming, setNaming] = useState('')
   const [making, setMaking] = useState(false)
 
@@ -585,15 +589,26 @@ function Ticks({
 
   // The singular, because the row is about making one. The plural is the
   // legend above the ticks and says what the set is.
-  const one = kind === 'lists' ? 'List' : 'Tag'
+  const singular = kind === 'lists' ? 'List' : 'Tag'
 
   const make = async () => {
+    // The name as the store will hold it, since it trims one on the way in.
+    // Sending it untrimmed would draw the typed spacing until the poll took
+    // them away, which is this side describing a write it did not make.
+    const name = naming.trim()
     setMaking(true)
     try {
-      const id = await addCollection(kind, { name: naming })
-      setMade((was) => [...was, { id, name: naming, color: '', count: 0 }])
+      const id = await addCollection(kind, { name })
+      setMade((was) => [...was, { id, name }])
       onToggle(id)
-      setNaming('')
+      // Only if the box still holds what went out: a name typed while the
+      // request was in flight is the next one somebody means to make, and
+      // blanking it would throw away what they had just typed.
+      setNaming((now) => (now === naming ? '' : now))
+      // The sentence belonged to a write that has now been followed by one
+      // that landed, and a refusal left standing over a Collection that was
+      // made says the wrong thing about the tick beside it.
+      onFail('')
     } catch (caught) {
       onFail(sentence(caught))
     } finally {
@@ -616,16 +631,16 @@ function Ticks({
       ))}
       <div className="pair">
         <input
-          aria-label={`New ${one}`}
-          placeholder={`new ${one.toLowerCase()}`}
+          aria-label={`New ${singular}`}
+          placeholder={`new ${singular.toLowerCase()}`}
           value={naming}
           onChange={(event) => setNaming(event.target.value)}
         />
         <button
           type="button"
-          aria-label={`Add ${one}`}
+          aria-label={`Add ${singular}`}
           onClick={() => void make()}
-          disabled={making || naming === ''}
+          disabled={making || naming.trim() === ''}
         >
           Add
         </button>
