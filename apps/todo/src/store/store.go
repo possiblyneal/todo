@@ -1286,6 +1286,9 @@ func (s *Store) Tasks(q Query) ([]Task, error) {
 	if q.Sort == "" {
 		q.Sort = SortCreated
 	}
+	// Trimmed the way every other text a caller types is: a word with a space
+	// after it is the word, and `instr` would read the space and match nothing.
+	q.Search = strings.TrimSpace(q.Search)
 	if err := q.Check(); err != nil {
 		return nil, err
 	}
