@@ -340,6 +340,24 @@ test('a cleared picker leaves the box alone', () => {
   expect(sheet.submit().deadline).toBe('2026-03-04')
 })
 
+// The picker holds nothing of its own, which is the whole of "never reads the
+// box". A control left holding the day it wrote would fire nothing when that
+// same day is picked again, so somebody who typed over a picked date could not
+// pick it back; empty after a pick is what makes the next one a change.
+test('the picker holds nothing after it has written', () => {
+  const sheet = opened({ title: 'Buy milk', deadline: 'next Friday' })
+  const picker = screen.getByLabelText('Pick a deadline') as HTMLInputElement
+  expect(picker.value).toBe('')
+
+  fireEvent.change(picker, { target: { value: '2026-03-04' } })
+  expect(picker.value).toBe('')
+  fireEvent.change(screen.getByLabelText('Deadline as typed'), {
+    target: { value: 'next Friday' },
+  })
+  fireEvent.change(picker, { target: { value: '2026-03-04' } })
+  expect(sheet.submit().deadline).toBe('2026-03-04')
+})
+
 // A refusal belongs to the write somebody just made, and a Collection that was
 // made is the write they just made. Left standing, the sentence says the wrong
 // thing about the tick that appeared beside it.

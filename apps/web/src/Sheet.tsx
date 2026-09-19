@@ -130,15 +130,20 @@ export function Sheet({
         its own words.
 
         The picker writes into the box and never reads it. "next Friday" is not
-        a date it can show, and one that blanked or guessed at it would be the
-        same failure a control later. So it is the platform's own, uncontrolled,
+        a date it can show, and one that blanked or guessed at it would be that
+        same failure, only later. So it is the platform's own, uncontrolled,
         and the box is still free text after a date lands in it.
 
         It writes a date and never an empty one. A native date input fires a
         change carrying "" when it is cleared, which a keystroke in it does, and
-        writing that through would blank the box -- the same failure by the same
-        control, arrived at from the other side. Clearing the box is what the
-        box is for.
+        writing that through would blank the box -- that same failure, only by
+        the control that was put there to prevent it. Clearing the box is what
+        the box is for.
+
+        It blanks itself after each pick, which is what "never reads" comes to
+        in practice: left holding the day, an identical pick is not a change
+        and React fires nothing, so somebody who typed over a picked date could
+        not pick that same date again. The box is where a deadline is shown.
       */}
       <fieldset className="field">
         <legend>Deadline</legend>
@@ -152,9 +157,11 @@ export function Sheet({
           <input
             type="date"
             aria-label="Pick a deadline"
-            onChange={(event) =>
-              event.target.value && say('deadline', event.target.value)
-            }
+            onChange={(event) => {
+              if (!event.target.value) return
+              say('deadline', event.target.value)
+              event.target.value = ''
+            }}
           />
         </div>
       </fieldset>
