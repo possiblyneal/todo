@@ -28,10 +28,10 @@ export function drawKey(count: number, random: () => number): number {
  * The keys drawn so far, by Collection id, for as long as the page is loaded.
  *
  * It is here rather than inside a component because the lifetime is the page's
- * and not any one screen's. `Narrow` is unmounted whenever a Task, the
- * Collections screen or the Activity screen is open, so a draw held in its
- * state would be thrown away and redrawn on the way back — the reshuffle this
- * exists to prevent, at the granularity somebody actually navigates at.
+ * and not any one screen's. `Narrow` does not stay mounted across every screen,
+ * so a draw held in its state would be thrown away and redrawn on the way back
+ * — the reshuffle this exists to prevent, at the granularity somebody actually
+ * navigates at.
  *
  * `ranked` takes a map as an argument all the same, so a test draws into one of
  * its own and this one stays out of it.
