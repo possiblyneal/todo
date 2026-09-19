@@ -172,13 +172,13 @@ and adds to this list rather than to the plan.
 - **The sorts on offer are the API's, not a copy.** `GET /api/state` carries
   `sorts` from `store.Sorts`, so the picker cannot offer one the store would
   refuse and a fifth sort appears the day it lands. This is the pattern for a
-  set the store owns; the level names, the verbs and the marks are copied only
-  because no route answers what they are.
+  set the store owns, and the levels joined it: the verbs and the marks are
+  copied only because no route answers what they are.
 - **The served sets travel as one prop, never as several.** `Offered` bundles
-  the Lists, the Tags, the sorts, the colors and the snoozes, and `State` is it
-  plus the Tasks. Every component takes `offered` whole, including the three
-  that only hand it on, so a sixth set the route serves is one field here rather
-  than a prop threaded through them again. **What belongs in it is what the
+  the Lists, the Tags, the sorts, the colors, the snoozes, the priorities and
+  the impacts, and `State` is it plus the Tasks. Every component takes `offered`
+  whole, including the three that only hand it on, so a further set the route
+  serves is one field here rather than a prop threaded through them again. **What belongs in it is what the
   route serves, not what one screen reads.** A set used by both the controls and
   the sheet would have nowhere to live under a bundle shaped by its consumers,
   and the wire has one shape whatever reads it; the cost is that `Narrow` and
@@ -186,9 +186,12 @@ and adds to this list rather than to the plan.
   name their own list `options` or `all` rather than `offered`, so the served
   bundle and one control's values are never the same word in one file.
 - **A component reading the wrong set off `Offered` is a mistake a test catches.**
-  Five string lists behind one prop makes `offered.sorts` and `offered.colors`
-  interchangeable to the compiler, so `Narrow.test.tsx` pins which set feeds the
-  sort and `Sheet.test.tsx` pins the color and the snooze.
+  Five of the seven fields are lists of strings, which makes `offered.sorts` and
+  `offered.colors` interchangeable to the compiler, so `Narrow.test.tsx` pins
+  which set feeds the sort and `Sheet.test.tsx` pins the color and the snooze.
+  `priorities` and `impacts` are `Level[]` and so cannot be read as either, but
+  they are interchangeable with each other, which is the same mistake with two
+  candidates instead of five.
 - **A changed narrowing restarts the poll from no ETag.** The tag and the list
   it describes have to be the same age, so `App` keys the polling effect on the
   query string. The API hashes the query into the tag as well, which means a
@@ -214,14 +217,21 @@ and adds to this list rather than to the plan.
   the controls show: the list is left standing through the round trip after a
   control is touched, so the sentence under an empty one has to name the
   narrowing that emptied it.
-- **The client keeps a copy of nothing on offer.** The sorts, the colors, the
-  snoozes and now the levels all arrive with the state, so no picker here can
-  offer a value the store would refuse or miss one added on the other side.
+- **No picker here keeps its own list of what to offer.** The sorts, the
+  colors, the snoozes and now the levels all arrive with the state, so no picker
+  can miss a value the store offers or go on offering one it dropped. It is the
+  narrower claim on purpose: a picker still offers a value the store would
+  refuse, because a value already on the Task is added to the options below, and
+  the client keeps copies of the verbs, the marks and the Lease kinds, which no
+  route answers.
   `priorities` and `impacts` are two fields because the three words are the same
   and what they mean is not, and each level travels beside the example that says
   what it means. `Choice` puts that example in the option itself: the question
   it answers is asked while the three are side by side, and showing only the
-  chosen one's would mean picking each in turn to read them.
+  chosen one's would mean picking each in turn to read them. It takes one list
+  of what is on offer and not a list of names beside a list of meanings, since
+  two lists of the same values are two that can disagree; a color goes in as a
+  name with nothing said about it, because blue means blue.
 - **A rename and a recolor are one write, and each carries only what changed.**
   `Collections.tsx` edits a row's name and color in place and submits them
   together, because the store writes them as one entry and a screen that sent
@@ -372,7 +382,7 @@ and adds to this list rather than to the plan.
   the day the store's answer changed. Reopen is reached through show everything: the everyday poll asks for the
   open Tasks, so an ended one is in the list to be tapped only under
   `?all=true`.
-- **The four verbs are the second thing the client keeps a copy of.**
+- **The four verbs are the first thing the client keeps a copy of.**
   `write.VERBS` names them because no route answers what they are, and both the
   row and the detail screen read that one list. A fifth added to
   `write.Lifecycle` has to be added here too, and until it is, the button is
@@ -386,7 +396,7 @@ and adds to this list rather than to the plan.
   in between cannot appear twice. The button is there while the route filled
   the page it asked for, which is the only thing that says there may be more:
   what is drawn is smaller, since the Lease bookkeeping comes out client-side.
-  The route's own cap is the client's third copy of something, in `state.ts`:
+  The route's own cap is the client's second copy of something, in `state.ts`:
   nothing on the wire says where the route stops, and a button that asked past
   it would offer more and then produce none.
 - **A verb that landed goes back to the list.** Three of the four take the Task
@@ -417,7 +427,7 @@ and adds to this list rather than to the plan.
   that moves under it on every poll, so `Replace` is a rule stated in full and
   never half of two. Stopping is its own button, because `DELETE` is what takes
   a rule off and an empty field is a refusal.
-- **The three marks are the client's fourth copy of something.**
+- **The three marks are the client's third copy of something.**
   `write.MARKS` names tick, skip and detach because no route answers what they
   are, the same as `write.VERBS`. All three are offered on every date; which of
   them the store refuses on a date already marked is the store's to say, and it
