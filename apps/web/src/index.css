@@ -349,3 +349,11 @@ button.row {
   flex: 1 1 100%;
   margin-top: 0;
 }
+
+/* A remark beside a control rather than a thing to act on: what the control
+   already did, or what there is to say about what it is showing. It is the
+   size of the labels above the fields, because it is the same kind of aside. */
+.aside {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}

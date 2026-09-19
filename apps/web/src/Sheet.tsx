@@ -1,15 +1,19 @@
 // The sheet: a Task open for correction, whether it is one the Broker just read
-// or one that already exists. Submitting it is the only thing that writes, so a
-// dump handed over and then thought better of leaves nothing behind.
+// or one that already exists. Nothing about the Task is written before submit,
+// so a dump handed over and then thought better of leaves nothing behind.
 //
-// It makes no write of its own. Whoever opens it says what submitting it does,
-// which is what lets one sheet be the add form, the edit form and the subtask
-// form without holding three descriptions of the same ten attributes.
+// It makes one write of its own, which is the List or Tag its ticks offer to
+// make: a Collection is an aggregate of its own rather than part of the Task,
+// so making one is not the gate giving way. Every other write is whoever opens
+// the sheet saying what submitting it does, which is what lets one sheet be the
+// add form, the edit form and the subtask form without holding three
+// descriptions of the same ten attributes.
 
 import { useState } from 'react'
 
+import { sentence } from './api'
 import type { Collection, Offered } from './state'
-import { memberships, type TaskBody } from './write'
+import { addCollection, type Kind, memberships, type TaskBody } from './write'
 
 /** The attributes this sheet takes as text, which is every one it shows. */
 type Said = 'title' | 'description' | 'why' | 'deadline' | 'estimate'
@@ -89,7 +93,7 @@ export function Sheet({
       // it could not read is still in the field it came back in, so whoever
       // is looking at the sheet can correct that value rather than retype the
       // whole Task.
-      setError(caught instanceof Error ? caught.message : String(caught))
+      setError(sentence(caught))
       setWriting(false)
     }
   }
@@ -182,15 +186,19 @@ export function Sheet({
 
       <Ticks
         name="Lists"
+        kind="lists"
         all={offered.lists}
         on={body.intoLists ?? []}
         onToggle={(id) => toggle('intoLists', id)}
+        onFail={setError}
       />
       <Ticks
         name="Tags"
+        kind="tags"
         all={offered.tags}
         on={body.addTags ?? []}
         onToggle={(id) => toggle('addTags', id)}
+        onFail={setError}
       />
 
       <div className="buttons">
@@ -357,30 +365,88 @@ function Fields({
 }
 
 /**
- * The Lists or Tags the Task is filed under, ticked by id.
+ * The Lists or Tags the Task is filed under, ticked by id, with the row that
+ * makes one more.
  *
  * An id the draft carries that the client cannot name is shown anyway, under
  * the id itself. That happens in the window before the first poll lands, and
  * the alternative is a membership submitted without ever being on the screen,
  * which is not what the sheet being the gate means.
+ *
+ * Making one is the sheet's one exception to nothing here writing, and it is
+ * not really an exception: a List is an aggregate of its own, and the one made
+ * here exists on the same terms as one made on the collections screen. It
+ * outlives a sheet backed out of, so the row says so rather than letting
+ * somebody discover it later. A blank set still draws, because a tracker with
+ * no Lists is exactly where somebody needs to make the first one.
+ *
+ * The made one is held here until the poll names it, so it ticks under the word
+ * that was typed rather than under its id for the second it takes to come back.
+ * It is ticked on arrival: making a List from the form that files a Task under
+ * one is somebody saying which List, not adding to a catalogue.
  */
 function Ticks({
   name,
+  kind,
   all,
   on,
   onToggle,
+  onFail,
 }: {
   name: string
+  kind: Kind
   all: Collection[]
   on: string[]
   onToggle: (id: string) => void
+  /** Where a refused creation is said, which is the sheet's own one place. */
+  onFail: (said: string) => void
 }) {
+  // Only the id and the name, because those are the two this side knows. A
+  // color and a count filled in here would be this side answering questions
+  // the store never answered, which is the rule the unnamed ids below follow.
+  const [made, setMade] = useState<{ id: string; name: string }[]>([])
+  const [naming, setNaming] = useState('')
+  const [making, setMaking] = useState(false)
+
   const named = new Set(all.map((one) => one.id))
+  const held = made.filter((one) => !named.has(one.id))
   const shown = [
     ...all,
-    ...on.filter((id) => !named.has(id)).map((id) => ({ id, name: id })),
+    ...held,
+    ...on
+      .filter((id) => !named.has(id) && !held.some((one) => one.id === id))
+      .map((id) => ({ id, name: id })),
   ]
-  if (shown.length === 0) return null
+
+  // The singular, because the row is about making one. The plural is the
+  // legend above the ticks and says what the set is.
+  const singular = kind === 'lists' ? 'List' : 'Tag'
+
+  const make = async () => {
+    // The name as the store will hold it, since it trims one on the way in.
+    // Sending it untrimmed would draw the typed spacing until the poll took
+    // them away, which is this side describing a write it did not make.
+    const name = naming.trim()
+    setMaking(true)
+    try {
+      const id = await addCollection(kind, { name })
+      setMade((was) => [...was, { id, name }])
+      onToggle(id)
+      // Only if the box still holds what went out: a name typed while the
+      // request was in flight is the next one somebody means to make, and
+      // blanking it would throw away what they had just typed.
+      setNaming((now) => (now === naming ? '' : now))
+      // The sentence belonged to a write that has now been followed by one
+      // that landed, and a refusal left standing over a Collection that was
+      // made says the wrong thing about the tick beside it.
+      onFail('')
+    } catch (caught) {
+      onFail(sentence(caught))
+    } finally {
+      setMaking(false)
+    }
+  }
+
   return (
     <fieldset className="field">
       <legend>{name}</legend>
@@ -394,6 +460,25 @@ function Ticks({
           <span>{one.name}</span>
         </label>
       ))}
+      <div className="pair">
+        <input
+          aria-label={`New ${singular}`}
+          placeholder={`new ${singular.toLowerCase()}`}
+          value={naming}
+          onChange={(event) => setNaming(event.target.value)}
+        />
+        <button
+          type="button"
+          aria-label={`Add ${singular}`}
+          onClick={() => void make()}
+          disabled={making || naming.trim() === ''}
+        >
+          Add
+        </button>
+      </div>
+      <span className="aside">
+        Made when you tap Add, and kept even if this sheet is cancelled.
+      </span>
     </fieldset>
   )
 }
