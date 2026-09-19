@@ -140,7 +140,7 @@ func listTasks(s *store.Store, args []string, stdout, stderr io.Writer) int {
 	in := fs.String("list", "", "only the tasks in this list, by id")
 	var tags tagIDs
 	fs.Var(&tags, "tag", "only the tasks carrying this tag, by id; repeat for any of several")
-	search := fs.String("search", "", "only the tasks whose title, description or why hold this text")
+	search := fs.String("search", "", "only the tasks whose title, description or why hold this text, and the tasks they sit under")
 	sort := fs.String("sort", string(store.SortCreated),
 		"order siblings by "+strings.Join(store.SortNames(), ", "))
 	if err := fs.Parse(args); err != nil {
