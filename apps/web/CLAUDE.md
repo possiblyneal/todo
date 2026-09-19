@@ -80,15 +80,20 @@ and adds to this list rather than to the plan.
   their log through it.
 - `src/App.tsx` — the box above the list, and which screen is open. It draws what the read returned and works nothing out for itself.
 - `src/main.tsx` — the mount, and nothing else.
-- `src/rank.test.ts`, `src/Sheet.test.tsx`, `src/Breakdown.test.tsx`,
-  `src/Narrow.test.tsx`, `src/Collections.test.tsx`, `src/Detail.test.tsx`,
-  `src/Row.test.tsx` — the ranking's draw, and the six components with a
-  grammar: what a pick turns into on the wire, what a proposal draws before it
-  is approved, what a picker does with a value it cannot name, which kind a
+- `src/Sheet.test.tsx`, `src/Breakdown.test.tsx`, `src/Narrow.test.tsx`,
+  `src/Collections.test.tsx`, `src/Detail.test.tsx`, `src/Row.test.tsx` — the
+  six components with a grammar: what a pick turns into on the wire, what a
+  proposal draws before it is approved, what a picker does with a value it
+  cannot name and whether its Tag order survives an unmount, which kind a
   collection write goes out under, whether the field holding a pointer is
   cleared, and what a row does with a name nothing named and an instant it
   cannot read. The other components are drawn from what they are handed, so
   there is nothing in them a test would pin that reading them does not.
+- `src/log.test.ts`, `src/state.test.ts`, `src/write.test.ts`,
+  `src/rank.test.ts` — the modules that work something out rather than draw it:
+  how an Actor splits, what a Narrowing becomes as a query, what a write sends,
+  and what the draw does to the Tag order. A module that only holds types or
+  calls `fetch` has nothing to pin and is not listed.
 - `src/index.css` — the whole of the styling. There is no component-level
   stylesheet and no CSS-in-JS, so the 44px rule below is checkable by reading
   one file.
@@ -447,9 +452,10 @@ and adds to this list rather than to the plan.
 - **The Tags are ranked for discovery, and the draw is once per Tag.**
   Efraimidis-Spirakis weighted sampling over `count + 1`, so a Tag carried
   twice usually sits above one carried once and sometimes sits below it. The
-  keys are held in a ref across polls rather than redrawn from each one: the
-  poll runs every second, and a list re-weighted that often would move between
-  seeing a Tag and reaching it. The Lists are not ranked — there are few of
+  keys live in `rank.ts` for as long as the page is loaded rather than in the
+  controls that read them: `Narrow` is unmounted whenever another screen is
+  open, and an order redrawn on the way back would move a Tag out from under
+  whoever went to fetch something. The Lists are not ranked — there are few of
   them, and a stable order is what makes one easy to reach.
 - **A paperclip is the row's own count, not a mark the store keeps.**
   `store.Task.Marks` is the store's vocabulary for what a Task _is_, and
