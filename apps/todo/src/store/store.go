@@ -80,6 +80,12 @@ const (
 // instead: a List Created names the List, and looking a Task up by that id
 // would find none.
 //
+// The eight left out are KindListCreated, KindListDescribed, KindListDeleted,
+// KindTagCreated, KindTagDescribed and KindTagDeleted, each naming the
+// Collection, and KindSeriesCreated and KindSeriesEdited, naming the Series.
+// They are named here so that "deliberately left out" is something a reader
+// can check rather than take on trust.
+//
 // It is here rather than worked out by whoever draws a log, for the reason
 // Sorts and Colors are: a kind added to this package appears wherever the set
 // is served the day it is appended, and a surface keeping its own copy would

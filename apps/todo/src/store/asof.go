@@ -88,9 +88,11 @@ func (s *Store) TaskAsOf(taskID string, seq int64) (Task, error) {
 // connection database/sql retires and redials is a fresh empty database, so
 // there is nothing here worth keeping past the read it was built for.
 //
-// The DSN is the store's own, so the replica runs under the settings every
-// other connection in this package runs under rather than a second set written
-// out beside them.
+// The DSN is the store's own rather than a second set of settings written out
+// beside it. Three of its four pragmas apply here; journal_mode(WAL) does not,
+// since SQLite answers `memory` to it on an in-memory database and carries on.
+// That is a no-op and not a mistake: there is no write-ahead log to want on a
+// database thrown away at the end of one read.
 func replay(entries []Entry) (*Store, error) {
 	db, err := sql.Open("sqlite", dsn(":memory:"))
 	if err != nil {

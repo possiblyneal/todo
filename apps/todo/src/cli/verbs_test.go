@@ -57,6 +57,13 @@ func TestTheLifecycleVerbsEachTakeTheirOwnLease(t *testing.T) {
 	if out := listed(t); strings.Contains(out, id) {
 		t.Errorf("a deleted task is still listed: %q", out)
 	}
+	// Nor under -all. The flag takes in the snoozed, the completed and the
+	// declined -- three states that were meant to be there -- and a deleted
+	// Task was not one of those. It is read at the entry that deleted it
+	// instead.
+	if out := listed(t, "-all"); strings.Contains(out, id) {
+		t.Errorf("todo list -all takes in a deleted task: %q", out)
+	}
 
 	// Every verb appended, and each one gave its Lease back.
 	kinds := kindsFromStore(t)
