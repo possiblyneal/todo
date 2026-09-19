@@ -12,7 +12,7 @@
 import { useState } from 'react'
 
 import { sentence } from './api'
-import type { Collection, Level, Offered } from './state'
+import type { Collection, Offered } from './state'
 import { addCollection, type Kind, memberships, type TaskBody } from './write'
 
 /** The attributes this sheet takes as text, which is every one it shows. */
@@ -148,21 +148,19 @@ export function Sheet({
 
       <Choice
         name="Priority"
-        options={offered.priorities.map((one) => one.name)}
-        examples={offered.priorities}
+        options={offered.priorities}
         value={body.priority ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, priority: value }))}
       />
       <Choice
         name="Impact"
-        options={offered.impacts.map((one) => one.name)}
-        examples={offered.impacts}
+        options={offered.impacts}
         value={body.impact ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, impact: value }))}
       />
       <Choice
         name="Color"
-        options={offered.colors}
+        options={offered.colors.map((name) => ({ name }))}
         value={body.color ?? ''}
         onPick={(value) => setBody((was) => ({ ...was, color: value }))}
       />
@@ -220,24 +218,28 @@ export function Sheet({
 function Choice({
   name,
   options,
-  examples,
   value,
   onPick,
 }: {
   name: string
-  options: string[]
   /**
-   * What each value means, where the route says. The levels carry one and the
-   * colors do not: blue means blue. A value with none is offered under its own
-   * name, which is what a value the client cannot recognise gets as well.
+   * What is on offer, each with what choosing it means where the route says
+   * one. The levels carry an example and the colors do not: blue means blue.
+   * One prop and not a second list of names beside it, because two lists of
+   * the same values are two that can disagree.
    */
-  examples?: Level[]
+  options: { name: string; example?: string }[]
   value: string
   onPick: (value: string) => void
 }) {
+  const names = options.map((one) => one.name)
   const shown =
-    value === '' || options.includes(value) ? options : [...options, value]
-  const said = (one: string) => examples?.find((each) => each.name === one)
+    value === '' || names.includes(value)
+      ? options
+      : // A value the route does not offer is kept, under its own name and
+        // with nothing said about what it means, because the route is what
+        // says that and it said nothing about this one.
+        [...options, { name: value }]
   return (
     <label className="field">
       <span>{name}</span>
@@ -250,8 +252,8 @@ function Choice({
       <select value={value} onChange={(event) => onPick(event.target.value)}>
         <option value="">—</option>
         {shown.map((one) => (
-          <option key={one} value={one}>
-            {said(one) ? `${one} — ${said(one)?.example}` : one}
+          <option key={one.name} value={one.name}>
+            {one.example ? `${one.name} — ${one.example}` : one.name}
           </option>
         ))}
       </select>

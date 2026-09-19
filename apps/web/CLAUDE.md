@@ -221,7 +221,10 @@ and adds to this list rather than to the plan.
   and what they mean is not, and each level travels beside the example that says
   what it means. `Choice` puts that example in the option itself: the question
   it answers is asked while the three are side by side, and showing only the
-  chosen one's would mean picking each in turn to read them.
+  chosen one's would mean picking each in turn to read them. It takes one list
+  of what is on offer and not a list of names beside a list of meanings, since
+  two lists of the same values are two that can disagree; a color goes in as a
+  name with nothing said about it, because blue means blue.
 - **A rename and a recolor are one write, and each carries only what changed.**
   `Collections.tsx` edits a row's name and color in place and submits them
   together, because the store writes them as one entry and a screen that sent

@@ -22,8 +22,11 @@ const (
 var Levels = []Level{LevelLow, LevelMed, LevelHigh}
 
 // PriorityExamples and ImpactExamples answer "what does med mean here". They
-// are shown wherever a level is chosen. The wording is the tracker's to state
-// and the operator's to rewrite; what is settled is that each level has one.
+// are shown wherever a level is chosen and there is room to read one, which is
+// the sheet; the CLI's flag help names the three and leaves the sentences to
+// GET /api/state, because three of them is a wall in a flag. The wording is
+// the tracker's to state and the operator's to rewrite; what is settled is
+// that each level has one, which TestALevelOutsideTheThreeIsRefused pins.
 var (
 	PriorityExamples = map[Level]string{
 		LevelLow:  "Nothing goes wrong if this waits a month.",
@@ -38,14 +41,17 @@ var (
 )
 
 // LevelOffer is a level and the example that says what it means, which is what
-// a surface offering the choice shows. The two travel together because a level
-// without its example is the thing this type exists to prevent.
+// a surface offering the choice shows. The two travel together so that serving
+// the words without the sentences takes a deliberate step; that both maps name
+// all three is pinned by a test rather than by this type.
 type LevelOffer struct {
 	Name    string
 	Example string
 }
 
-// LevelOffers pairs the three with one of the example maps above, in order.
+// LevelOffers pairs the three with one of the two example maps above, in
+// order. A map missing a level yields an empty example rather than an error,
+// because the two maps here are the only ones and a test holds them complete.
 func LevelOffers(examples map[Level]string) []LevelOffer {
 	offers := make([]LevelOffer, len(Levels))
 	for i, l := range Levels {
