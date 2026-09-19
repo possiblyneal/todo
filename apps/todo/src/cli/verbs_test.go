@@ -307,8 +307,9 @@ func TestReopeningADeletedTaskExitsAsARefusal(t *testing.T) {
 	if code != 3 {
 		t.Errorf("todo reopen on a deleted Task exited %d, want 3: %s", code, errs)
 	}
-	// The store's own sentence, not one the CLI writes beside it.
-	if !strings.Contains(errs, "a deleted Task is gone") {
-		t.Errorf("the refusal reads %q, want the store's sentence", errs)
+	// The store's own sentence, asked for rather than repeated here, so the
+	// terminal and the store cannot drift apart about the same refusal.
+	if !strings.Contains(errs, store.ErrGone.Error()) {
+		t.Errorf("the refusal reads %q, want the store's own %q", errs, store.ErrGone)
 	}
 }

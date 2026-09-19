@@ -419,20 +419,22 @@ func TestReopeningADeletedTaskIsRefusedWithAConflict(t *testing.T) {
 	if w.Code != http.StatusConflict {
 		t.Fatalf("POST reopen on a deleted Task answered %d, want 409: %s", w.Code, w.Body.String())
 	}
-	if sentence := said(t, w)["error"]; !strings.Contains(sentence, "a deleted Task is gone") {
-		t.Errorf("the refusal reads %q, want the store's sentence", sentence)
+	// Asked of the store rather than repeated here, so the two cannot drift
+	// apart -- the same reason attachments_test.go asks for its sentence.
+	if sentence := said(t, w)["error"]; sentence != store.ErrGone.Error() {
+		t.Errorf("the refusal reads %q, want the store's own %q", sentence, store.ErrGone)
 	}
 
-	// The Lease is taken and given back either way -- write.Lifecycle takes it
-	// before the store is asked, so the bookkeeping is there and says a write
-	// was attempted. What must not be there is the entry itself.
+	// Not the log's length: write.Lifecycle takes the Lease before the store is
+	// asked, so lease_taken and lease_released land on a refusal too. What must
+	// not be there is the entry itself.
 	history, err := s.HistoryOf(id)
 	if err != nil {
 		t.Fatalf("HistoryOf: %v", err)
 	}
 	for _, e := range history {
 		if e.Kind == store.KindTaskReopened {
-			t.Fatal("a refused reopening was written into the Change History")
+			t.Error("a refused reopening was written into the Change History")
 		}
 	}
 
