@@ -13,7 +13,10 @@ import type { Offered } from './state'
 import * as write from './write'
 import type { TaskBody } from './write'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 const OFFERED: Offered = {
   lists: [{ id: 'l1', name: 'Home', color: 'blue', count: 2 }],
@@ -196,9 +199,9 @@ test('a pair added on the blank row is sent with the rest', () => {
   expect(body.fields).toEqual({ url: 'example.com', aisle: '7' })
 })
 
-// Making a List from here is a write of its own, and the point of it is that
-// the Task lands in the List somebody just named. Ticking it separately would
-// be the same two taps that leaving the sheet costs.
+// Making a Tag from here is a write of its own, and the point of it is that
+// the Task lands under the Tag somebody just named. Ticking it separately
+// would be the same two taps that leaving the sheet costs.
 test('a Tag made here is ticked and comes back as a membership', async () => {
   const made = vi.spyOn(write, 'addCollection').mockResolvedValue('t9')
   const sheet = opened({ title: 'Buy milk' })
@@ -275,4 +278,43 @@ test('a collected attachment is taken off before anything is written', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
   fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]!)
   expect(sheet.submit().attachments).toEqual(['/two'])
+})
+
+// A refusal belongs to the write somebody just made, and a Collection that was
+// made is the write they just made. Left standing, the sentence says the wrong
+// thing about the tick that appeared beside it.
+test('a refusal is taken down by the creation that follows it', async () => {
+  const made = vi.spyOn(write, 'addCollection')
+  made.mockRejectedValueOnce(new Error('that name is taken'))
+  opened({ title: 'Buy milk' })
+  const box = screen.getByLabelText('New List')
+  fireEvent.change(box, { target: { value: 'Home' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add List' }))
+  await screen.findByText('that name is taken')
+
+  made.mockResolvedValueOnce('l9')
+  fireEvent.change(box, { target: { value: 'Garden' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add List' }))
+  await screen.findByText('Garden')
+  expect(screen.queryByText('that name is taken')).toBeNull()
+})
+
+// The box is cleared by the name going out, not by the answer coming back: a
+// name typed while the request was in flight is the next one somebody means to
+// make, and it is theirs rather than this screen's to throw away.
+test('a name typed while the creation is in flight survives it', async () => {
+  let land: (id: string) => void = () => {}
+  vi.spyOn(write, 'addCollection').mockReturnValue(
+    new Promise<string>((resolve) => {
+      land = resolve
+    }),
+  )
+  opened({ title: 'Buy milk' })
+  const box = screen.getByLabelText<HTMLInputElement>('New Tag')
+  fireEvent.change(box, { target: { value: 'shopping' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add Tag' }))
+  fireEvent.change(box, { target: { value: 'errands' } })
+  land('t9')
+  await screen.findByText('shopping')
+  expect(box.value).toBe('errands')
 })
