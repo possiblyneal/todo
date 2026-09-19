@@ -242,11 +242,11 @@ export function Search({
 }
 
 /**
- * What one option or button reads. A Collection the last read named carries the count the
- * store worked out; an id nothing named reads as itself and carries no count at
- * all, because a zero here would be the client answering a question the store
- * never answered — the Collection may well have Tasks under it, and this side
- * has no way to know.
+ * What one option or button reads. A Collection the last read named carries
+ * the count the store worked out; an id nothing named reads as itself and
+ * carries no count at all, because a zero here would be the client answering a
+ * question the store never answered — the Collection may well have Tasks under
+ * it, and this side has no way to know.
  */
 function labelled(all: Collection[], id: string) {
   const named = all.find((one) => one.id === id)
