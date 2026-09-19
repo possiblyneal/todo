@@ -24,10 +24,6 @@ func browse(root string, w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if !inside(root, at) {
-		fail(w, outside(at, root))
-		return
-	}
 	read, err := os.ReadDir(at)
 	if err != nil {
 		fail(w, usage{fmt.Errorf("cannot list %s: %w", at, err)})
@@ -107,19 +103,6 @@ func within(root, asked string) (string, error) {
 func under(root, at string) bool {
 	rel, err := filepath.Rel(root, at)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
-// inside is the same containment as `under`, said on the strings with the
-// separator on the end so the boundary lands in the same place. It adds
-// nothing to `under`. It exists to be called in `browse`, beside the read it
-// guards, because the scanner reading this route for path injection
-// recognises only a guard in the same function as the path it judges: a
-// containment two calls away reads to it as no containment at all, and an
-// unbounded-looking read of the host is not a warning to leave standing on a
-// route anybody on the LAN can call.
-func inside(root, at string) bool {
-	sep := string(filepath.Separator)
-	return at == root || strings.HasPrefix(at, strings.TrimSuffix(root, sep)+sep)
 }
 
 // outside is the one sentence every path the listener will not look at gets.
