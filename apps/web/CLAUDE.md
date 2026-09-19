@@ -152,12 +152,15 @@ and adds to this list rather than to the plan.
   a dropped answer. The nine colors and the four snoozes were the same problem
   and are not any more: `colors` and `snoozes` arrive with the state, so the
   picker for each is the store's list and cannot offer a tenth or a fifth.
-- **A picked value the client does not know is offered rather than dropped.**
-  `Choice` in `Sheet.tsx` is one control for the levels and the colors alike,
-  and a value that is none of the offered ones is added to the end of the list:
-  the Broker chose the word, and a picker that silently could not hold it would
-  lose what it said. The API refuses what it refuses, in the sentence the sheet
-  shows.
+- **A level the client does not know is offered rather than dropped.** `Choice`
+  in `Sheet.tsx` is one control for the levels and the colors alike, and a value
+  that is none of the offered ones is added to the end of the list. That is the
+  levels' case: the Broker answers priority and impact in whatever words it
+  chose, and a picker that silently could not hold one would lose what it said.
+  A color cannot arrive that way — `write.AsSaid` carries no color, and the nine
+  arrive with the state — so for colors the branch is the same code standing
+  idle rather than a case being handled. The API refuses what it refuses, in the
+  sentence the sheet shows.
 - **Snooze is the one attribute the sheet cannot read back.** A Task carries the
   instant it wakes and the field takes the span to wait, so the control never
   opens knowing the answer: leaving it alone and waking the Task cannot be the

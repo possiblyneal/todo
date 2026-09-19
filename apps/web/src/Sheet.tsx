@@ -266,13 +266,6 @@ function Snooze({
   value?: string
   onPick: (value: string | undefined) => void
 }) {
-  // A snooze the Broker said is offered as one more, the way a Choice offers a
-  // word it did not know: `write.Snooze` takes a plain duration as well as the
-  // labels, so one is not a value to drop on the way to the screen.
-  const shown =
-    value === undefined || value === '' || offered.includes(value)
-      ? offered
-      : [...offered, value]
   return (
     <label className="field">
       <span>Snooze</span>
@@ -287,7 +280,7 @@ function Snooze({
       >
         <option value="leave">—</option>
         <option value="wake">wake it</option>
-        {shown.map((one) => (
+        {offered.map((one) => (
           <option key={one} value={one}>
             {one}
           </option>
@@ -316,7 +309,9 @@ function Fields({
   const [value, setValue] = useState('')
 
   const add = () => {
-    if (key === '') return
+    // An empty value is how the wire says remove, so adding a pair with one
+    // would draw a row that submitting deletes.
+    if (key === '' || value === '') return
     onChange({ ...on, [key]: value })
     setKey('')
     setValue('')
