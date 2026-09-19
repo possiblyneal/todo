@@ -133,12 +133,18 @@ export function Sheet({
         a date it can show, and one that blanked or guessed at it would be the
         same failure a control later. So it is the platform's own, uncontrolled,
         and the box is still free text after a date lands in it.
+
+        It writes a date and never an empty one. A native date input fires a
+        change carrying "" when it is cleared, which a keystroke in it does, and
+        writing that through would blank the box -- the same failure by the same
+        control, arrived at from the other side. Clearing the box is what the
+        box is for.
       */}
       <fieldset className="field">
         <legend>Deadline</legend>
         <div className="pair">
           <input
-            aria-label="Deadline"
+            aria-label="Deadline as typed"
             value={body.deadline ?? ''}
             onChange={(event) => say('deadline', event.target.value)}
             placeholder="2026-03-04"
@@ -146,7 +152,9 @@ export function Sheet({
           <input
             type="date"
             aria-label="Pick a deadline"
-            onChange={(event) => say('deadline', event.target.value)}
+            onChange={(event) =>
+              event.target.value && say('deadline', event.target.value)
+            }
           />
         </div>
       </fieldset>
