@@ -100,21 +100,9 @@ func within(root, asked string) (string, error) {
 
 // under is the containment comparison, on the path boundary rather than on the
 // characters: a root of `/home/ne` does not contain `/home/neal`.
-//
-// It is spelled twice. The first is the comparison itself and is already the
-// answer. The second says the same thing on the strings, with the separator
-// on the end so it draws the boundary in the same place, and it is here
-// because the scanner reading this route for path injection recognises that
-// form as the guard and does not recognise the first. A route that is bounded
-// but reported as unbounded is a finding nobody can tell from a real one, and
-// those are the findings that eventually get waved through.
 func under(root, at string) bool {
 	rel, err := filepath.Rel(root, at)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return false
-	}
-	sep := string(filepath.Separator)
-	return at == root || strings.HasPrefix(at, strings.TrimSuffix(root, sep)+sep)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // outside is the one sentence every path the listener will not look at gets.
