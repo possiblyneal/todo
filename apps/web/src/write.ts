@@ -3,7 +3,7 @@
 // `apps/todo/src/api/series.go`, `apps/todo/src/api/collections.go` and
 // `apps/todo/src/api/broker.go`, which are the side that decides them.
 
-import { send } from './api'
+import { send, sentence } from './api'
 import { type Narrowing, queryString, type Task } from './state'
 
 /**
@@ -39,6 +39,16 @@ export type TaskBody = {
    */
   fields?: Record<string, string>
   parent?: string
+  /**
+   * Pointers to attach once the Task exists. They never travel in the body: no
+   * write route takes an attachment and every one of them refuses a field it
+   * does not know, so `addTask`, `addSubtask`, `editTask` and `detachEdited`
+   * each split them off and attach them one at a time afterwards.
+   *
+   * Nothing here detaches. A pointer already on the Task is taken off from the
+   * detail screen, which is the only screen that can show what is there.
+   */
+  attachments?: string[]
   intoLists?: string[]
   outOfLists?: string[]
   addTags?: string[]
@@ -75,19 +85,62 @@ export async function ask(
   return said.answer
 }
 
+/**
+ * Splits the pointers off a body. The routes refuse a field they do not know,
+ * and an Attachment is a write of its own against a Task that has to exist
+ * first, so this is where the two part company.
+ */
+function unattached(body: TaskBody): [TaskBody, string[]] {
+  const { attachments, ...rest } = body
+  return [rest, attachments ?? []]
+}
+
+/**
+ * Attaches each pointer to a Task that now exists. One at a time and in order,
+ * because each is its own guarded write; a refusal on one stops there, with the
+ * Task and whatever was attached before it left standing.
+ *
+ * The sentence says the Task was written, because the form that sent it cannot
+ * tell otherwise: every other way a submit fails leaves nothing behind, and a
+ * second press of the same button after this one would write a second Task
+ * rather than retry the pointer. What did not land is added from the Task
+ * itself, which is the screen that can show what is already on it.
+ */
+async function attachAll(id: string, pointers: string[]): Promise<void> {
+  for (const [landed, pointer] of pointers.entries()) {
+    try {
+      await attach(id, pointer)
+    } catch (caught) {
+      throw new Error(
+        `the task was written, and ${landed} of ${pointers.length} attachments with it. ` +
+          `${pointer} was refused: ${sentence(caught)}. ` +
+          `Add the rest from the task rather than submitting again, which writes a second task.`,
+        { cause: caught },
+      )
+    }
+  }
+}
+
 /** Writes one Task and files it, and names the Task it wrote. */
 export async function addTask(body: TaskBody): Promise<string> {
-  const written = await send<{ id: string }>('POST', '/api/tasks', body)
+  const [create, pointers] = unattached(body)
+  const written = await send<{ id: string }>('POST', '/api/tasks', create)
+  await attachAll(written.id, pointers)
   return written.id
 }
 
-/** Changes a Task's attributes and its memberships together, as one write. */
+/**
+ * Changes a Task's attributes and its memberships together, as one write, and
+ * attaches any pointers after it.
+ */
 export async function editTask(id: string, body: TaskBody): Promise<void> {
+  const [change, pointers] = unattached(body)
   await send<{ id: string }>(
     'PATCH',
     `/api/tasks/${encodeURIComponent(id)}`,
-    body,
+    change,
   )
+  await attachAll(id, pointers)
 }
 
 /** Writes one Task under another, which is the same write with a parent. */
@@ -95,11 +148,13 @@ export async function addSubtask(
   parent: string,
   body: TaskBody,
 ): Promise<string> {
+  const [create, pointers] = unattached(body)
   const written = await send<{ id: string }>(
     'POST',
     `/api/tasks/${encodeURIComponent(parent)}/subtasks`,
-    body,
+    create,
   )
+  await attachAll(written.id, pointers)
   return written.id
 }
 
@@ -279,11 +334,13 @@ export async function detachEdited(
   on: string,
   body: TaskBody,
 ): Promise<string> {
+  const [lift, pointers] = unattached(body)
   const written = await send<{ id: string }>(
     'POST',
     `/api/tasks/${encodeURIComponent(id)}/series/edit`,
-    { ...body, on },
+    { ...lift, on },
   )
+  await attachAll(written.id, pointers)
   return written.id
 }
 

@@ -364,3 +364,10 @@ button.row {
   font-size: 0.8rem;
   opacity: 0.7;
 }
+
+/* A collected pointer and the button that drops it again. The pointer takes
+   the width, unlike the key of a key/value pair, which is a word. */
+.pointer > span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
