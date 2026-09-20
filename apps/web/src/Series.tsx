@@ -87,6 +87,9 @@ export function Series({
         // recurring Task carries, so the ticked sets go whole.
         against={{}}
         offered={offered}
+        // Lifting a date out writes a Task that is not there yet, so there is
+        // nothing to hide and no snooze on the sheet.
+        existing={false}
         action="Lift out"
         onSubmit={async (body) => {
           // The lift and the corrections are one write, so backing out of this

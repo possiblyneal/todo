@@ -12,7 +12,8 @@ surface moved off the terminal.
 
 What it holds: the list over `GET /api/state` and the controls that narrow and
 order it, the box that hands a dump to the Broker and opens the add sheet
-filled in, the detail screen a tap on a Task opens, the Series screen and the
+filled in, over the list and again under a Task where what it writes is a
+Subtask, the detail screen a tap on a Task opens, the Series screen and the
 four things it does to a date, the breakdown that proposes Subtasks, the
 collections screen over the Lists and Tags, and the activity screen over the
 Change History. The six stages of
@@ -50,12 +51,14 @@ and adds to this list rather than to the plan.
   recognising anything by name: the Actor split on the first slash, and which
   kinds are the Lease bookkeeping rather than activity.
 - `src/Box.tsx` — the box: a dump or a question, in the same field under the
-  same thumb. Neither call writes.
+  same thumb. Neither call writes. Given a `parent` it is a Task's own box
+  instead: the same dump, submitted as a Subtask of that Task, with no Ask on
+  it because a question is about a list.
 - `src/Sheet.tsx` — the sheet: a Task open for correction, whether the Broker
   just read it or it already exists. Every attribute a Task has is on it, which
   is the title, description, why, deadline, estimate, priority, impact, color,
-  snooze, the key/value pairs, the pointers collected for it, and the Lists and
-  Tags it is filed under. It
+  the key/value pairs, the pointers collected for it, and the Lists and
+  Tags it is filed under, plus the snooze, which is on an edit alone. It
   makes one write of its own, the List or Tag its ticks offer to make; every
   other write is whoever opens it saying what submitting it does.
 - `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tags,
@@ -77,7 +80,8 @@ and adds to this list rather than to the plan.
   every attribute its tick would write.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
   Subtasks, its Series, its breakdown, the four lifecycle verbs, its pointers
-  added and taken off, and its history.
+  added and taken off, and its history. Subtask is a screen holding this Task's
+  own box, with By hand beside it for the blank sheet.
 - `src/Attributes.tsx` — the attributes a Task carries, drawn only where it
   carries one. The detail screen and the historical one both draw through it,
   so the Task as it stands and the Task as it stood cannot be described
@@ -96,10 +100,11 @@ and adds to this list rather than to the plan.
   is open. It draws what the read returned and works nothing out for itself,
   including how wide the screen is.
 - `src/main.tsx` — the mount, and nothing else.
-- `src/Sheet.test.tsx`, `src/Breakdown.test.tsx`, `src/Narrow.test.tsx`,
+- `src/Box.test.tsx`, `src/Sheet.test.tsx`, `src/Breakdown.test.tsx`, `src/Narrow.test.tsx`,
   `src/Collections.test.tsx`, `src/Detail.test.tsx`, `src/App.test.tsx`,
   `src/Row.test.tsx`, `src/Was.test.tsx` — the components with a grammar: what
-  a pick turns into on the wire, what a proposal draws before it is approved, what a picker does
+  a pick turns into on the wire, which route a dump goes out on, what a
+  proposal draws before it is approved, what a picker does
   with a value it cannot name and whether its Tag order survives an unmount,
   which kind a collection write goes out under, whether the field holding a
   pointer is cleared and what the picker off the host puts in it, that a
@@ -392,6 +397,22 @@ and adds to this list rather than to the plan.
   with the state — so for colors the branch is the same code standing idle
   rather than a case being handled. The API refuses what it refuses, in the
   sentence the sheet shows.
+- **A Subtask is said the way a Task is.** `Box` is the front door to both:
+  over the list a dump becomes a top-level Task, and under a Task the same
+  sentence, read by the same `POST /api/capture`, becomes a Subtask of it. The
+  `parent` it was given is the whole of the difference, so there is one dump
+  and one gate rather than a second flow for the nested case. That box draws no
+  Ask, because a question is asked about a list and a Task is not one; the
+  blank sheet is still reached, from By hand beside it, so a Subtask nobody
+  needs read for them does not wait on the Broker.
+- **The sheet offers a snooze on an edit and never on a create.** Hiding a Task
+  is something done to one that is there, and the three things the control says
+  — leave it alone, wake it, hide it for a span — are two of them nonsense
+  about a Task nobody has written yet. `existing` is what says which, and every
+  call site passes it: `Detail` on an edit alone, `Box` and `Series` never, the
+  second because lifting a date out writes a Task that is not there either. A
+  create sends no `snooze` field at all rather than an empty one, which is
+  absent meaning leave it alone.
 - **Snooze is the one attribute the sheet cannot read back.** A Task carries the
   instant it wakes and the field takes the span to wait, so the control never
   opens knowing the answer: leaving it alone and waking the Task cannot be the

@@ -9,6 +9,7 @@ import { useState } from 'react'
 
 import { sentence } from './api'
 import { Attributes } from './Attributes'
+import { Box } from './Box'
 import { Breakdown } from './Breakdown'
 import { Log } from './Log'
 import { useRead } from './read'
@@ -59,7 +60,7 @@ export function Detail({
   // breakdown are screens rather than sections because a thumb reaching a mark
   // should not have scrolled past everything the Task carries to get there.
   const [open, setOpen] = useState<
-    '' | 'edit' | 'subtask' | 'series' | 'breakdown'
+    '' | 'edit' | 'subtask' | 'hand' | 'series' | 'breakdown'
   >('')
   const [working, setWorking] = useState(false)
   // The entry being read out as the Task it left behind, or nothing. A screen
@@ -134,11 +135,35 @@ export function Detail({
     return <Breakdown task={task} onBack={() => setOpen('')} />
   }
 
+  // A Subtask is said the way a Task is: the sentence goes to the Broker and
+  // the sheet it fills is the gate. The box is this Task's rather than the
+  // list's, so it asks no question and what it writes lands under this Task.
+  // By hand is the same sheet with nothing in it, for a Subtask nobody needs
+  // read for them.
+  if (open === 'subtask') {
+    return (
+      <div className="detail">
+        <div className="buttons">
+          <button type="button" onClick={() => setOpen('')}>
+            Back
+          </button>
+          <button type="button" onClick={() => setOpen('hand')}>
+            By hand
+          </button>
+        </div>
+        <h1 className="title">Subtask of {task.title}</h1>
+        <Box offered={offered} parent={task.id} />
+      </div>
+    )
+  }
+
   if (open !== '') {
     return (
       <Sheet
         draft={open === 'edit' ? draftOf(task) : {}}
         offered={offered}
+        // Only an edit is open on a Task that is already there to be hidden.
+        existing={open === 'edit'}
         action={open === 'edit' ? 'Save' : 'Add'}
         onSubmit={async (body: TaskBody) => {
           if (open === 'edit') await editTask(task.id, body)

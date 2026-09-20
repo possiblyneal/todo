@@ -3,6 +3,11 @@
 // under the same thumb: a dump and a question are both "say a sentence about
 // the list".
 //
+// It is the front door to a Subtask as well, under a Task rather than over the
+// list: the same sentence read the same way, submitted as a Subtask of the
+// Task it was typed under. A question is about a list and there is no list
+// there, so that box asks nothing and draws no Ask.
+//
 // Neither call writes. Handing a dump over opens the add sheet filled in, and
 // submitting that sheet is the only thing that writes; a question is answered
 // as prose over the Tasks in view and appends nothing.
@@ -11,17 +16,26 @@ import { useState } from 'react'
 
 import { Sheet } from './Sheet'
 import type { Narrowing, Offered } from './state'
-import { addTask, ask, capture, type TaskBody } from './write'
+import { addSubtask, addTask, ask, capture, type TaskBody } from './write'
 
 export function Box({
   offered,
   narrowing,
+  parent,
 }: {
   /** What the add sheet picks from. Nothing here is read on the way past. */
   offered: Offered
-  // What the list is narrowed to, so a question is asked about the Tasks on
-  // the screen rather than about every open one.
-  narrowing: Narrowing
+  /**
+   * What the list is narrowed to, so a question is asked about the Tasks on
+   * the screen rather than about every open one. It is what makes this the
+   * list's box: given one, Ask is under the same thumb as Add.
+   */
+  narrowing?: Narrowing
+  /**
+   * The Task a dump becomes a Subtask of, which is what makes this a Task's
+   * own box. Absent, a dump becomes a top-level Task.
+   */
+  parent?: string
 }) {
   const [text, setText] = useState('')
   const [working, setWorking] = useState<'' | 'reading' | 'asking'>('')
@@ -40,7 +54,7 @@ export function Box({
     setAnswer(null)
     try {
       if (what === 'reading') setDraft(await capture(said))
-      else setAnswer(await ask(said, narrowing))
+      else if (narrowing) setAnswer(await ask(said, narrowing))
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
@@ -59,12 +73,18 @@ export function Box({
         // under nothing.
         against={{}}
         offered={offered}
+        // A Task being written now is hidden from nothing, so the sheet does
+        // not offer to snooze it.
+        existing={false}
         action="Add"
         // The dump is done with once the Task is written. Backing out of the
         // sheet keeps it, because somebody who changed their mind about the
         // Task has not changed their mind about having typed the sentence.
         onSubmit={async (body) => {
-          await addTask(body)
+          // A dump under a Task is a Subtask of it; the sentence was read the
+          // same way either side of that, and only the route differs.
+          if (parent) await addSubtask(parent, body)
+          else await addTask(body)
           setDraft(null)
           setText('')
         }}
@@ -79,7 +99,9 @@ export function Box({
         className="dump"
         value={text}
         onChange={(event) => setText(event.target.value)}
-        placeholder="Say the task, or ask about the list"
+        placeholder={
+          parent ? 'Say the subtask' : 'Say the task, or ask about the list'
+        }
         rows={2}
       />
       <div className="buttons">
@@ -90,13 +112,16 @@ export function Box({
         >
           {working === 'reading' ? 'Reading…' : 'Add'}
         </button>
-        <button
-          type="button"
-          onClick={() => void hand('asking')}
-          disabled={working !== '' || text.trim() === ''}
-        >
-          {working === 'asking' ? 'Asking…' : 'Ask'}
-        </button>
+        {/* A question is about a list, and a Task's own box has none. */}
+        {narrowing && (
+          <button
+            type="button"
+            onClick={() => void hand('asking')}
+            disabled={working !== '' || text.trim() === ''}
+          >
+            {working === 'asking' ? 'Asking…' : 'Ask'}
+          </button>
+        )}
       </div>
       {error && <p className="message">{error}</p>}
       {answer && <p className="answer">{answer}</p>}

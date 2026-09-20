@@ -33,14 +33,19 @@ const OFFERED: Offered = {
   opens: ['task_added'],
 }
 
-/** Renders the sheet and answers with what submitting it sent. */
-function opened(draft: TaskBody, against?: TaskBody) {
+/**
+ * Renders the sheet and answers with what submitting it sent. It opens on a
+ * Task that exists unless a test says otherwise, which is the case the
+ * snoozing grammar below is about: a create has no snooze to get wrong.
+ */
+function opened(draft: TaskBody, against?: TaskBody, existing = true) {
   const sent: TaskBody[] = []
   render(
     <Sheet
       draft={draft}
       against={against}
       offered={OFFERED}
+      existing={existing}
       action="Save"
       onSubmit={(body) => {
         sent.push(body)
@@ -95,6 +100,15 @@ test('a snooze the client was not offered is kept and sent as it came', () => {
   const sheet = opened({ title: 'Buy milk', snooze: '90m' })
   expect(screen.getByLabelText('Snooze')).toHaveProperty('value', '90m')
   expect(sheet.submit().snooze).toBe('90m')
+})
+
+// Hiding a Task is done to one that is there. A create offering it would be
+// the sheet asking a question about a Task nobody has written, and the three
+// answers it takes -- leave it, wake it, hide it -- are two of them nonsense.
+test('a create does not offer to snooze the Task it is writing', () => {
+  const sheet = opened({ title: 'Buy milk' }, undefined, false)
+  expect(screen.queryByLabelText('Snooze')).toBeNull()
+  expect(sheet.submit().snooze).toBeUndefined()
 })
 
 test('a snooze picked and then put back is absent again', () => {

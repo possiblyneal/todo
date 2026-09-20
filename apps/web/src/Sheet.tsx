@@ -23,6 +23,7 @@ export function Sheet({
   draft,
   against,
   offered,
+  existing,
   action,
   onSubmit,
   onCancel,
@@ -44,6 +45,13 @@ export function Sheet({
    * form's.
    */
   offered: Offered
+  /**
+   * Whether the Task this sheet is open on already exists. Only the snooze
+   * reads it: what it takes is a span to hide a Task for, and a Task nobody
+   * has written yet is hidden from nothing, so the control is on an edit and
+   * not on a create. Every other attribute means the same thing either way.
+   */
+  existing: boolean
   /** The word on the button, which is what submitting it does. */
   action: string
   onSubmit: (body: TaskBody) => Promise<void>
@@ -195,11 +203,19 @@ export function Sheet({
         onPick={(value) => setBody((was) => ({ ...was, color: value }))}
       />
 
-      <Snooze
-        options={offered.snoozes}
-        value={body.snooze}
-        onPick={(value) => setBody((was) => ({ ...was, snooze: value }))}
-      />
+      {/*
+        Hiding a Task is something done to one that is already there, so the
+        control is on an edit and not on a create: the three things it says --
+        leave it alone, wake it, hide it for a span -- are two things and a
+        choice about a Task that does not exist yet.
+      */}
+      {existing && (
+        <Snooze
+          options={offered.snoozes}
+          value={body.snooze}
+          onPick={(value) => setBody((was) => ({ ...was, snooze: value }))}
+        />
+      )}
 
       <Fields
         on={body.fields ?? {}}
@@ -305,6 +321,10 @@ function Choice({
  * Undefined is left alone, which is what an untouched sheet sends and what
  * keeps a snoozed Task snoozed through an edit about something else. The empty
  * string wakes it, which is the only way back from a snooze on this surface.
+ *
+ * It is drawn on an edit alone. A create has no Task to hide, and `snooze` is
+ * absent from what it submits rather than sent empty: absent is leave it
+ * alone, which is the right thing to say about a Task being written now.
  */
 function Snooze({
   options,
