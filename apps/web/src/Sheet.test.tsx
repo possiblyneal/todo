@@ -111,6 +111,15 @@ test('a create does not offer to snooze the Task it is writing', () => {
   expect(sheet.submit().snooze).toBeUndefined()
 })
 
+// The control being absent is not on its own the gate: a draft arriving with a
+// snooze on it would otherwise be submitted unseen, which is the one thing the
+// sheet exists to prevent. What is not on the sheet does not go out.
+test('a create drops a snooze it was handed rather than sending it unseen', () => {
+  const sheet = opened({ title: 'Buy milk', snooze: '90m' }, undefined, false)
+  expect(screen.queryByLabelText('Snooze')).toBeNull()
+  expect(sheet.submit().snooze).toBeUndefined()
+})
+
 test('a snooze picked and then put back is absent again', () => {
   const sheet = opened({ title: 'Buy milk' })
   sheet.pick('Snooze', 'tomorrow')

@@ -138,17 +138,17 @@ export function Detail({
   // A Subtask is said the way a Task is: the sentence goes to the Broker and
   // the sheet it fills is the gate. The box is this Task's rather than the
   // list's, so it asks no question and what it writes lands under this Task.
-  // By hand is the same sheet with nothing in it, for a Subtask nobody needs
-  // read for them.
+  //
+  // Back is the only other thing on this screen. The blank sheet is reached
+  // from the screen before, not from beside the box: a button here that
+  // unmounted the box would throw away the sentence somebody had typed into
+  // it, and the box keeps a dump through everything else.
   if (open === 'subtask') {
     return (
       <div className="detail">
         <div className="buttons">
           <button type="button" onClick={() => setOpen('')}>
             Back
-          </button>
-          <button type="button" onClick={() => setOpen('hand')}>
-            By hand
           </button>
         </div>
         <h1 className="title">Subtask of {task.title}</h1>
@@ -192,6 +192,11 @@ export function Detail({
         </button>
         <button type="button" onClick={() => setOpen('subtask')}>
           Subtask
+        </button>
+        {/* The same sheet with nothing in it, for a Subtask nobody needs read
+            for them: it is the Broker that is skipped rather than the gate. */}
+        <button type="button" onClick={() => setOpen('hand')}>
+          Subtask by hand
         </button>
         <button type="button" onClick={() => setOpen('series')}>
           Series

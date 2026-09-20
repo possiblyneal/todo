@@ -88,7 +88,15 @@ export function Sheet({
       // The memberships are the difference between what the Task carried when
       // this opened and what is ticked now, because ticking and unticking are
       // different fields on the wire.
-      await onSubmit({ ...body, ...memberships(opened, body) })
+      //
+      // A create carries no snooze whatever it was handed. The control is not
+      // on the sheet, and a value nobody was shown is one nobody could correct:
+      // the sheet being the gate means what goes out is what was on it.
+      await onSubmit({
+        ...body,
+        ...(existing ? {} : { snooze: undefined }),
+        ...memberships(opened, body),
+      })
     } catch (caught) {
       // The API's sentence is the one the CLI would have printed, and a value
       // it could not read is still in the field it came back in, so whoever

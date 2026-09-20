@@ -9,7 +9,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { Box } from './Box'
-import { OFFERED_NOTHING } from './state'
+import { OFFERED_NOTHING, WIDE } from './state'
 import * as write from './write'
 
 afterEach(() => {
@@ -17,12 +17,17 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-/** Renders a box, hands it a dump, and submits the sheet that comes back. */
-async function dumped(parent?: string) {
+/**
+ * Renders the box it is given, hands it a dump, and submits the sheet that
+ * comes back. Which box it is is spelled out at each call rather than switched
+ * on here: the two are alternatives the type keeps apart, so there is no one
+ * element that stands for both.
+ */
+async function dumped(box: React.ReactElement) {
   vi.spyOn(write, 'capture').mockResolvedValue({ title: 'Sand it down' })
   const addTask = vi.spyOn(write, 'addTask').mockResolvedValue('t2')
   const addSubtask = vi.spyOn(write, 'addSubtask').mockResolvedValue('t2')
-  render(<Box offered={OFFERED_NOTHING} parent={parent} />)
+  render(box)
   fireEvent.change(screen.getByRole('textbox'), {
     target: { value: 'sand the shed down' },
   })
@@ -45,7 +50,9 @@ async function dumped(parent?: string) {
 }
 
 test('a dump under a Task is submitted as a Subtask of it', async () => {
-  const { addTask, addSubtask } = await dumped('t1')
+  const { addTask, addSubtask } = await dumped(
+    <Box offered={OFFERED_NOTHING} parent="t1" />,
+  )
   await vi.waitFor(() =>
     expect(addSubtask).toHaveBeenCalledWith(
       't1',
@@ -56,14 +63,24 @@ test('a dump under a Task is submitted as a Subtask of it', async () => {
 })
 
 test('a dump over the list is submitted as a top-level Task', async () => {
-  const { addTask, addSubtask } = await dumped()
+  const { addTask, addSubtask } = await dumped(
+    <Box offered={OFFERED_NOTHING} narrowing={WIDE} />,
+  )
   await vi.waitFor(() => expect(addTask).toHaveBeenCalled())
   expect(addSubtask).not.toHaveBeenCalled()
 })
 
 // A question is about a list, and a Task's own box has none: an Ask there
 // would narrow by nothing and answer about every open Task in the tracker.
+// What keeps the two apart is the type -- a box is given a Narrowing or a
+// parent and never both -- so this pins what that comes to on the screen.
 test('a Task of its own is not something the box asks about', () => {
   render(<Box offered={OFFERED_NOTHING} parent="t1" />)
   expect(screen.queryByRole('button', { name: 'Ask' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy()
+})
+
+test("the list's box is the one with a question under the same thumb", () => {
+  render(<Box offered={OFFERED_NOTHING} narrowing={WIDE} />)
+  expect(screen.getByRole('button', { name: 'Ask' })).toBeTruthy()
 })
