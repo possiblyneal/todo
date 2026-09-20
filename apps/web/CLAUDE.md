@@ -82,7 +82,7 @@ and adds to this list rather than to the plan.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
   Subtasks, its Series, its breakdown, the four lifecycle verbs, its pointers
   added and taken off, and its history. Subtask is a screen holding this Task's
-  own box; Subtask by hand beside it opens the blank sheet.
+  own box; Subtask by hand, on the same button row, opens the blank sheet.
 - `src/Attributes.tsx` — the attributes a Task carries, drawn only where it
   carries one. The detail screen and the historical one both draw through it,
   so the Task as it stands and the Task as it stood cannot be described
