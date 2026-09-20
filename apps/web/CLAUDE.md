@@ -12,7 +12,8 @@ surface moved off the terminal.
 
 What it holds: the list over `GET /api/state` and the controls that narrow and
 order it, the box that hands a dump to the Broker and opens the add sheet
-filled in, the detail screen a tap on a Task opens, the Series screen and the
+filled in, over the list and again under a Task where what it writes is a
+Subtask, the detail screen a tap on a Task opens, the Series screen and the
 four things it does to a date, the breakdown that proposes Subtasks, the
 collections screen over the Lists and Tags, and the activity screen over the
 Change History. The six stages of
@@ -50,12 +51,15 @@ and adds to this list rather than to the plan.
   recognising anything by name: the Actor split on the first slash, and which
   kinds are the Lease bookkeeping rather than activity.
 - `src/Box.tsx` — the box: a dump or a question, in the same field under the
-  same thumb. Neither call writes.
+  same thumb. Neither call writes. It is given a Narrowing or a `parent` and
+  never both: the second makes it a Task's own box, where the same dump is
+  submitted as a Subtask of that Task and there is no Ask, a question being
+  about a list.
 - `src/Sheet.tsx` — the sheet: a Task open for correction, whether the Broker
   just read it or it already exists. Every attribute a Task has is on it, which
   is the title, description, why, deadline, estimate, priority, impact, color,
-  snooze, the key/value pairs, the pointers collected for it, and the Lists and
-  Tags it is filed under. It
+  the key/value pairs, the pointers collected for it, and the Lists and
+  Tags it is filed under, plus the snooze, which is on an edit alone. It
   makes one write of its own, the List or Tag its ticks offer to make; every
   other write is whoever opens it saying what submitting it does.
 - `src/Narrow.tsx` — the controls over the list: the sort, the List, the Tags,
@@ -77,7 +81,8 @@ and adds to this list rather than to the plan.
   every attribute its tick would write.
 - `src/Detail.tsx` — the detail screen: everything the Task carries, its
   Subtasks, its Series, its breakdown, the four lifecycle verbs, its pointers
-  added and taken off, and its history.
+  added and taken off, and its history. Subtask is a screen holding this Task's
+  own box; Subtask by hand, on the same button row, opens the blank sheet.
 - `src/Attributes.tsx` — the attributes a Task carries, drawn only where it
   carries one. The detail screen and the historical one both draw through it,
   so the Task as it stands and the Task as it stood cannot be described
@@ -96,10 +101,11 @@ and adds to this list rather than to the plan.
   is open. It draws what the read returned and works nothing out for itself,
   including how wide the screen is.
 - `src/main.tsx` — the mount, and nothing else.
-- `src/Sheet.test.tsx`, `src/Breakdown.test.tsx`, `src/Narrow.test.tsx`,
+- `src/Box.test.tsx`, `src/Sheet.test.tsx`, `src/Breakdown.test.tsx`, `src/Narrow.test.tsx`,
   `src/Collections.test.tsx`, `src/Detail.test.tsx`, `src/App.test.tsx`,
   `src/Row.test.tsx`, `src/Was.test.tsx` — the components with a grammar: what
-  a pick turns into on the wire, what a proposal draws before it is approved, what a picker does
+  a pick turns into on the wire, which route a dump goes out on, what a
+  proposal draws before it is approved, what a picker does
   with a value it cannot name and whether its Tag order survives an unmount,
   which kind a collection write goes out under, whether the field holding a
   pointer is cleared and what the picker off the host puts in it, that a
@@ -392,6 +398,35 @@ and adds to this list rather than to the plan.
   with the state — so for colors the branch is the same code standing idle
   rather than a case being handled. The API refuses what it refuses, in the
   sentence the sheet shows.
+- **A Subtask is said the way a Task is.** `Box` is the front door to both:
+  over the list a dump becomes a top-level Task, and under a Task the same
+  sentence, read by the same `POST /api/capture`, becomes a Subtask of it. The
+  `parent` it was given is the whole of the difference, so there is one dump
+  and one gate rather than a second flow for the nested case. That box draws no
+  Ask, because a question is asked about a list and a Task is not one.
+- **A box is the list's or a Task's, and the type is what says which.** `Where`
+  in `Box.tsx` is a Narrowing or a `parent`, never both and never neither: two
+  optional props would have been two switches over one fact, with a box that
+  wrote Subtasks while answering about the list, and a box that wrote top-level
+  Tasks under a Task, both typechecking and neither reachable on purpose. The
+  turn each button takes is handed to `hand` as a function for the same reason —
+  the question is asked only from the button that knows what it is about, so no
+  arm of it has to wonder whether there was a list to ask about.
+- **The blank sheet is reached from the screen before the box, never beside
+  it.** `Detail` puts Subtask by hand in its own button row: on the box screen
+  it would unmount the box and take the sentence somebody had typed with it,
+  and a dump survives everything else. Back is the one other thing on that
+  screen, and leaving is leaving.
+- **The sheet offers a snooze on an edit and never on a create.** Hiding a Task
+  is something done to one that is there, and the three things the control says
+  — leave it alone, wake it, hide it for a span — are two of them nonsense
+  about a Task nobody has written yet. `existing` is what says which, and every
+  call site passes it: `Detail` on an edit alone, `Box` and `Series` never, the
+  second because lifting a date out writes a Task that is not there either.
+  A create drops the snooze on its way out rather than only hiding the control,
+  so what is submitted is what was on the sheet: a draft that arrived carrying
+  one would otherwise be written unseen, which is the gate giving way. The
+  field is absent rather than empty, absent being leave it alone.
 - **Snooze is the one attribute the sheet cannot read back.** A Task carries the
   instant it wakes and the field takes the span to wait, so the control never
   opens knowing the answer: leaving it alone and waking the Task cannot be the
